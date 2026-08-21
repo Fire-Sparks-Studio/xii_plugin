@@ -16,12 +16,13 @@ import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.UUID;
+import java.util.*;
 
-public class XCommands implements CommandExecutor {
+public class XCommands implements CommandExecutor, TabCompleter {
     private final TeamManager teamManager;
     private final GameManager gameManager;
     private PointService pointService;
@@ -81,6 +82,74 @@ public class XCommands implements CommandExecutor {
             default -> player.sendMessage("§cCommande inconnue: " + args[0]);
         }
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
+        if (!sender.hasPermission("xii.play")) return Collections.emptyList();
+
+        if (args.length == 1) {
+            List<String> completions = new ArrayList<>(Arrays.asList("join", "leave"));
+            if (sender.hasPermission("xii.admin")) {
+                completions.addAll(Arrays.asList(
+                        "allowjoin", "allowleave", "createteam", "deleteteam",
+                        "addmember", "removemember", "setspawn", "setheart",
+                        "start", "stop", "setday", "tpbase", "destroyheart",
+                        "revive", "restoreheart", "eliminate", "blacklist",
+                        "unblacklist", "give", "setpoints", "resetpoints", "maxmembers"
+                ));
+            }
+            return completions.stream()
+                    .filter(s -> s.startsWith(args[0].toLowerCase()))
+                    .toList();
+        }
+
+        if (args.length == 2) {
+            switch (args[0].toLowerCase()) {
+                case "join", "createteam", "deleteteam", "setspawn", "setheart",
+                     "tpbase", "destroyheart", "restoreheart", "eliminate" -> {
+                    return Arrays.stream(TeamColor.values())
+                            .map(c -> c.name())
+                            .filter(s -> s.startsWith(args[1].toUpperCase()))
+                            .toList();
+                }
+                case "addmember", "removemember", "revive", "give", "setpoints", "resetpoints" -> {
+                    return null; // retourne les joueurs connectés automatiquement
+                }
+                case "allowjoin", "allowleave" -> {
+                    return Arrays.asList("true", "false");
+                }
+                case "setday" -> {
+                    return Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+                }
+                case "maxmembers" -> {
+                    return Arrays.stream(TeamColor.values())
+                            .map(c -> c.name())
+                            .filter(s -> s.startsWith(args[1].toUpperCase()))
+                            .toList();
+                }
+            }
+        }
+
+        if (args.length == 3) {
+            switch (args[0].toLowerCase()) {
+                case "addmember" -> {
+                    return Arrays.stream(TeamColor.values())
+                            .map(c -> c.name())
+                            .filter(s -> s.startsWith(args[2].toUpperCase()))
+                            .toList();
+                }
+                case "give" -> {
+                    return Arrays.stream(Material.values())
+                            .map(m -> m.name())
+                            .filter(s -> s.startsWith(args[2].toUpperCase()))
+                            .limit(20)
+                            .toList();
+                }
+            }
+        }
+
+        return Collections.emptyList();
     }
 
     // Publique
