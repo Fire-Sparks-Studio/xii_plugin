@@ -1,0 +1,16 @@
+name: XII-Days
+version: '1.0'
+main: com.mceteams.xii.XiiPlugin
+api-version: '26.2'
+description: XII Days Plugin
+commands:
+  xii:
+    description: Commande principale XII Days
+    usage: /xii <command>
+permissions:
+  xii.admin:
+    description: Permission admin XII Days
+    default: op
+  xii.play:
+    description: Permission de jouer
+    default: true
