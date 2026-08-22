@@ -4,6 +4,7 @@ import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.enums.Lang;
 import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.manager.GameManager;
+import com.mceteams.xii.manager.SetupManager;
 import com.mceteams.xii.manager.TeamManager;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.PlayerScore;
@@ -13,6 +14,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -21,15 +23,19 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 public class XCommands implements CommandExecutor, TabCompleter {
     private final TeamManager teamManager;
     private final GameManager gameManager;
-    private PointService pointService;
+    private final SetupManager setupManager;
+    private final PointService pointService;
 
-    public XCommands(TeamManager teamManager, GameManager gameManager) {
+    public XCommands(TeamManager teamManager, GameManager gameManager, PointService pointService, SetupManager setupManager) {
         this.teamManager = teamManager;
         this.gameManager = gameManager;
+        this.pointService = pointService;
+        this.setupManager = setupManager;
     }
 
     @Override
@@ -39,10 +45,19 @@ public class XCommands implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (!player.hasPermission("xii.play")) {
-            player.sendMessage("§cTu n'as pas la permission !");
+        String cmd = command.getName().toLowerCase();
+
+        if (cmd.equals("join")) {
+            handleJoin(player, args);
             return true;
         }
+
+        if (cmd.equals("leave")) {
+            handleLeave(player);
+            return true;
+        }
+
+        if (!cmd.equals("xii")) return true;
 
         if (args.length == 0) {
             player.sendMessage("§cUsage: /xii <commande>");
@@ -50,145 +65,51 @@ public class XCommands implements CommandExecutor, TabCompleter {
         }
 
         switch (args[0].toLowerCase()) {
-            // Publique
-            case "join" -> handleJoin(player, args);
-            case "leave" -> handleLeave(player);
-
-            // Admin
-            case "allowjoin" -> handleAllowJoin(player, args);
-            case "allowleave" -> handleAllowLeave(player, args);
-            case "createteam" -> handleCreateTeam(player, args);
-            case "deleteteam" -> handleDeleteTeam(player, args);
-            case "addmember" -> handleAddMember(player, args);
-            case "removemember" -> handleRemoveMember(player, args);
-            case "setspawn" -> handleSetSpawn(player, args);
-            case "setheart" -> handleSetHeart(player, args);
-            case "start" -> handleStart(player);
-            case "stop" -> handleStop(player);
-            case "setday" -> handleSetDay(player, args);
-            case "tpbase" -> handleTpBase(player, args);
-            case "destroyheart" -> handleDestroyHeart(player, args);
-            case "revive" -> handleRevive(player, args);
-            case "restoreheart" -> handleRestoreHeart(player, args);
-            case "eliminate" -> handleEliminate(player, args);
-            case "blacklist" -> handleBlacklist(player, args);
-            case "unblacklist" -> handleUnblacklist(player, args);
-            case "give" -> handleGive(player, args);
-            case "setpoints" -> handleSetPoints(player, args);
-            case "resetpoints" -> handleResetPoints(player, args);
-            case "maxmembers" -> handleMaxMembers(player, args);
-
-            // Autre
+            case "teams" -> handleTeams(player, args);
+            case "day" -> handleDay(player, args);
+            case "allow" -> handleAllow(player, args);
+            case "points" -> handlePoints(player, args);
+            case "admin" -> handleAdmin(player, args);
             default -> player.sendMessage("§cCommande inconnue: " + args[0]);
         }
         return true;
     }
 
-    @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.hasPermission("xii.play")) return Collections.emptyList();
-
-        if (args.length == 1) {
-            List<String> completions = new ArrayList<>(Arrays.asList("join", "leave"));
-            if (sender.hasPermission("xii.admin")) {
-                completions.addAll(Arrays.asList(
-                        "allowjoin", "allowleave", "createteam", "deleteteam",
-                        "addmember", "removemember", "setspawn", "setheart",
-                        "start", "stop", "setday", "tpbase", "destroyheart",
-                        "revive", "restoreheart", "eliminate", "blacklist",
-                        "unblacklist", "give", "setpoints", "resetpoints", "maxmembers"
-                ));
-            }
-            return completions.stream()
-                    .filter(s -> s.startsWith(args[0].toLowerCase()))
-                    .toList();
-        }
-
-        if (args.length == 2) {
-            switch (args[0].toLowerCase()) {
-                case "join", "createteam", "deleteteam", "setspawn", "setheart",
-                     "tpbase", "destroyheart", "restoreheart", "eliminate" -> {
-                    return Arrays.stream(TeamColor.values())
-                            .map(c -> c.name())
-                            .filter(s -> s.startsWith(args[1].toUpperCase()))
-                            .toList();
-                }
-                case "addmember", "removemember", "revive", "give", "setpoints", "resetpoints" -> {
-                    return null; // retourne les joueurs connectés automatiquement
-                }
-                case "allowjoin", "allowleave" -> {
-                    return Arrays.asList("true", "false");
-                }
-                case "setday" -> {
-                    return Arrays.asList("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
-                }
-                case "maxmembers" -> {
-                    return Arrays.stream(TeamColor.values())
-                            .map(c -> c.name())
-                            .filter(s -> s.startsWith(args[1].toUpperCase()))
-                            .toList();
-                }
-            }
-        }
-
-        if (args.length == 3) {
-            switch (args[0].toLowerCase()) {
-                case "addmember" -> {
-                    return Arrays.stream(TeamColor.values())
-                            .map(c -> c.name())
-                            .filter(s -> s.startsWith(args[2].toUpperCase()))
-                            .toList();
-                }
-                case "give" -> {
-                    return Arrays.stream(Material.values())
-                            .map(m -> m.name())
-                            .filter(s -> s.startsWith(args[2].toUpperCase()))
-                            .limit(20)
-                            .toList();
-                }
-            }
-        }
-
-        return Collections.emptyList();
-    }
-
-    // Publique
+    // ========== /join /leave ==========
 
     private void handleJoin(Player player, String[] args) {
+        if (!player.hasPermission("xii.play")) {
+            player.sendMessage("§cTu n'as pas la permission !");
+            return;
+        }
         if (!gameManager.isJoinEnabled()) {
             player.sendMessage("§cLes teams sont fermées !");
             return;
         }
-
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii join <couleur>");
-            return;
-        }
-
         if (gameManager.getState() != GameState.WAITING) {
             player.sendMessage("§cLa partie a déjà commencé !");
             return;
         }
-
         if (teamManager.getTeam(player.getUniqueId()) != null) {
             player.sendMessage("§cTu es déjà dans une équipe !");
             return;
         }
-
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
+        if (args.length < 1) {
+            player.sendMessage("§cUsage: /join <couleur>");
             return;
         }
-
+        TeamColor color;
+        try {
+            color = TeamColor.valueOf(args[0].toUpperCase());
+        } catch (IllegalArgumentException e) {
+            player.sendMessage("§cCouleur inconnue: " + args[0]);
+            return;
+        }
         GameTeam team = teamManager.getTeam(color);
         if (team == null) {
-            team = teamManager.createTeam(color);
+            player.sendMessage("§cCette équipe n'existe pas !");
+            return;
         }
-
         if (teamManager.addPlayer(player.getUniqueId(), team)) {
             player.sendMessage("§aTu as rejoint l'équipe " + color.getName(Lang.FR) + " !");
         } else {
@@ -197,155 +118,100 @@ public class XCommands implements CommandExecutor, TabCompleter {
     }
 
     private void handleLeave(Player player) {
+        if (!player.hasPermission("xii.play")) {
+            player.sendMessage("§cTu n'as pas la permission !");
+            return;
+        }
         if (!gameManager.isLeaveEnabled()) {
             player.sendMessage("§cLe leave est désactivé !");
             return;
         }
-
         if (gameManager.getState() != GameState.WAITING) {
             player.sendMessage("§cLa partie a déjà commencé !");
             return;
         }
-
         GameTeam team = teamManager.getTeam(player.getUniqueId());
         if (team == null) {
             player.sendMessage("§cTu n'es dans aucune équipe !");
             return;
         }
-
         teamManager.removePlayer(player.getUniqueId());
         player.sendMessage("§aTu as quitté l'équipe.");
     }
 
-    // Admin
+    // ========== /xii teams ==========
 
-    private void handleAllowJoin(Player player, String[] args) {
+    private void handleTeams(Player player, String[] args) {
         if (!player.hasPermission("xii.admin")) {
             player.sendMessage("§cPermission refusée !");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii allowjoin <true|false>");
+            player.sendMessage("§cUsage: /xii teams <create|delete|add|remove|heart|eliminate|revive|tpbase|options>");
             return;
         }
 
-        boolean enabled = Boolean.parseBoolean(args[1]);
-        gameManager.setJoinEnabled(enabled);
-        player.sendMessage("§aJoin " + (enabled ? "activé" : "désactivé") + " !");
+        String sub = args[1].toLowerCase();
+
+        switch (sub) {
+            case "create" -> handleTeamsCreate(player, args);
+            case "delete" -> handleTeamsDelete(player, args);
+            case "add" -> handleTeamsAdd(player, args);
+            case "remove" -> handleTeamsRemove(player, args);
+            case "heart" -> handleTeamsHeart(player, args);
+            case "eliminate" -> handleTeamsEliminate(player, args);
+            case "revive" -> handleTeamsRevive(player, args);
+            case "tpbase" -> handleTeamsTpBase(player, args);
+            case "options" -> handleTeamsOptions(player, args);
+            default -> player.sendMessage("§cSous-commande inconnue: " + sub);
+        }
     }
 
-    private void handleAllowLeave(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handleTeamsCreate(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii teams create <couleur>");
             return;
         }
-
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii allowleave <true|false>");
-            return;
-        }
-
-        boolean enabled = Boolean.parseBoolean(args[1]);
-        gameManager.setLeaveEnabled(enabled);
-        player.sendMessage("§aLeave " + (enabled ? "activé" : "désactivé") + " !");
-    }
-
-    private void handleCreateTeam(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii createteam <COULEUR>");
-            return;
-        }
-
-        String colorName = args[1].toUpperCase();
         TeamColor color;
-
         try {
-            color = TeamColor.valueOf(colorName);
+            color = TeamColor.valueOf(args[2].toUpperCase());
         } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
+            player.sendMessage("§cCouleur inconnue: " + args[2]);
             return;
         }
-
         if (teamManager.getTeam(color) != null) {
             player.sendMessage("§cCette équipe existe déjà !");
             return;
         }
-
         teamManager.createTeam(color);
         player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " créée !");
     }
 
-    private void handleDeleteTeam(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handleTeamsDelete(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii teams delete <couleur>");
             return;
         }
-
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii deleteteam <COULEUR>");
-            return;
-        }
-
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
-        }
-
-        GameTeam team = teamManager.getTeam(color);
-
-        if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
-            return;
-        }
-
-        teamManager.deleteTeam(team);
+        TeamColor color = getExistingTeamColor(player, args[2]);
+        if (color == null) return;
+        teamManager.deleteTeam(teamManager.getTeam(color));
         player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " supprimée !");
     }
 
-    private void handleAddMember(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handleTeamsAdd(Player player, String[] args) {
+        if (args.length < 4) {
+            player.sendMessage("§cUsage: /xii teams add <joueur> <couleur>");
             return;
         }
-
-        if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii addmember <joueur> <COULEUR>");
-            return;
-        }
-
-        Player target = Bukkit.getPlayer(args[1]);
-
+        Player target = Bukkit.getPlayer(args[2]);
         if (target == null) {
-            player.sendMessage("§cJoueur introuvable: " + args[1]);
+            player.sendMessage("§cJoueur introuvable: " + args[2]);
             return;
         }
-
-        String colorName = args[2].toUpperCase();
-        TeamColor color;
-
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
-        }
-
+        TeamColor color = getExistingTeamColor(player, args[3]);
+        if (color == null) return;
         GameTeam team = teamManager.getTeam(color);
-        if (team == null) {
-            team = teamManager.createTeam(color);
-        }
-
         if (teamManager.addPlayer(target.getUniqueId(), team)) {
             player.sendMessage("§a" + target.getName() + " ajouté à l'équipe " + color.getName(Lang.FR) + " !");
         } else {
@@ -353,355 +219,350 @@ public class XCommands implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleRemoveMember(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handleTeamsRemove(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii teams remove <joueur>");
             return;
         }
-
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii removemember <joueur>");
-            return;
-        }
-
-        Player target = Bukkit.getPlayer(args[1]);
+        Player target = Bukkit.getPlayer(args[2]);
         if (target == null) {
-            player.sendMessage("§cJoueur introuvable: " + args[1]);
+            player.sendMessage("§cJoueur introuvable: " + args[2]);
             return;
         }
-
         teamManager.removePlayer(target.getUniqueId());
         player.sendMessage("§a" + target.getName() + " retiré de son équipe !");
     }
 
-    private void handleSetSpawn(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handleTeamsHeart(Player player, String[] args) {
+        if (args.length < 4) {
+            player.sendMessage("§cUsage: /xii teams heart <couleur> <destroy|restore>");
             return;
         }
-
-        GameTeam team = teamManager.getTeam(player.getUniqueId());
-        if (team == null) {
-            player.sendMessage("§cTu n'es dans aucune équipe !");
-            return;
-        }
-
-        team.setSpawn(player.getLocation());
-        player.sendMessage("§aSpawn de l'équipe " + team.getColor().getName(Lang.FR) + " défini !");
-    }
-
-    private void handleSetHeart(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        GameTeam team = teamManager.getTeam(player.getUniqueId());
-        if (team == null) {
-            player.sendMessage("§cTu n'es dans aucune équipe !");
-            return;
-        }
-        team.setHeartLocation(player.getLocation());
-        player.sendMessage("§aCœur de l'équipe " + team.getColor().getName(Lang.FR) + " défini !");
-    }
-
-    private void handleStart(Player player) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (gameManager.getState() != GameState.WAITING) {
-            player.sendMessage("§cLa partie a déjà commencé !");
-            return;
-        }
-        if (teamManager.getTeamCount() < 2) {
-            player.sendMessage("§cIl faut au moins 2 équipes !");
-            return;
-        }
-        gameManager.startGame();
-        Bukkit.broadcast(Component.text("\n§6§lXII DAYS §7a commencé !\n"));
-    }
-
-    private void handleStop(Player player) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (gameManager.getState() == GameState.WAITING) {
-            player.sendMessage("§cLa partie n'a pas commencé !");
-            return;
-        }
-        gameManager.endGame();
-        Bukkit.broadcast(Component.text("\n§c§lXII DAYS §7a été arrêté !\n"));
-    }
-
-    private void handleSetDay(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii setday <jour>");
-            return;
-        }
-        int day;
-        try {
-            day = Integer.parseInt(args[1]);
-        } catch (NumberFormatException e) {
-            player.sendMessage("§cNombre invalide !");
-            return;
-        }
-        if (day < 1 || day > 12) {
-            player.sendMessage("§cLe jour doit être entre 1 et 12 !");
-            return;
-        }
-        gameManager.getDayManager().setDay(day);
-        Bukkit.broadcast(Component.text("\n§6§lJour §c§l" + day + " §6§l!\n"));
-    }
-
-    private void handleTpBase(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii tpbase <COULEUR>");
-            return;
-        }
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
-        }
+        TeamColor color = getExistingTeamColor(player, args[2]);
+        if (color == null) return;
         GameTeam team = teamManager.getTeam(color);
-        if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
-            return;
-        }
-        if (team.getSpawn() == null) {
-            player.sendMessage("§cLe spawn de cette équipe n'est pas défini !");
-            return;
-        }
-        for (UUID uuid : team.getPlayers()) {
-            Player target = Bukkit.getPlayer(uuid);
-            if (target != null) {
-                target.teleport(team.getSpawn());
+
+        String action = args[3].toLowerCase();
+        switch (action) {
+            case "destroy" -> {
+                teamManager.destroyHeart(team);
+                player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " détruit !");
             }
+            case "restore" -> {
+                team.setHeartAlive(true);
+                player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " restauré !");
+            }
+            default -> player.sendMessage("§cUsage: /xii teams heart <couleur> <destroy|restore>");
         }
-        player.sendMessage("§aJoueurs de l'équipe " + color.getName(Lang.FR) + " téléportés !");
     }
 
-    private void handleDestroyHeart(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handleTeamsEliminate(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii teams eliminate <couleur>");
             return;
         }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii destroyheart <COULEUR>");
-            return;
-        }
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
-        }
+        TeamColor color = getExistingTeamColor(player, args[2]);
+        if (color == null) return;
         GameTeam team = teamManager.getTeam(color);
-        if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
-            return;
-        }
-        teamManager.destroyHeart(team);
-        player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " détruit !");
-    }
-
-    private void handleRevive(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii revive <joueur|COULEUR>");
-            return;
-        }
-        String target = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(target);
-            GameTeam team = teamManager.getTeam(color);
-            if (team == null) {
-                player.sendMessage("§cCette équipe n'existe pas !");
-                return;
-            }
-            team.setHeartAlive(true);
-            for (UUID uuid : team.getPlayers()) {
-                Player p = Bukkit.getPlayer(uuid);
-                if (p != null) p.setGameMode(GameMode.SURVIVAL);
-            }
-            player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " réanimée !");
-        } catch (IllegalArgumentException e) {
-            Player targetPlayer = Bukkit.getPlayer(target);
-            if (targetPlayer == null) {
-                player.sendMessage("§cJoueur introuvable: " + target);
-                return;
-            }
-            targetPlayer.setGameMode(GameMode.SURVIVAL);
-            targetPlayer.setHealth(20);
-            player.sendMessage("§a" + targetPlayer.getName() + " réanimé !");
-        }
-    }
-
-    private void handleRestoreHeart(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii restoreheart <COULEUR>");
-            return;
-        }
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
-        }
-        GameTeam team = teamManager.getTeam(color);
-        if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
-            return;
-        }
-        team.setHeartAlive(true);
-        player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " restauré !");
-    }
-
-    private void handleEliminate(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii eliminate <COULEUR>");
-            return;
-        }
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
-        }
-        GameTeam team = teamManager.getTeam(color);
-        if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
-            return;
-        }
         team.destroyHeart();
         for (UUID uuid : team.getPlayers()) {
-            Player target = Bukkit.getPlayer(uuid);
-            if (target != null) {
-                target.setGameMode(GameMode.SPECTATOR);
-                target.sendMessage("§cVous avez été éliminé !");
+            Player p = Bukkit.getPlayer(uuid);
+            if (p != null) {
+                p.setGameMode(GameMode.SPECTATOR);
+                p.sendMessage("§cVous avez été éliminé !");
             }
         }
         player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " éliminée !");
     }
 
-    private void handleBlacklist(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii blacklists <ITEM>");
-            return;
-        }
-        Material material = Material.matchMaterial(args[1].toUpperCase());
-        if (material == null) {
-            player.sendMessage("§cItem inconnu: " + args[1]);
-            return;
-        }
-        gameManager.getBlacklistedItems().add(material);
-        player.sendMessage("§a" + material.name() + " blacklisté !");
-    }
-
-    private void handleUnblacklist(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii unblacklist <ITEM>");
-            return;
-        }
-        Material material = Material.matchMaterial(args[1].toUpperCase());
-        if (material == null) {
-            player.sendMessage("§cItem inconnu: " + args[1]);
-            return;
-        }
-        gameManager.getBlacklistedItems().remove(material);
-        player.sendMessage("§a" + material.name() + " retiré de la blacklist !");
-    }
-
-    private void handleGive(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
-            return;
-        }
+    private void handleTeamsRevive(Player player, String[] args) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii give <joueur> <ITEM> [quantité]");
+            player.sendMessage("§cUsage: /xii teams revive <couleur>");
             return;
         }
-        Player target = Bukkit.getPlayer(args[1]);
-        if (target == null) {
-            player.sendMessage("§cJoueur introuvable: " + args[1]);
-            return;
-        }
-        Material material = Material.matchMaterial(args[2].toUpperCase());
-        if (material == null) {
-            player.sendMessage("§cItem inconnu: " + args[2]);
-            return;
-        }
-        int amount = 1;
-        if (args.length >= 4) {
-            try {
-                amount = Integer.parseInt(args[3]);
-            } catch (NumberFormatException e) {
-                player.sendMessage("§cNombre invalide !");
-                return;
+        TeamColor color = getExistingTeamColor(player, args[2]);
+        if (color == null) return;
+        GameTeam team = teamManager.getTeam(color);
+        team.setHeartAlive(true);
+        for (UUID uuid : team.getPlayers()) {
+            Player p = Bukkit.getPlayer(uuid);
+            if (p != null) {
+                p.setGameMode(GameMode.SURVIVAL);
             }
         }
-        target.getInventory().addItem(new ItemStack(material, amount));
-        player.sendMessage("§a" + amount + "x " + material.name() + " donné à " + target.getName() + " !");
+        player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " réanimée !");
     }
 
-    private void handleSetPoints(Player player, String[] args) {
+    private void handleTeamsTpBase(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii teams tpbase <couleur|@a|joueur>");
+            return;
+        }
+
+        String target = args[2];
+
+        if (target.equals("@a")) {
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                GameTeam team = teamManager.getTeam(online.getUniqueId());
+                if (team != null && team.getSpawn() != null) {
+                    online.teleport(team.getSpawn());
+                }
+            }
+            player.sendMessage("§aTous les joueurs ont été téléportés à leur base !");
+            return;
+        }
+
+        Player targetPlayer = Bukkit.getPlayer(target);
+        if (targetPlayer != null) {
+            GameTeam team = teamManager.getTeam(targetPlayer.getUniqueId());
+            if (team == null) {
+                player.sendMessage("§c" + target + " n'est dans aucune équipe !");
+                return;
+            }
+            if (team.getSpawn() == null) {
+                player.sendMessage("§cLe spawn de cette équipe n'est pas défini !");
+                return;
+            }
+            targetPlayer.teleport(team.getSpawn());
+            player.sendMessage("§a" + target + " téléporté à sa base !");
+            return;
+        }
+
+        TeamColor color = getExistingTeamColor(player, target);
+        if (color == null) return;
+        GameTeam team = teamManager.getTeam(color);
+        if (team.getSpawn() == null) {
+            player.sendMessage("§cLe spawn de cette équipe n'est pas défini !");
+            return;
+        }
+        for (UUID uuid : team.getPlayers()) {
+            Player p = Bukkit.getPlayer(uuid);
+            if (p != null) {
+                p.teleport(team.getSpawn());
+            }
+        }
+        player.sendMessage("§aJoueurs de l'équipe " + color.getName(Lang.FR) + " téléportés !");
+    }
+
+    private void handleTeamsOptions(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii teams options <allow|<couleur>>");
+            return;
+        }
+
+        // /xii teams options allow join/leave true/false
+        if (args[2].equalsIgnoreCase("allow")) {
+            if (args.length < 5) {
+                player.sendMessage("§cUsage: /xii teams options allow <join|leave> <true|false>");
+                return;
+            }
+            String what = args[3].toLowerCase();
+            boolean value = Boolean.parseBoolean(args[4]);
+            switch (what) {
+                case "join" -> {
+                    gameManager.setJoinEnabled(value);
+                    player.sendMessage("§aJoin " + (value ? "activé" : "désactivé") + " !");
+                }
+                case "leave" -> {
+                    gameManager.setLeaveEnabled(value);
+                    player.sendMessage("§aLeave " + (value ? "activé" : "désactivé") + " !");
+                }
+                default -> player.sendMessage("§cUsage: /xii teams options allow <join|leave> <true|false>");
+            }
+            return;
+        }
+
+        // /xii teams options <couleur> <setspawn|setheart|maxmembers>
+        TeamColor color = getExistingTeamColor(player, args[2]);
+        if (color == null) return;
+        GameTeam team = teamManager.getTeam(color);
+
+        if (args.length < 4) {
+            player.sendMessage("§cUsage: /xii teams options " + color.getFormattedName() + " <setspawn|setheart|maxmembers>");
+            return;
+        }
+
+        String option = args[3].toLowerCase();
+        switch (option) {
+            case "setspawn" -> {
+                team.setSpawn(player.getLocation());
+                player.sendMessage("§aSpawn de l'équipe " + color.getName(Lang.FR) + " défini !");
+            }
+            case "setheart" -> {
+                team.setHeartLocation(player.getLocation());
+                player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " défini !");
+            }
+            case "maxmembers" -> {
+                if (args.length < 5) {
+                    player.sendMessage("§cUsage: /xii teams options " + color.getFormattedName() + " maxmembers <nombre>");
+                    return;
+                }
+                int max;
+                try {
+                    max = Integer.parseInt(args[4]);
+                } catch (NumberFormatException e) {
+                    player.sendMessage("§cNombre invalide !");
+                    return;
+                }
+                team.setMaxPlayers(max);
+                player.sendMessage("§aLimite de l'équipe " + color.getName(Lang.FR) + " mise à " + max + " !");
+            }
+            default -> player.sendMessage("§cOption inconnue: " + option);
+        }
+    }
+
+    // ========== Helpers ==========
+
+    private TeamColor getExistingTeamColor(Player player, String input) {
+        TeamColor color;
+        try {
+            color = TeamColor.valueOf(input.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            player.sendMessage("§cCouleur inconnue: " + input);
+            return null;
+        }
+        if (teamManager.getTeam(color) == null) {
+            player.sendMessage("§cCette équipe n'existe pas !");
+            return null;
+        }
+        return color;
+    }
+
+    // ========== /xii day ==========
+
+    private void handleDay(Player player, String[] args) {
+        if (!player.hasPermission("xii.admin")) {
+            player.sendMessage("§cPermission refusée !");
+            return;
+        }
+        if (args.length < 2) {
+            player.sendMessage("§cUsage: /xii day <start|stop|set>");
+            return;
+        }
+        switch (args[1].toLowerCase()) {
+            case "start" -> {
+                if (gameManager.getState() != GameState.WAITING) {
+                    player.sendMessage("§cLa partie a déjà commencé !");
+                    return;
+                }
+                if (teamManager.getTeamCount() < 2) {
+                    player.sendMessage("§cIl faut au moins 2 équipes !");
+                    return;
+                }
+                gameManager.startGame();
+                Bukkit.broadcast(Component.text("\n§6§lXII DAYS §7a commencé !\n"));
+            }
+            case "stop" -> {
+                if (gameManager.getState() == GameState.WAITING) {
+                    player.sendMessage("§cLa partie n'a pas commencé !");
+                    return;
+                }
+                gameManager.endGame();
+                Bukkit.broadcast(Component.text("\n§c§lXII DAYS §7a été arrêté !\n"));
+            }
+            case "set" -> {
+                if (args.length < 3) {
+                    player.sendMessage("§cUsage: /xii day set <1-12>");
+                    return;
+                }
+                int day;
+                try {
+                    day = Integer.parseInt(args[2]);
+                } catch (NumberFormatException e) {
+                    player.sendMessage("§cNombre invalide !");
+                    return;
+                }
+                if (day < 1 || day > 12) {
+                    player.sendMessage("§cLe jour doit être entre 1 et 12 !");
+                    return;
+                }
+                gameManager.getDayManager().setDay(day);
+                Bukkit.broadcast(Component.text("\n§6§lJour §c§l" + day + " §6§l!\n"));
+            }
+            default -> player.sendMessage("§cSous-commande inconnue: " + args[1]);
+        }
+    }
+
+    // ========== /xii allow ==========
+
+    private void handleAllow(Player player, String[] args) {
         if (!player.hasPermission("xii.admin")) {
             player.sendMessage("§cPermission refusée !");
             return;
         }
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii setpoints <joueur|COULEUR> <points>");
+            player.sendMessage("§cUsage: /xii allow <item|block> <true|false>");
+            return;
+        }
+        String what = args[1].toLowerCase();
+        boolean allow = Boolean.parseBoolean(args[2]);
+        switch (what) {
+            case "item" -> {
+                ItemStack hand = player.getInventory().getItemInMainHand();
+                if (hand.getType() == Material.AIR) {
+                    player.sendMessage("§cTu ne tiens aucun item !");
+                    return;
+                }
+                if (allow) {
+                    gameManager.getBlacklistedItems().remove(hand.getType());
+                    player.sendMessage("§a" + hand.getType().name() + " retiré de la blacklist !");
+                } else {
+                    gameManager.getBlacklistedItems().add(hand.getType());
+                    player.sendMessage("§c" + hand.getType().name() + " ajouté à la blacklist !");
+                }
+            }
+            case "block" -> {
+                Block target = player.getTargetBlockExact(5);
+                if (target == null || target.getType() == Material.AIR) {
+                    player.sendMessage("§cTu ne vises aucun bloc !");
+                    return;
+                }
+                if (allow) {
+                    gameManager.getBlacklistedItems().remove(target.getType());
+                    player.sendMessage("§a" + target.getType().name() + " retiré de la blacklist !");
+                } else {
+                    gameManager.getBlacklistedItems().add(target.getType());
+                    player.sendMessage("§c" + target.getType().name() + " ajouté à la blacklist !");
+                }
+            }
+            default -> player.sendMessage("§cUsage: /xii allow <item|block> <true|false>");
+        }
+    }
+
+    // ========== /xii points ==========
+
+    private void handlePoints(Player player, String[] args) {
+        if (!player.hasPermission("xii.admin")) {
+            player.sendMessage("§cPermission refusée !");
+            return;
+        }
+        if (args.length < 2) {
+            player.sendMessage("§cUsage: /xii points <set|reset> <joueur|couleur> [valeur]");
+            return;
+        }
+        switch (args[1].toLowerCase()) {
+            case "set" -> handlePointsSet(player, args);
+            case "reset" -> handlePointsReset(player, args);
+            default -> player.sendMessage("§cSous-commande inconnue: " + args[1]);
+        }
+    }
+
+    private void handlePointsSet(Player player, String[] args) {
+        if (args.length < 4) {
+            player.sendMessage("§cUsage: /xii points set <joueur|couleur> <points>");
             return;
         }
         int points;
         try {
-            points = Integer.parseInt(args[2]);
+            points = Integer.parseInt(args[3]);
         } catch (NumberFormatException e) {
             player.sendMessage("§cNombre invalide !");
             return;
         }
-        String target = args[1].toUpperCase();
+        String target = args[2];
         TeamColor color;
         try {
-            color = TeamColor.valueOf(target);
+            color = TeamColor.valueOf(target.toUpperCase());
             GameTeam team = teamManager.getTeam(color);
             if (team == null) {
                 player.sendMessage("§cCette équipe n'existe pas !");
@@ -722,19 +583,15 @@ public class XCommands implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleResetPoints(Player player, String[] args) {
-        if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+    private void handlePointsReset(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage("§cUsage: /xii points reset <joueur|couleur>");
             return;
         }
-        if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii resetpoints <joueur|COULEUR>");
-            return;
-        }
-        String target = args[1].toUpperCase();
+        String target = args[2];
         TeamColor color;
         try {
-            color = TeamColor.valueOf(target);
+            color = TeamColor.valueOf(target.toUpperCase());
             GameTeam team = teamManager.getTeam(color);
             if (team == null) {
                 player.sendMessage("§cCette équipe n'existe pas !");
@@ -753,36 +610,206 @@ public class XCommands implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleMaxMembers(Player player, String[] args) {
+    // ========== /xii admin ==========
+
+    private void handleAdmin(Player player, String[] args) {
         if (!player.hasPermission("xii.admin")) {
             player.sendMessage("§cPermission refusée !");
             return;
         }
-        if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii maxmembers <COULEUR> <nombre>");
+        if (args.length < 2) {
+            player.sendMessage("§cUsage: /xii admin <setup|quit>");
             return;
         }
-        String colorName = args[1].toUpperCase();
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(colorName);
-        } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + colorName);
-            return;
+        switch (args[1].toLowerCase()) {
+            case "setup" -> setupManager.setup();
+            case "quit" -> setupManager.quit();
+            default -> player.sendMessage("§cSous-commande inconnue: " + args[1]);
         }
-        GameTeam team = teamManager.getTeam(color);
-        if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
-            return;
+    }
+
+    // ========== Tab Complete ==========
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
+        String cmd = command.getName().toLowerCase();
+
+        if (cmd.equals("join")) {
+            if (args.length == 1) {
+                return getExistingTeams().stream()
+                        .map(c -> c.getFormattedName())
+                        .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
+                        .toList();
+            }
+            return Collections.emptyList();
         }
-        int max;
-        try {
-            max = Integer.parseInt(args[2]);
-        } catch (NumberFormatException e) {
-            player.sendMessage("§cNombre invalide !");
-            return;
+
+        if (cmd.equals("leave")) return Collections.emptyList();
+
+        if (!cmd.equals("xii")) return Collections.emptyList();
+
+        if (args.length == 1) {
+            return Stream.of("teams", "day", "allow", "points", "admin")
+                    .filter(s -> s.startsWith(args[0].toLowerCase()))
+                    .toList();
         }
-        team.setMaxPlayers(max);
-        player.sendMessage("§aLimite de l'équipe " + color.getName(Lang.FR) + " mise à " + max + " !");
+
+        if (args.length == 2) {
+            switch (args[0].toLowerCase()) {
+                case "teams" -> {
+                    return Stream.of("create", "delete", "add", "remove", "heart", "eliminate", "revive", "tpbase", "options")
+                            .filter(s -> s.startsWith(args[1].toLowerCase()))
+                            .toList();
+                }
+                case "day" -> {
+                    return Stream.of("start", "stop", "set")
+                            .filter(s -> s.startsWith(args[1].toLowerCase()))
+                            .toList();
+                }
+                case "allow" -> {
+                    return Stream.of("item", "block")
+                            .filter(s -> s.startsWith(args[1].toLowerCase()))
+                            .toList();
+                }
+                case "points" -> {
+                    return Stream.of("set", "reset")
+                            .filter(s -> s.startsWith(args[1].toLowerCase()))
+                            .toList();
+                }
+                case "admin" -> {
+                    return Stream.of("setup", "quit")
+                            .filter(s -> s.startsWith(args[1].toLowerCase()))
+                            .toList();
+                }
+            }
+        }
+
+        if (args.length == 3) {
+            if (args[0].equalsIgnoreCase("teams")) {
+                switch (args[1].toLowerCase()) {
+                    case "create" -> {
+                        return getNonExistingTeams().stream()
+                                .map(TeamColor::getFormattedName)
+                                .filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase()))
+                                .toList();
+                    }
+                    case "delete", "heart", "eliminate", "revive", "tpbase" -> {
+                        return getExistingTeams().stream()
+                                .map(TeamColor::getFormattedName)
+                                .filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase()))
+                                .toList();
+                    }
+                    case "add" -> {
+                        return null; // online players
+                    }
+                    case "remove" -> {
+                        return null; // online players
+                    }
+                    case "options" -> {
+                        List<String> list = new ArrayList<>(getExistingTeams().stream()
+                                .map(TeamColor::getFormattedName)
+                                .toList());
+                        list.add("allow");
+                        return list.stream()
+                                .filter(s -> s.toLowerCase().startsWith(args[2].toLowerCase()))
+                                .toList();
+                    }
+                }
+            }
+            if (args[0].equalsIgnoreCase("day") && args[1].equalsIgnoreCase("set")) {
+                return Stream.of("1","2","3","4","5","6","7","8","9","10","11","12")
+                        .filter(s -> s.startsWith(args[2]))
+                        .toList();
+            }
+            if (args[0].equalsIgnoreCase("points")) {
+                return null; // online players + team colors
+            }
+        }
+
+        if (args.length == 4) {
+            if (args[0].equalsIgnoreCase("teams")) {
+                switch (args[1].toLowerCase()) {
+                    case "heart" -> {
+                        return Stream.of("destroy", "restore")
+                                .filter(s -> s.startsWith(args[3].toLowerCase()))
+                                .toList();
+                    }
+                    case "add" -> {
+                        return getExistingTeams().stream()
+                                .map(TeamColor::getFormattedName)
+                                .filter(s -> s.toLowerCase().startsWith(args[3].toLowerCase()))
+                                .toList();
+                    }
+                    case "options" -> {
+                        if (args[2].equalsIgnoreCase("allow")) {
+                            return Stream.of("join", "leave")
+                                    .filter(s -> s.startsWith(args[3].toLowerCase()))
+                                    .toList();
+                        }
+                        // It's a team name → show options
+                        try {
+                            TeamColor.valueOf(args[2].toUpperCase());
+                            return Stream.of("setspawn", "setheart", "maxmembers")
+                                    .filter(s -> s.startsWith(args[3].toLowerCase()))
+                                    .toList();
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                    case "tpbase" -> {
+                        List<String> list = new ArrayList<>(getExistingTeams().stream()
+                                .map(TeamColor::getFormattedName)
+                                .toList());
+                        list.add("@a");
+                        return list.stream()
+                                .filter(s -> s.toLowerCase().startsWith(args[3].toLowerCase()))
+                                .toList();
+                    }
+                }
+            }
+            if (args[0].equalsIgnoreCase("points") && args[1].equalsIgnoreCase("set")) {
+                return null; // number input
+            }
+        }
+
+        if (args.length == 5) {
+            if (args[0].equalsIgnoreCase("teams")) {
+                if (args[1].equalsIgnoreCase("options")) {
+                    if (args[2].equalsIgnoreCase("allow")) {
+                        return Stream.of("true", "false")
+                                .filter(s -> s.startsWith(args[4].toLowerCase()))
+                                .toList();
+                    }
+                    try {
+                        TeamColor.valueOf(args[2].toUpperCase());
+                        if (args[3].equalsIgnoreCase("maxmembers")) {
+                            return null; // number input
+                        }
+                    } catch (IllegalArgumentException ignored) {}
+                }
+            }
+        }
+
+        return Collections.emptyList();
+    }
+
+    // ========== Helpers for Tab Complete ==========
+
+    private List<TeamColor> getExistingTeams() {
+        List<TeamColor> list = new ArrayList<>();
+        for (TeamColor c : TeamColor.values()) {
+            if (teamManager.getTeam(c) != null) {
+                list.add(c);
+            }
+        }
+        return list;
+    }
+
+    private List<TeamColor> getNonExistingTeams() {
+        List<TeamColor> list = new ArrayList<>();
+        for (TeamColor c : TeamColor.values()) {
+            if (teamManager.getTeam(c) == null) {
+                list.add(c);
+            }
+        }
+        return list;
     }
 }

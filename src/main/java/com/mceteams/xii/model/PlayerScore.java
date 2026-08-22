@@ -2,12 +2,13 @@ package com.mceteams.xii.model;
 
 import com.mceteams.xii.enums.PointCategory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public class PlayerScore {
     private final UUID player;
-    private Map<PointCategory, Integer> points;
+    private Map<PointCategory, Integer> points = new HashMap<>();
 
     public PlayerScore(UUID player) {
         this.player = player;
@@ -40,4 +41,9 @@ public class PlayerScore {
     public void reset() {
         this.points.clear();
     }
+
+    public UUID getPlayerUUID() {
+        return this.player;
+    }
+
 }

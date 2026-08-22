@@ -5,3 +5,4 @@ out/
 *.jar
 .idea/
 *.iml
+version.properties

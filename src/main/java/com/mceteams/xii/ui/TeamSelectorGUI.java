@@ -25,37 +25,23 @@ public class TeamSelectorGUI {
             if (slot == 4) slot++;
 
             GameTeam team = teamManager.getTeam(color);
-            boolean isFull = team != null && team.getPlayers().size() >= team.getMaxPlayers();
+            if (team == null) continue;
 
-            if (isFull) {
-                inv.setItem(slot, ItemBuilder.create(
-                        color.getGlassPane(),
-                        color.getName(Lang.FR),
-                        "§c§lCOMPLET"
-                ));
+            if (team.getPlayers().size() >= team.getMaxPlayers()) {
+                inv.setItem(slot, ItemBuilder.create(color.getGlassPane(), color.getName(Lang.FR), "§c§lCOMPLET"));
             } else {
-                int count = team != null ? team.getPlayers().size() : 0;
-                inv.setItem(slot, ItemBuilder.create(
-                        color.getMaterial(),
-                        color.getName(Lang.FR),
-                        "§7" + count + "/10 joueurs"
-                ));
+                inv.setItem(slot, ItemBuilder.create(color.getMaterial(), color.getName(Lang.FR), "§7" + team.getPlayers().size() + "/" + team.getMaxPlayers() + " joueurs"));
             }
             slot++;
         }
 
         GameTeam myTeam = teamManager.getTeam(player.getUniqueId());
-        if (myTeam != null) {
-            inv.setItem(4, ItemBuilder.create(
-                    myTeam.getColor().getMaterial(),
-                    "§aTa team : " + myTeam.getColor().getName(Lang.FR)
-            ));
-        } else {
-            inv.setItem(4, ItemBuilder.create(
-                    Material.WHITE_STAINED_GLASS_PANE,
-                    "§7Aucune team"
-            ));
-        }
+
+        inv.setItem(4, ItemBuilder.create(
+                Material.BARRIER,
+                "§7Mode Spectateur"
+        ));
+
 
         return inv;
     }

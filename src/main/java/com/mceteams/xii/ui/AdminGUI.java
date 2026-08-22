@@ -25,19 +25,31 @@ public class AdminGUI {
         inv.setItem(10, ItemBuilder.create(
                 Material.PURPLE_BANNER,
                 "§d§lTeam Management",
-                "§7Créer, supprimer, gérer les équipes"
+                "§7Gérer les équipes, créer, supprimer, etc."
         ));
 
         inv.setItem(13, ItemBuilder.create(
                 Material.CLOCK,
                 "§e§lGame Management",
-                "§7Start, stop, set day, etc."
+                "§7Start, stop, set day"
         ));
 
-        inv.setItem(16, ItemBuilder.create(
-                Material.CHEST,
-                "§6§lItem Management",
-                "§7Blacklist, give items"
+        boolean joinEnabled = gameManager.isJoinEnabled();
+        inv.setItem(19, ItemBuilder.create(
+                joinEnabled ? Material.LIME_WOOL : Material.RED_WOOL,
+                "§e§lAllow Join",
+                "§7État: " + (joinEnabled ? "§aActivé" : "§cDésactivé"),
+                "",
+                "§7Clic pour basculer"
+        ));
+
+        boolean leaveEnabled = gameManager.isLeaveEnabled();
+        inv.setItem(20 , ItemBuilder.create(
+                leaveEnabled ? Material.LIME_WOOL : Material.RED_WOOL,
+                "§e§lAllow Leave",
+                "§7État: " + (leaveEnabled ? "§aActivé" : "§cDésactivé"),
+                "",
+                "§7Clic pour basculer"
         ));
 
         return inv;

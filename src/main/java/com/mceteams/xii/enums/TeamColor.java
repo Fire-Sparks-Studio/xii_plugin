@@ -56,4 +56,8 @@ public enum TeamColor {
     public Material getGlassPane() {
         return Material.valueOf(this.name() + "_STAINED_GLASS_PANE");
     }
+
+    public String getFormattedName() {
+        return this.name().charAt(0) + this.name().substring(1).toLowerCase();
+    }
 }

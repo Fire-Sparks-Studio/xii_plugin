@@ -1,5 +1,5 @@
 name: XII-Days
-version: '1.1'
+version: ${version}
 main: com.mceteams.xii.XiiPlugin
 api-version: '26.2'
 description: XII Days Plugin
@@ -7,6 +7,12 @@ commands:
   xii:
     description: Commande principale XII Days
     usage: /xii <command>
+  join:
+    description: Rejoindre une équipe
+    usage: /join <COULEUR>
+  leave:
+    description: Quitter son équipe
+    usage: /leave
 permissions:
   xii.admin:
     description: Permission admin XII Days

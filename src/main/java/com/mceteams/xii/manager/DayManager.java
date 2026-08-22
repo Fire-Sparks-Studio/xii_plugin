@@ -3,7 +3,7 @@ package com.mceteams.xii.manager;
 import com.mceteams.xii.enums.GameState;
 
 public class DayManager {
-    private int currentDay;
+    private int currentDay = 1;
     private long dayStartTime;
     private long dayDuration;
     private GameState gameState;

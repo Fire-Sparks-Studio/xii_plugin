@@ -3,7 +3,25 @@ plugins {
 }
 
 group = 'com.mceteams.xii'
-version = '1.1-SNAPSHOT'
+
+def versionFile = file('version.properties')
+def buildNumber = 0
+
+if (versionFile.exists()) {
+    def props = new Properties()
+    props.load(versionFile.newReader())
+    buildNumber = props.getProperty('buildNumber', '0').toInteger()
+}
+
+version = "2.0.0-bA${buildNumber}"
+
+tasks.register('incrementBuildNumber') {
+    doLast {
+        buildNumber++
+        versionFile.text = "buildNumber=${buildNumber}"
+        println "Build number incremented to A${buildNumber}"
+    }
+}
 
 repositories {
     mavenCentral()
@@ -24,4 +42,16 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+processResources {
+    filesMatching('plugin.yml') {
+        expand(
+                version: project.version
+        )
+    }
+}
+
+jar {
+    finalizedBy incrementBuildNumber
 }

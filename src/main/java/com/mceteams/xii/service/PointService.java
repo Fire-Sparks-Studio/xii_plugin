@@ -30,4 +30,13 @@ public class PointService {
         history.add(event);
     }
 
+    public void reset() {
+        playerScores.clear();
+        teamScores.clear();
+        history.clear();
+    }
+
+    public Collection<PlayerScore> getAllPlayerScores() {
+        return playerScores.values();
+    }
 }
