@@ -12,6 +12,13 @@ import org.bukkit.inventory.PlayerInventory;
 public class HotbarManager {
     private final TeamManager teamManager;
 
+    public static final int SLOT_ADMIN = 0;
+    public static final int SLOT_TEAM = 4;
+    public static final int SLOT_LANG = 8;
+
+    // Globe/Earth texture (mc-heads.com)
+    private static final String PLANET_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjFkZDRmZTRhNDI5YWJkNjY1ZGZkYjNlMjEzMjFkNmVmYTZhNmI1ZTdiOTU2ZGI5YzVkNTljOWVmYWIyNSJ9fX0=";
+
     public HotbarManager(TeamManager teamManager) {
         this.teamManager = teamManager;
     }
@@ -19,19 +26,13 @@ public class HotbarManager {
     public void giveHotbar(Player player) {
         PlayerInventory inv = player.getInventory();
 
-        if (player.hasPermission("xii.admin") && inv.getItem(0) == null) {
-            ItemStack adminItem = ItemBuilder.create(Material.TRIPWIRE_HOOK, "§6§lAdmin", "§7Clic pour ouvrir le menu admin");
-            adminItem.addUnsafeEnchantment(Enchantment.SHARPNESS, 1);
-            inv.setItem(0, adminItem);
+        if (player.hasPermission("xii.admin")) {
+            inv.setItem(SLOT_ADMIN, ItemBuilder.create(Material.TRIPWIRE_HOOK, "§6§lAdmin", "§7Clic pour ouvrir le menu admin"));
         }
 
-        if (inv.getItem(4) == null) {
-            inv.setItem(4, getTeamItem(player));
-        }
+        inv.setItem(SLOT_TEAM, getTeamItem(player));
 
-        if (inv.getItem(8) == null) {
-            inv.setItem(8, ItemBuilder.createSkull("eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDA2NWI0OTU3NzdiYTg0MmQyMmRjYTY2M2U5Zjc5NjE3ZDhiZDliOTgzZDQyNGUzNmRkN2Q5OTMwNGJhMjUwOCJ9fX0=", "§6§lLanguage", "§7Click to change of Language."));
-        }
+        inv.setItem(SLOT_LANG, ItemBuilder.createSkull(PLANET_TEXTURE, "§6§lLanguage", "§7Click to change language."));
     }
 
     public ItemStack getTeamItem(Player player) {
@@ -47,6 +48,6 @@ public class HotbarManager {
     }
 
     public void refreshTeamItem(Player player) {
-        player.getInventory().setItem(4, getTeamItem(player));
+        player.getInventory().setItem(SLOT_TEAM, getTeamItem(player));
     }
 }

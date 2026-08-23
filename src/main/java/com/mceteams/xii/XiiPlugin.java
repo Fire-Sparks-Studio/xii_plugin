@@ -37,27 +37,47 @@ public class XiiPlugin extends JavaPlugin implements Listener {
     private PlayerDataManager playerDataManager;
     private SoundService soundService;
     private TeamAdminService teamAdminService;
+    private RestrictionManager restrictionManager;
+    private SpectatorManager spectatorManager;
+    private RespawnManager respawnManager;
+    private DynamicBarManager dynamicBarManager;
+    private ConfigManager configManager;
 
     @Override
     public void onEnable() {
         getLogger().info("===[ENABLING]===");
 
-        // Registering Managers and Services
-        getLogger().info(": Registering up Managers & Services");
+        getLogger().info(": Registering Managers & Services");
         teamManager = new TeamManager();
         pointService = new PointService();
         soundService = new SoundService();
         playerDataManager = new PlayerDataManager(this);
         hotbarManager = new HotbarManager(teamManager);
         gameManager = new GameManager(teamManager, dayManager, hotbarManager, pointService, soundService, playerDataManager);
+
+        configManager = new ConfigManager(this);
+        gameManager.setConfigManager(configManager);
+
+        spectatorManager = new SpectatorManager(teamManager, playerDataManager, soundService);
+        respawnManager = new RespawnManager(teamManager, playerDataManager, spectatorManager, soundService, gameManager);
+        dynamicBarManager = new DynamicBarManager(gameManager, playerDataManager);
+        restrictionManager = new RestrictionManager(gameManager);
+
+        gameManager.setSpectatorManager(spectatorManager);
+        gameManager.setRespawnManager(respawnManager);
+        gameManager.setDynamicBarManager(dynamicBarManager);
+        gameManager.setRestrictionManager(restrictionManager);
+
+        setupManager = new SetupManager(teamManager, gameManager, hotbarManager, playerDataManager, soundService);
+        gameManager.setSetupManager(setupManager);
+
         teamAdminService = new TeamAdminService(teamManager, gameManager, setupManager, playerDataManager, soundService);
-        setupManager = new SetupManager(teamManager, gameManager, hotbarManager, pointService, playerDataManager, soundService);
         setupManager.startHotbarTask(this);
+
         ChatInputManager chatInputManager = new ChatInputManager();
 
         getLogger().info(": Managers & Services Registered!");
 
-        // Registering Listeners
         getLogger().info(": Registering Listeners");
         GuiListener guiListener = new GuiListener(teamManager, gameManager, hotbarManager, setupManager, chatInputManager, playerDataManager, soundService, teamAdminService);
         MiningListener miningListener = new MiningListener(pointService, teamManager);
@@ -68,6 +88,7 @@ public class XiiPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(placeListener, this);
         GameplayListener gameplayListener = new GameplayListener(gameManager);
         getServer().getPluginManager().registerEvents(gameplayListener, this);
+        getServer().getPluginManager().registerEvents(this, this);
         getLogger().info(": Listeners Registered!");
 
         getLogger().info(": Registering Commands");
@@ -79,11 +100,9 @@ public class XiiPlugin extends JavaPlugin implements Listener {
         Objects.requireNonNull(getCommand("admin")).setExecutor(commands);
         getLogger().info(": Commands Registered!");
 
-
-        // Getting Data Ready
         getLogger().info(": Getting Data And Game Ready");
         loadGameData();
-        gameManager.forceState(GameState.WAITING);
+        setupManager.onServerStart(this);
         getLogger().info(": Data And Game Ready!");
 
         getLogger().info("===[READY]===");
@@ -106,7 +125,6 @@ public class XiiPlugin extends JavaPlugin implements Listener {
         getConfig().set("leaveEnabled", gameManager.isLeaveEnabled());
         getConfig().set("day", gameManager.getDayManager().getCurrentDay());
 
-        // Teams
         for (GameTeam team : teamManager.getTeams()) {
             String path = "teams." + team.getColor().name();
             getConfig().set(path + ".players", team.getPlayers().stream().map(UUID::toString).toList());
@@ -126,7 +144,6 @@ public class XiiPlugin extends JavaPlugin implements Listener {
             }
         }
 
-        // Player scores
         for (PlayerScore score : pointService.getAllPlayerScores()) {
             String path = "scores.players." + score.getPlayerUUID();
             for (PointCategory cat : PointCategory.values()) {
@@ -134,7 +151,6 @@ public class XiiPlugin extends JavaPlugin implements Listener {
             }
         }
 
-// Team scores
         for (GameTeam team : teamManager.getTeams()) {
             String path = "scores.teams." + team.getColor().name();
             TeamScore score = pointService.getTeamScore(team);
@@ -162,7 +178,6 @@ public class XiiPlugin extends JavaPlugin implements Listener {
             gameManager.getDayManager().setDay(getConfig().getInt("day"));
         }
 
-        // Teams
         if (getConfig().contains("teams")) {
             for (String colorName : Objects.requireNonNull(getConfig().getConfigurationSection("teams")).getKeys(false)) {
                 TeamColor color = TeamColor.valueOf(colorName);
@@ -177,7 +192,6 @@ public class XiiPlugin extends JavaPlugin implements Listener {
             }
         }
 
-        // Player scores
         if (getConfig().contains("scores.players")) {
             for (String uuid : Objects.requireNonNull(getConfig().getConfigurationSection("scores.players")).getKeys(false)) {
                 PlayerScore score = pointService.getPlayerScore(UUID.fromString(uuid));
@@ -190,7 +204,6 @@ public class XiiPlugin extends JavaPlugin implements Listener {
             }
         }
 
-        // Team scores
         if (getConfig().contains("scores.teams")) {
             for (String colorName : Objects.requireNonNull(getConfig().getConfigurationSection("scores.teams")).getKeys(false)) {
                 GameTeam team = teamManager.getTeam(TeamColor.valueOf(colorName));
@@ -208,21 +221,5 @@ public class XiiPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-
-        if (setupManager.isSetup() && gameManager.getState() == GameState.WAITING) {
-            player.setGameMode(GameMode.ADVENTURE);
-            player.teleport(new org.bukkit.Location(getServer().getWorlds().get(0), 0, 100, 0));
-            hotbarManager.giveHotbar(player);
-        }
-
-        if (gameManager.getState() != GameState.WAITING) {
-            GameTeam team = teamManager.getTeam(player.getUniqueId());
-            if (team == null) {
-                player.setGameMode(GameMode.SPECTATOR);
-                soundService.play(player, com.mceteams.xii.enums.GameSound.SPECTATOR);
-                player.sendMessage(Messages.SPECTATOR_NO_TEAM.get(playerDataManager.getLang(player)));
-            }
-        }
     }
 }

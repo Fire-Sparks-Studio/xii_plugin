@@ -114,6 +114,7 @@ public enum Messages {
     COUNTDOWN_TICK("§e§l{0}...", "§e§l{0}..."),
     SETUP_INITIALIZED("§a§lXII DAYS §7a été initialisé.", "§a§lXII DAYS §7has been initialized."),
     SETUP_RESET("§e§lXII DAYS §7a été réinitialisé.", "§e§lXII DAYS §7has been reset."),
+    WAITING_FOR_START("§e§lEn attente du début...", "§e§lWaiting for start..."),
 
     // ===== Misc =====
     SPECTATOR_NO_TEAM("§cVous n'êtes dans aucune équipe. §7Mode spectateur activé.", "§cYou're not in any team. §7Spectator mode enabled."),
@@ -193,7 +194,38 @@ public enum Messages {
     GUI_TP_CLICK("§7Cliquez pour téléporter.", "§7Click to teleport."),
     GUI_TEAM_FULL("§cCette équipe est complète.", "§cThis team is full."),
     GUI_ADD_PLAYER_TITLE("§a§lAjouter un joueur", "§a§lAdd a Player"),
-    GUI_REMOVE_PLAYER_TITLE("§c§lRetirer un joueur", "§c§lRemove a Player");
+    GUI_REMOVE_PLAYER_TITLE("§c§lRetirer un joueur", "§c§lRemove a Player"),
+
+    // ===== New Game States =====
+    SETUP_ALREADY_DONE("§cXII Days est déjà configuré.", "§cXII Days is already configured."),
+    SETUP_REQUIRED("§cLe setup n'a pas été lancé. Utilise /xii admin setup", "§cSetup not done. Use /xii admin setup"),
+    SETUP_IN_PROGRESS("§eConfiguration en cours...", "§eSetup in progress..."),
+    SETUP_FAILED("§cErreur lors de la configuration.", "§cError during setup."),
+    WORLD_MISSING("§cLe monde XII Days n'existe plus. Reconfiguration nécessaire.", "§cXII Days world no longer exists. Reconfiguration needed."),
+    WORLD_RESET("§eLe monde XII Days a été supprimé. Serveur en mode classique.", "§eXII Days world deleted. Server in classic mode."),
+
+    // ===== Countdown =====
+    COUNTDOWN_START("§e§lLe compte à rebours commence !", "§e§lThe countdown has started!"),
+    COUNTDOWN_CANCELLED("§e§lCompte à rebours annulé.", "§e§lCountdown cancelled."),
+    COUNTDOWN_GO("§a§lC'EST PARTI !", "§a§lGO!"),
+
+    // ===== Death / Respawn =====
+    YOU_DIED("§c§lVOUS AVEZ MOURU", "§c§lYOU DIED"),
+    RESPAWN_IN("§7Réapparition dans §f{0} §7secondes", "§7Respawn in §f{0} §7seconds"),
+    PLAYER_LEFT_GAME("§e{0} §ca quitté la partie.", "§e{0} §chas left the game."),
+    PLAYER_RECONNECTED("§a{0} §7est revenu dans la partie.", "§a{0} §7has returned to the game."),
+
+    // ===== Game Phase =====
+    PREPARATION_INFO("§6§lPRÉPARATION §7- Jour §f{0}", "§6§lPREPARATION §7- Day §f{0}"),
+    COMBAT_INFO("§c§lCOMBAT §7- Jour §f{0}", "§c§lCOMBAT §7- Day §f{0}"),
+
+    // ===== Region Protection =====
+    BASE_PROTECTED("§cVous êtes dans une zone protégée.", "§cYou are in a protected zone."),
+    DUNGEON_PROTECTED("§cVous êtes dans un donjon protégé.", "§cYou are in a protected dungeon."),
+
+    // ===== Admin Stop =====
+    ADMIN_STOP("§c§lXII DAYS §7a été complètement arrêté.", "§c§lXII DAYS §7has been fully stopped."),
+    ADMIN_STOP_NO_SETUP("§cXII Days n'est pas configuré.", "§cXII Days is not configured.");
 
     private final String fr;
     private final String en;

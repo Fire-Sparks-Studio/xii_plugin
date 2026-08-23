@@ -18,7 +18,6 @@ import com.mceteams.xii.service.TeamAdminService;
 import com.mceteams.xii.ui.AdminGUI;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -26,6 +25,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -77,6 +77,7 @@ public class XCommands implements CommandExecutor, TabCompleter {
             }
             if (!setupManager.isSetup()) {
                 soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.SETUP_REQUIRED.get(lang));
                 return true;
             }
             soundService.play(player, GameSound.CLICK);
@@ -89,6 +90,14 @@ public class XCommands implements CommandExecutor, TabCompleter {
 
         if (args.length == 0) {
             player.sendMessage(Messages.USAGE.get(lang, "/xii <commande>"));
+            return true;
+        }
+
+        boolean isSetupCommand = args[0].equalsIgnoreCase("admin") && args.length >= 2 && args[1].equalsIgnoreCase("setup");
+
+        if (gameManager.getState() == GameState.NON_SETUP && !isSetupCommand) {
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.SETUP_REQUIRED.get(lang));
             return true;
         }
 
@@ -112,6 +121,11 @@ public class XCommands implements CommandExecutor, TabCompleter {
         if (!player.hasPermission("xii.play")) {
             soundService.play(player, GameSound.ERROR);
             player.sendMessage(Messages.NO_PERMISSION.get(lang));
+            return;
+        }
+        if (!setupManager.isSetup()) {
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.SETUP_REQUIRED.get(lang));
             return;
         }
         if (!gameManager.isJoinEnabled()) {
@@ -154,6 +168,11 @@ public class XCommands implements CommandExecutor, TabCompleter {
         if (!player.hasPermission("xii.play")) {
             soundService.play(player, GameSound.ERROR);
             player.sendMessage(Messages.NO_PERMISSION.get(lang));
+            return;
+        }
+        if (!setupManager.isSetup()) {
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.SETUP_REQUIRED.get(lang));
             return;
         }
         if (!gameManager.isLeaveEnabled()) {
@@ -387,25 +406,6 @@ public class XCommands implements CommandExecutor, TabCompleter {
         }
     }
 
-    // ========== Helpers ==========
-
-    private TeamColor getExistingTeamColor(Player player, String input, Lang lang) {
-        TeamColor color;
-        try {
-            color = TeamColor.valueOf(input.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            soundService.play(player, GameSound.ERROR);
-            player.sendMessage(Messages.JOIN_UNKNOWN_COLOR.get(lang, input));
-            return null;
-        }
-        if (teamManager.getTeam(color) == null) {
-            soundService.play(player, GameSound.ERROR);
-            player.sendMessage(Messages.JOIN_TEAM_NOT_EXIST.get(lang));
-            return null;
-        }
-        return color;
-    }
-
     // ========== /xii day ==========
 
     private void handleDay(Player player, String[] args, Lang lang) {
@@ -466,11 +466,11 @@ public class XCommands implements CommandExecutor, TabCompleter {
                     return;
                 }
                 if (allow) {
-                    gameManager.getBlacklistedItems().remove(hand.getType());
+                    gameManager.getRestrictionManager().whitelistItem(hand.getType());
                     soundService.play(player, GameSound.SUCCESS);
                     player.sendMessage(Messages.ALLOW_ITEM_REMOVED.get(lang, hand.getType().name()));
                 } else {
-                    gameManager.getBlacklistedItems().add(hand.getType());
+                    gameManager.getRestrictionManager().blacklistItem(hand.getType());
                     soundService.play(player, GameSound.SUCCESS_HIGH);
                     player.sendMessage(Messages.ALLOW_ITEM_ADDED.get(lang, hand.getType().name()));
                 }
@@ -483,11 +483,11 @@ public class XCommands implements CommandExecutor, TabCompleter {
                     return;
                 }
                 if (allow) {
-                    gameManager.getBlacklistedItems().remove(target.getType());
+                    gameManager.getRestrictionManager().whitelistItem(target.getType());
                     soundService.play(player, GameSound.SUCCESS);
                     player.sendMessage(Messages.ALLOW_BLOCK_REMOVED.get(lang, target.getType().name()));
                 } else {
-                    gameManager.getBlacklistedItems().add(target.getType());
+                    gameManager.getRestrictionManager().blacklistItem(target.getType());
                     soundService.play(player, GameSound.SUCCESS_HIGH);
                     player.sendMessage(Messages.ALLOW_BLOCK_ADDED.get(lang, target.getType().name()));
                 }
@@ -604,18 +604,50 @@ public class XCommands implements CommandExecutor, TabCompleter {
         }
 
         if (args.length < 2) {
-            player.sendMessage(Messages.USAGE.get(lang, "/xii admin <setup|quit>"));
+            player.sendMessage(Messages.USAGE.get(lang, "/xii admin <setup|stop>"));
             return;
         }
 
         switch (args[1].toLowerCase()) {
-            case "setup" -> setupManager.setup();
-            case "quit" -> setupManager.quit();
+            case "setup" -> {
+                JavaPlugin plugin = (JavaPlugin) Bukkit.getPluginManager().getPlugin("XII-Days");
+                setupManager.setup(plugin, player);
+            }
+            case "stop" -> {
+                if (!setupManager.isSetup()) {
+                    soundService.play(player, GameSound.ERROR);
+                    player.sendMessage(Messages.ADMIN_STOP_NO_SETUP.get(lang));
+                    return;
+                }
+                JavaPlugin plugin = (JavaPlugin) Bukkit.getPluginManager().getPlugin("XII-Days");
+                setupManager.quit(plugin);
+                soundService.playToAll(GameSound.SETUP_STOP);
+                Bukkit.broadcast(Component.text(Messages.ADMIN_STOP.get(lang)));
+            }
             default -> {
                 soundService.play(player, GameSound.ERROR);
                 player.sendMessage(Messages.TEAMS_UNKNOWN_SUB.get(lang, args[1]));
             }
         }
+    }
+
+    // ========== Helpers ==========
+
+    private TeamColor getExistingTeamColor(Player player, String input, Lang lang) {
+        TeamColor color;
+        try {
+            color = TeamColor.valueOf(input.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_UNKNOWN_COLOR.get(lang, input));
+            return null;
+        }
+        if (teamManager.getTeam(color) == null) {
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_TEAM_NOT_EXIST.get(lang));
+            return null;
+        }
+        return color;
     }
 
     // ========== Tab Complete ==========
@@ -667,7 +699,7 @@ public class XCommands implements CommandExecutor, TabCompleter {
                             .toList();
                 }
                 case "admin" -> {
-                    return Stream.of("setup", "quit")
+                    return Stream.of("setup", "stop")
                             .filter(s -> s.startsWith(args[1].toLowerCase()))
                             .toList();
                 }
@@ -690,10 +722,10 @@ public class XCommands implements CommandExecutor, TabCompleter {
                                 .toList();
                     }
                     case "add" -> {
-                        return null; // online players
+                        return null;
                     }
                     case "remove" -> {
-                        return null; // online players
+                        return null;
                     }
                     case "options" -> {
                         List<String> list = new ArrayList<>(getExistingTeams().stream()
@@ -712,7 +744,7 @@ public class XCommands implements CommandExecutor, TabCompleter {
                         .toList();
             }
             if (args[0].equalsIgnoreCase("points")) {
-                return null; // online players + team colors
+                return null;
             }
         }
 
@@ -755,7 +787,7 @@ public class XCommands implements CommandExecutor, TabCompleter {
                 }
             }
             if (args[0].equalsIgnoreCase("points") && args[1].equalsIgnoreCase("set")) {
-                return null; // number input
+                return null;
             }
         }
 
@@ -770,7 +802,7 @@ public class XCommands implements CommandExecutor, TabCompleter {
                     try {
                         TeamColor.valueOf(args[2].toUpperCase());
                         if (args[3].equalsIgnoreCase("maxmembers")) {
-                            return null; // number input
+                            return null;
                         }
                     } catch (IllegalArgumentException ignored) {}
                 }
@@ -779,8 +811,6 @@ public class XCommands implements CommandExecutor, TabCompleter {
 
         return Collections.emptyList();
     }
-
-    // ========== Helpers for Tab Complete ==========
 
     private List<TeamColor> getExistingTeams() {
         List<TeamColor> list = new ArrayList<>();

@@ -22,13 +22,18 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 
@@ -57,10 +62,14 @@ public class GuiListener implements Listener {
         this.teamSelectorGUI = new TeamSelectorGUI(teamManager, playerDataManager);
     }
 
+    // ========== Hotbar Click ==========
+
     @EventHandler
     public void onHotbarClick(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+
+        if (gameManager.getState() == GameState.NON_SETUP) return;
 
         ItemStack item = player.getInventory().getItemInMainHand();
         if (item.getType() == Material.AIR) return;
@@ -89,6 +98,8 @@ public class GuiListener implements Listener {
         }
     }
 
+    // ========== Chat ==========
+
     @EventHandler
     public void onChat(AsyncPlayerChatEvent event) {
         Player player = event.getPlayer();
@@ -109,6 +120,8 @@ public class GuiListener implements Listener {
         }
     }
 
+    // ========== Inventory Click ==========
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
@@ -116,7 +129,6 @@ public class GuiListener implements Listener {
 
         String title = event.getView().getTitle();
 
-        // ===== Admin GUI — accessible in all states =====
         if (title.equals(Messages.GUI_ADMIN.get(lang))) {
             if (!setupManager.isSetup()) {
                 event.setCancelled(true);
@@ -127,21 +139,18 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // ===== Team Selector =====
         if (title.equals(Messages.GUI_TEAM_SELECTOR.get(lang))) {
             event.setCancelled(true);
             handleTeamSelectorClick(player, event, lang);
             return;
         }
 
-        // ===== Team Management =====
         if (title.equals(Messages.GUI_TEAM_MANAGEMENT.get(lang))) {
             event.setCancelled(true);
             handleTeamManagementClick(player, event, lang);
             return;
         }
 
-        // ===== Team Options =====
         if (event.getView().getTitle().startsWith("§6§l") && !title.equals(Messages.GUI_ADMIN.get(lang))
                 && !title.equals(Messages.GUI_TEAM_MANAGEMENT.get(lang)) && !title.equals(Messages.GUI_GAME_MANAGEMENT.get(lang))) {
             for (TeamColor c : TeamColor.values()) {
@@ -153,42 +162,36 @@ public class GuiListener implements Listener {
             }
         }
 
-        // ===== Game Management =====
         if (title.equals(Messages.GUI_GAME_MANAGEMENT.get(lang))) {
             event.setCancelled(true);
             handleGameManagementClick(player, event, lang);
             return;
         }
 
-        // ===== Language =====
         if (title.equals(Messages.GUI_LANGUAGE.get(lang))) {
             event.setCancelled(true);
             handleLanguageClick(player, event);
             return;
         }
 
-        // ===== Team Create =====
         if (title.equals(Messages.GUI_TEAM_CREATE.get(lang))) {
             event.setCancelled(true);
             handleTeamCreateClick(player, event, lang);
             return;
         }
 
-        // ===== Team Player Select =====
         if (title.startsWith(Messages.GUI_ADD_PLAYER_TITLE.get(lang)) || title.startsWith(Messages.GUI_REMOVE_PLAYER_TITLE.get(lang))) {
             event.setCancelled(true);
             handleTeamPlayerSelectClick(player, event, title, lang);
             return;
         }
 
-        // ===== TP Base =====
         if (title.startsWith(Messages.GUI_TP_BASE.get(lang))) {
             event.setCancelled(true);
             handleTpBaseClick(player, event, title, lang);
             return;
         }
 
-        // ===== Hotbar (depuis un GUI ouvert) =====
         if (event.getClickedInventory() == player.getInventory()) {
             int rawSlot = event.getRawSlot();
             event.setCancelled(true);
@@ -209,7 +212,6 @@ public class GuiListener implements Listener {
         ItemStack current = event.getCurrentItem();
         if (current == null || current.getType() == Material.AIR) return;
 
-        // Barrier = leave team
         if (event.getRawSlot() == 4 && current.getType() == Material.BARRIER) {
             GameTeam team = teamManager.getTeam(player.getUniqueId());
             if (team != null) {
@@ -272,7 +274,6 @@ public class GuiListener implements Listener {
 
         int size = event.getInventory().getSize();
 
-        // Back button
         if (rawSlot == size - 1) {
             soundService.play(player, GameSound.BACK);
             AdminGUI adminGUI = new AdminGUI(teamManager, gameManager, playerDataManager);
@@ -280,7 +281,6 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // Create team button
         if (rawSlot == size - 5 && item.getType() == Material.LIME_STAINED_GLASS_PANE) {
             soundService.play(player, GameSound.CLICK);
             TeamCreateGUI createGUI = new TeamCreateGUI(teamManager, playerDataManager);
@@ -288,7 +288,6 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // Team slots
         for (GameTeam team : teamManager.getTeams()) {
             if (item.getType() == team.getColor().getMaterial()) {
                 soundService.play(player, GameSound.SELECT);
@@ -428,12 +427,14 @@ public class GuiListener implements Listener {
         switch (rawSlot) {
             case 3 -> {
                 playerDataManager.setLang(player, Lang.FR);
+                hotbarManager.giveHotbar(player);
                 soundService.play(player, GameSound.LANG_SELECT);
                 player.sendMessage(Messages.LANG_CHANGED_FR.get(Lang.FR));
                 player.closeInventory();
             }
             case 5 -> {
                 playerDataManager.setLang(player, Lang.EN);
+                hotbarManager.giveHotbar(player);
                 soundService.play(player, GameSound.LANG_SELECT);
                 player.sendMessage(Messages.LANG_CHANGED_EN.get(Lang.EN));
                 player.closeInventory();
@@ -447,7 +448,6 @@ public class GuiListener implements Listener {
 
         int rawSlot = event.getRawSlot();
 
-        // Back button
         if (rawSlot == 49) {
             soundService.play(player, GameSound.BACK);
             TeamManagementGUI gui = new TeamManagementGUI(teamManager, playerDataManager);
@@ -455,7 +455,6 @@ public class GuiListener implements Listener {
             return;
         }
 
-        // Find color from wool material
         for (TeamColor color : TeamColor.values()) {
             if (item.getType() == color.getMaterial()) {
                 teamAdminService.createTeam(player, color);
@@ -482,7 +481,6 @@ public class GuiListener implements Listener {
         }
         if (team == null) return;
 
-        // Back button
         if (rawSlot == size - 5) {
             soundService.play(player, GameSound.BACK);
             TeamOptionsGUI gui = new TeamOptionsGUI(gameManager, playerDataManager);
@@ -555,6 +553,37 @@ public class GuiListener implements Listener {
         }
     }
 
+    // ========== Block Place / Drop / Drag ==========
+
+    @EventHandler
+    public void onBlockPlace(BlockPlaceEvent event) {
+        if (gameManager.getState() == GameState.NON_SETUP) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onDrop(PlayerDropItemEvent event) {
+        if (gameManager.getState() == GameState.NON_SETUP) return;
+        event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onDrag(InventoryDragEvent event) {
+        if (gameManager.getState() == GameState.NON_SETUP) return;
+        event.setCancelled(true);
+    }
+
+    // ========== Block Break ==========
+
+    @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        if (gameManager.getState() == GameState.NON_SETUP) return;
+        if (gameManager.getState() == GameState.COMBAT) return;
+        event.setCancelled(true);
+    }
+
+    // ========== Inventory Close ==========
+
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
@@ -564,21 +593,63 @@ public class GuiListener implements Listener {
         }
     }
 
-    @EventHandler
-    public void onBlockPlace(BlockPlaceEvent event) {
-        if (gameManager.getState() != GameState.WAITING) return;
-        event.setCancelled(true);
-    }
+    // ========== Player Join ==========
 
     @EventHandler
-    public void onDrop(PlayerDropItemEvent event) {
-        if (gameManager.getState() != GameState.WAITING) return;
-        event.setCancelled(true);
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+
+        if (gameManager.getState() == GameState.NON_SETUP) return;
+
+        if (gameManager.getState() == GameState.WAITING) {
+            player.setGameMode(GameMode.ADVENTURE);
+            player.teleport(gameManager.getLobbySpawn());
+            hotbarManager.giveHotbar(player);
+        }
+
+        if (gameManager.getState() == GameState.PREPARATION || gameManager.getState() == GameState.COMBAT) {
+            com.mceteams.xii.model.GameTeam team = teamManager.getTeam(player.getUniqueId());
+            if (team == null) {
+                gameManager.getSpectatorManager().makePermanentSpectator(player);
+            } else {
+                gameManager.getRespawnManager().handleReconnect(player);
+            }
+        }
     }
 
+    // ========== Player Quit ==========
+
     @EventHandler
-    public void onDrag(InventoryDragEvent event) {
-        if (gameManager.getState() != GameState.WAITING) return;
-        event.setCancelled(true);
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+
+        if (gameManager.getState() == GameState.PREPARATION || gameManager.getState() == GameState.COMBAT) {
+            com.mceteams.xii.model.GameTeam team = teamManager.getTeam(player.getUniqueId());
+            if (team != null) {
+                Lang lang = playerDataManager.getLang(player);
+                for (Player member : Bukkit.getOnlinePlayers()) {
+                    com.mceteams.xii.model.GameTeam memberTeam = teamManager.getTeam(member.getUniqueId());
+                    if (memberTeam != null && memberTeam.equals(team)) {
+                        member.sendMessage(Messages.PLAYER_LEFT_GAME.get(playerDataManager.getLang(member), player.getName()));
+                    }
+                }
+                gameManager.getRespawnManager().handleDisconnect(player);
+            }
+        }
+    }
+
+    // ========== Death Event ==========
+
+    @EventHandler
+    public void onPlayerDeath(org.bukkit.event.entity.PlayerDeathEvent event) {
+        Player player = event.getEntity();
+
+        if (gameManager.getState() == GameState.PREPARATION || gameManager.getState() == GameState.COMBAT) {
+            event.setDeathMessage("");
+            event.getDrops().clear();
+            event.setDroppedExp(0);
+
+            gameManager.getRespawnManager().handleDeath(player);
+        }
     }
 }
