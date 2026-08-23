@@ -1,7 +1,10 @@
 package com.mceteams.xii.manager;
 
+import com.mceteams.xii.enums.GameSound;
 import com.mceteams.xii.enums.GameState;
+import com.mceteams.xii.enums.Messages;
 import com.mceteams.xii.service.PointService;
+import com.mceteams.xii.service.SoundService;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -12,13 +15,17 @@ public class SetupManager {
     private final GameManager gameManager;
     private final HotbarManager hotbarManager;
     private final PointService pointService;
+    private final PlayerDataManager playerDataManager;
+    private final SoundService soundService;
     private boolean isSetup = false;
 
-    public SetupManager(TeamManager teamManager, GameManager gameManager, HotbarManager hotbarManager, PointService pointService) {
+    public SetupManager(TeamManager teamManager, GameManager gameManager, HotbarManager hotbarManager, PointService pointService, PlayerDataManager playerDataManager, SoundService soundService) {
         this.teamManager = teamManager;
         this.gameManager = gameManager;
         this.hotbarManager = hotbarManager;
         this.pointService = pointService;
+        this.playerDataManager = playerDataManager;
+        this.soundService = soundService;
     }
 
     public void setup() {
@@ -29,7 +36,10 @@ public class SetupManager {
         }
 
         isSetup = true;
-        Bukkit.broadcast(Component.text("\n§6§lXII DAYS §7a été initialisé !\n"));
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            soundService.play(player, GameSound.SETUP_START);
+            player.sendMessage(Messages.SETUP_INITIALIZED.get(playerDataManager.getLang(player)));
+        }
     }
 
     public void quit() {
@@ -43,12 +53,16 @@ public class SetupManager {
         teamManager.reset();
         pointService.reset();
         isSetup = false;
-        Bukkit.broadcast(Component.text("\n§c§lXII DAYS §7a été réinitialisé !\n"));
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            soundService.play(player, GameSound.SETUP_STOP);
+            player.sendMessage(Messages.SETUP_RESET.get(playerDataManager.getLang(player)));
+        }
     }
 
     public void startHotbarTask(JavaPlugin plugin) {
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             if (!isSetup) return;
+            if (gameManager.getState() != GameState.WAITING) return;
             for (Player player : Bukkit.getOnlinePlayers()) {
                 hotbarManager.giveHotbar(player);
             }

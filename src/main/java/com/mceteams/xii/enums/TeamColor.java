@@ -60,4 +60,8 @@ public enum TeamColor {
     public String getFormattedName() {
         return this.name().charAt(0) + this.name().substring(1).toLowerCase();
     }
+
+    public String getColorCode() {
+        return chatColor.toString();
+    }
 }

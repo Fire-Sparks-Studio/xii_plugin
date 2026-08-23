@@ -2,9 +2,11 @@ package com.mceteams.xii;
 
 import com.mceteams.xii.commands.XCommands;
 import com.mceteams.xii.enums.GameState;
+import com.mceteams.xii.enums.Messages;
 import com.mceteams.xii.enums.PointCategory;
 import com.mceteams.xii.enums.TeamColor;
-import com.mceteams.xii.listener.HotbarListener;
+import com.mceteams.xii.listener.GuiListener;
+import com.mceteams.xii.listener.GameplayListener;
 import com.mceteams.xii.listener.MiningListener;
 import com.mceteams.xii.listener.PlaceListener;
 import com.mceteams.xii.manager.*;
@@ -12,6 +14,8 @@ import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.PlayerScore;
 import com.mceteams.xii.model.TeamScore;
 import com.mceteams.xii.service.PointService;
+import com.mceteams.xii.service.SoundService;
+import com.mceteams.xii.service.TeamAdminService;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -30,6 +34,9 @@ public class XiiPlugin extends JavaPlugin implements Listener {
     private GameManager gameManager;
     private TeamManager teamManager;
     private PointService pointService;
+    private PlayerDataManager playerDataManager;
+    private SoundService soundService;
+    private TeamAdminService teamAdminService;
 
     @Override
     public void onEnable() {
@@ -39,9 +46,12 @@ public class XiiPlugin extends JavaPlugin implements Listener {
         getLogger().info(": Registering up Managers & Services");
         teamManager = new TeamManager();
         pointService = new PointService();
+        soundService = new SoundService();
+        playerDataManager = new PlayerDataManager(this);
         hotbarManager = new HotbarManager(teamManager);
-        gameManager = new GameManager(teamManager, dayManager, hotbarManager, pointService);
-        setupManager = new SetupManager(teamManager, gameManager, hotbarManager, pointService);
+        gameManager = new GameManager(teamManager, dayManager, hotbarManager, pointService, soundService, playerDataManager);
+        teamAdminService = new TeamAdminService(teamManager, gameManager, playerDataManager, soundService);
+        setupManager = new SetupManager(teamManager, gameManager, hotbarManager, pointService, playerDataManager, soundService);
         setupManager.startHotbarTask(this);
         ChatInputManager chatInputManager = new ChatInputManager();
 
@@ -49,21 +59,24 @@ public class XiiPlugin extends JavaPlugin implements Listener {
 
         // Registering Listeners
         getLogger().info(": Registering Listeners");
-        HotbarListener hotbarListener = new HotbarListener(teamManager, gameManager, hotbarManager, setupManager, chatInputManager);
+        GuiListener guiListener = new GuiListener(teamManager, gameManager, hotbarManager, setupManager, chatInputManager, playerDataManager, soundService, teamAdminService);
         MiningListener miningListener = new MiningListener(pointService, teamManager);
         PlaceListener placeListener = new PlaceListener(miningListener);
 
-        getServer().getPluginManager().registerEvents(hotbarListener, this);
+        getServer().getPluginManager().registerEvents(guiListener, this);
         getServer().getPluginManager().registerEvents(miningListener, this);
         getServer().getPluginManager().registerEvents(placeListener, this);
+        GameplayListener gameplayListener = new GameplayListener(gameManager);
+        getServer().getPluginManager().registerEvents(gameplayListener, this);
         getLogger().info(": Listeners Registered!");
 
         getLogger().info(": Registering Commands");
-        XCommands commands = new XCommands(teamManager, gameManager, pointService, setupManager);
+        XCommands commands = new XCommands(teamManager, gameManager, pointService, setupManager, playerDataManager, soundService, teamAdminService);
 
         Objects.requireNonNull(getCommand("xii")).setExecutor(commands);
         Objects.requireNonNull(getCommand("join")).setExecutor(commands);
         Objects.requireNonNull(getCommand("leave")).setExecutor(commands);
+        Objects.requireNonNull(getCommand("admin")).setExecutor(commands);
         getLogger().info(": Commands Registered!");
 
 
@@ -205,7 +218,8 @@ public class XiiPlugin extends JavaPlugin implements Listener {
             GameTeam team = teamManager.getTeam(player.getUniqueId());
             if (team == null) {
                 player.setGameMode(GameMode.SPECTATOR);
-                player.sendMessage("§cTu n'es dans aucune équipe. Mode spectateur.");
+                soundService.play(player, com.mceteams.xii.enums.GameSound.SPECTATOR);
+                player.sendMessage(Messages.SPECTATOR_NO_TEAM.get(playerDataManager.getLang(player)));
             }
         }
     }

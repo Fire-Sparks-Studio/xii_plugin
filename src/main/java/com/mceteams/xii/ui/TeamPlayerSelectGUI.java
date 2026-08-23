@@ -1,6 +1,8 @@
 package com.mceteams.xii.ui;
 
 import com.mceteams.xii.enums.Lang;
+import com.mceteams.xii.enums.Messages;
+import com.mceteams.xii.manager.PlayerDataManager;
 import com.mceteams.xii.manager.TeamManager;
 import com.mceteams.xii.model.GameTeam;
 import net.kyori.adventure.text.Component;
@@ -15,14 +17,17 @@ import java.util.List;
 
 public class TeamPlayerSelectGUI {
     private final TeamManager teamManager;
+    private final PlayerDataManager playerDataManager;
 
-    public TeamPlayerSelectGUI(TeamManager teamManager) {
+    public TeamPlayerSelectGUI(TeamManager teamManager, PlayerDataManager playerDataManager) {
         this.teamManager = teamManager;
+        this.playerDataManager = playerDataManager;
     }
 
-    public Inventory createForAdd(GameTeam team) {
+    public Inventory createForAdd(Player player, GameTeam team) {
+        var lang = playerDataManager.getLang(player);
         int size = Math.max(54, (int) (Math.ceil((Bukkit.getOnlinePlayers().size() + 1) / 9.0) * 9));
-        Inventory inv = Bukkit.createInventory(null, size, "§a§lAjouter §7| §f" + team.getColor().getName(Lang.FR));
+        Inventory inv = Bukkit.createInventory(null, size, Messages.GUI_ADD_PLAYER_TITLE.get(lang) + " §7| §f" + team.getColor().getName(lang));
 
         for (int i = 0; i < size; i++) {
             inv.setItem(i, ItemBuilder.create(Material.GRAY_STAINED_GLASS_PANE, " "));
@@ -40,12 +45,12 @@ public class TeamPlayerSelectGUI {
             if (playerTeam != null) {
                 meta.displayName(Component.text("§e" + online.getName()));
                 meta.lore(List.of(
-                        Component.text("§cDéjà dans l'équipe §e" + playerTeam.getColor().getName(Lang.FR))
+                        Component.text(Messages.ALREADY_IN_TEAM.get(lang, playerTeam.getColor().getName(lang)))
                 ));
             } else {
                 meta.displayName(Component.text("§a" + online.getName()));
                 meta.lore(List.of(
-                        Component.text("§7Clic pour ajouter")
+                        Component.text(Messages.GUI_CLICK_TO_ADD.get(lang))
                 ));
             }
 
@@ -56,15 +61,16 @@ public class TeamPlayerSelectGUI {
 
         inv.setItem(size - 5, ItemBuilder.create(
                 Material.ARROW,
-                "§c§lRetour"
+                Messages.GUI_BACK.get(lang)
         ));
 
         return inv;
     }
 
-    public Inventory createForRemove(GameTeam team) {
+    public Inventory createForRemove(Player player, GameTeam team) {
+        var lang = playerDataManager.getLang(player);
         int size = Math.max(27, (int) (Math.ceil((team.getPlayers().size() + 1) / 9.0) * 9));
-        Inventory inv = Bukkit.createInventory(null, size, "§c§lRetirer §7| §f" + team.getColor().getName(Lang.FR));
+        Inventory inv = Bukkit.createInventory(null, size, Messages.GUI_REMOVE_PLAYER_TITLE.get(lang) + " §7| §f" + team.getColor().getName(lang));
 
         for (int i = 0; i < size; i++) {
             inv.setItem(i, ItemBuilder.create(Material.GRAY_STAINED_GLASS_PANE, " "));
@@ -74,15 +80,15 @@ public class TeamPlayerSelectGUI {
         for (java.util.UUID uuid : team.getPlayers()) {
             if (slot >= size - 9) break;
 
-            Player player = Bukkit.getPlayer(uuid);
-            String name = player != null ? player.getName() : uuid.toString();
+            Player p = Bukkit.getPlayer(uuid);
+            String name = p != null ? p.getName() : uuid.toString();
 
             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) head.getItemMeta();
             meta.setOwner(name);
             meta.displayName(Component.text("§c" + name));
             meta.lore(List.of(
-                    Component.text("§7Clic pour retirer")
+                    Component.text(Messages.GUI_CLICK_TO_REMOVE.get(lang))
             ));
             head.setItemMeta(meta);
             inv.setItem(slot, head);
@@ -91,7 +97,7 @@ public class TeamPlayerSelectGUI {
 
         inv.setItem(size - 5, ItemBuilder.create(
                 Material.ARROW,
-                "§c§lRetour"
+                Messages.GUI_BACK.get(lang)
         ));
 
         return inv;

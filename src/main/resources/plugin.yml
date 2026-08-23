@@ -13,6 +13,10 @@ commands:
   leave:
     description: Quitter son équipe
     usage: /leave
+  admin:
+    description: Ouvrir le menu admin
+    usage: /admin
+    permission: xii.admin
 permissions:
   xii.admin:
     description: Permission admin XII Days

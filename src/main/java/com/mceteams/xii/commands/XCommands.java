@@ -1,20 +1,25 @@
 package com.mceteams.xii.commands;
 
+import com.mceteams.xii.enums.GameSound;
 import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.enums.Lang;
+import com.mceteams.xii.enums.Messages;
 import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.manager.GameManager;
+import com.mceteams.xii.manager.PlayerDataManager;
 import com.mceteams.xii.manager.SetupManager;
 import com.mceteams.xii.manager.TeamManager;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.PlayerScore;
 import com.mceteams.xii.model.TeamScore;
 import com.mceteams.xii.service.PointService;
+import com.mceteams.xii.service.SoundService;
+import com.mceteams.xii.service.TeamAdminService;
+import com.mceteams.xii.ui.AdminGUI;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
-import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -30,399 +35,372 @@ public class XCommands implements CommandExecutor, TabCompleter {
     private final GameManager gameManager;
     private final SetupManager setupManager;
     private final PointService pointService;
+    private final PlayerDataManager playerDataManager;
+    private final SoundService soundService;
+    private final TeamAdminService teamAdminService;
 
-    public XCommands(TeamManager teamManager, GameManager gameManager, PointService pointService, SetupManager setupManager) {
+    public XCommands(TeamManager teamManager, GameManager gameManager, PointService pointService, SetupManager setupManager, PlayerDataManager playerDataManager, SoundService soundService, TeamAdminService teamAdminService) {
         this.teamManager = teamManager;
         this.gameManager = gameManager;
         this.pointService = pointService;
         this.setupManager = setupManager;
+        this.playerDataManager = playerDataManager;
+        this.soundService = soundService;
+        this.teamAdminService = teamAdminService;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Seuls les joueurs peuvent utiliser cette commande.");
+            sender.sendMessage(Messages.NOT_PLAYER.get(Lang.FR));
             return true;
         }
+        Lang lang = playerDataManager.getLang(player);
 
         String cmd = command.getName().toLowerCase();
 
         if (cmd.equals("join")) {
-            handleJoin(player, args);
+            handleJoin(player, args, lang);
             return true;
         }
 
         if (cmd.equals("leave")) {
-            handleLeave(player);
+            handleLeave(player, lang);
+            return true;
+        }
+
+        if (cmd.equals("admin")) {
+            if (!player.hasPermission("xii.admin")) {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.NO_PERMISSION.get(lang));
+                return true;
+            }
+            if (!setupManager.isSetup()) {
+                soundService.play(player, GameSound.ERROR);
+                return true;
+            }
+            soundService.play(player, GameSound.CLICK);
+            AdminGUI adminGUI = new AdminGUI(teamManager, gameManager, playerDataManager);
+            player.openInventory(adminGUI.create(player));
             return true;
         }
 
         if (!cmd.equals("xii")) return true;
 
         if (args.length == 0) {
-            player.sendMessage("§cUsage: /xii <commande>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii <commande>"));
             return true;
         }
 
         switch (args[0].toLowerCase()) {
-            case "teams" -> handleTeams(player, args);
-            case "day" -> handleDay(player, args);
-            case "allow" -> handleAllow(player, args);
-            case "points" -> handlePoints(player, args);
-            case "admin" -> handleAdmin(player, args);
-            default -> player.sendMessage("§cCommande inconnue: " + args[0]);
+            case "teams" -> handleTeams(player, args, lang);
+            case "day" -> handleDay(player, args, lang);
+            case "allow" -> handleAllow(player, args, lang);
+            case "points" -> handlePoints(player, args, lang);
+            case "admin" -> handleAdmin(player, args, lang);
+            default -> {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.UNKNOWN_COMMAND.get(lang, args[0]));
+            }
         }
         return true;
     }
 
     // ========== /join /leave ==========
 
-    private void handleJoin(Player player, String[] args) {
+    private void handleJoin(Player player, String[] args, Lang lang) {
         if (!player.hasPermission("xii.play")) {
-            player.sendMessage("§cTu n'as pas la permission !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
         if (!gameManager.isJoinEnabled()) {
-            player.sendMessage("§cLes teams sont fermées !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_TEAM_CLOSED.get(lang));
             return;
         }
         if (gameManager.getState() != GameState.WAITING) {
-            player.sendMessage("§cLa partie a déjà commencé !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_GAME_STARTED.get(lang));
             return;
         }
         if (teamManager.getTeam(player.getUniqueId()) != null) {
-            player.sendMessage("§cTu es déjà dans une équipe !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_ALREADY_IN_TEAM.get(lang));
             return;
         }
         if (args.length < 1) {
-            player.sendMessage("§cUsage: /join <couleur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/join <couleur>"));
             return;
         }
         TeamColor color;
         try {
             color = TeamColor.valueOf(args[0].toUpperCase());
         } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + args[0]);
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_UNKNOWN_COLOR.get(lang, args[0]));
             return;
         }
         GameTeam team = teamManager.getTeam(color);
         if (team == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_TEAM_NOT_EXIST.get(lang));
             return;
         }
-        if (teamManager.addPlayer(player.getUniqueId(), team)) {
-            player.sendMessage("§aTu as rejoint l'équipe " + color.getName(Lang.FR) + " !");
-        } else {
-            player.sendMessage("§cL'équipe est complète !");
-        }
+        teamAdminService.joinTeam(player, team);
     }
 
-    private void handleLeave(Player player) {
+    private void handleLeave(Player player, Lang lang) {
         if (!player.hasPermission("xii.play")) {
-            player.sendMessage("§cTu n'as pas la permission !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
         if (!gameManager.isLeaveEnabled()) {
-            player.sendMessage("§cLe leave est désactivé !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.LEAVE_DISABLED.get(lang));
             return;
         }
         if (gameManager.getState() != GameState.WAITING) {
-            player.sendMessage("§cLa partie a déjà commencé !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.LEAVE_GAME_STARTED.get(lang));
             return;
         }
         GameTeam team = teamManager.getTeam(player.getUniqueId());
         if (team == null) {
-            player.sendMessage("§cTu n'es dans aucune équipe !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.LEAVE_NOT_IN_TEAM.get(lang));
             return;
         }
-        teamManager.removePlayer(player.getUniqueId());
-        player.sendMessage("§aTu as quitté l'équipe.");
+        teamAdminService.leaveTeam(player);
     }
 
     // ========== /xii teams ==========
 
-    private void handleTeams(Player player, String[] args) {
+    private void handleTeams(Player player, String[] args, Lang lang) {
         if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii teams <create|delete|add|remove|heart|eliminate|revive|tpbase|options>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams <create|delete|add|remove|heart|eliminate|revive|tpbase|options>"));
             return;
         }
 
         String sub = args[1].toLowerCase();
 
         switch (sub) {
-            case "create" -> handleTeamsCreate(player, args);
-            case "delete" -> handleTeamsDelete(player, args);
-            case "add" -> handleTeamsAdd(player, args);
-            case "remove" -> handleTeamsRemove(player, args);
-            case "heart" -> handleTeamsHeart(player, args);
-            case "eliminate" -> handleTeamsEliminate(player, args);
-            case "revive" -> handleTeamsRevive(player, args);
-            case "tpbase" -> handleTeamsTpBase(player, args);
-            case "options" -> handleTeamsOptions(player, args);
-            default -> player.sendMessage("§cSous-commande inconnue: " + sub);
+            case "create" -> handleTeamsCreate(player, args, lang);
+            case "delete" -> handleTeamsDelete(player, args, lang);
+            case "add" -> handleTeamsAdd(player, args, lang);
+            case "remove" -> handleTeamsRemove(player, args, lang);
+            case "heart" -> handleTeamsHeart(player, args, lang);
+            case "eliminate" -> handleTeamsEliminate(player, args, lang);
+            case "revive" -> handleTeamsRevive(player, args, lang);
+            case "tpbase" -> handleTeamsTpBase(player, args, lang);
+            case "options" -> handleTeamsOptions(player, args, lang);
+            default -> {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.TEAMS_UNKNOWN_SUB.get(lang, sub));
+            }
         }
     }
 
-    private void handleTeamsCreate(Player player, String[] args) {
+    private void handleTeamsCreate(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams create <couleur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams create <couleur>"));
             return;
         }
         TeamColor color;
         try {
             color = TeamColor.valueOf(args[2].toUpperCase());
         } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + args[2]);
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_UNKNOWN_COLOR.get(lang, args[2]));
             return;
         }
-        if (teamManager.getTeam(color) != null) {
-            player.sendMessage("§cCette équipe existe déjà !");
-            return;
-        }
-        teamManager.createTeam(color);
-        player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " créée !");
+        teamAdminService.createTeam(player, color);
     }
 
-    private void handleTeamsDelete(Player player, String[] args) {
+    private void handleTeamsDelete(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams delete <couleur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams delete <couleur>"));
             return;
         }
-        TeamColor color = getExistingTeamColor(player, args[2]);
+        TeamColor color = getExistingTeamColor(player, args[2], lang);
         if (color == null) return;
-        teamManager.deleteTeam(teamManager.getTeam(color));
-        player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " supprimée !");
+        teamAdminService.deleteTeam(player, teamManager.getTeam(color));
     }
 
-    private void handleTeamsAdd(Player player, String[] args) {
+    private void handleTeamsAdd(Player player, String[] args, Lang lang) {
         if (args.length < 4) {
-            player.sendMessage("§cUsage: /xii teams add <joueur> <couleur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams add <joueur> <couleur>"));
             return;
         }
+
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) {
-            player.sendMessage("§cJoueur introuvable: " + args[2]);
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.PLAYER_NOT_FOUND.get(lang, args[2]));
             return;
         }
-        TeamColor color = getExistingTeamColor(player, args[3]);
+
+        TeamColor color = getExistingTeamColor(player, args[3], lang);
         if (color == null) return;
-        GameTeam team = teamManager.getTeam(color);
-        if (teamManager.addPlayer(target.getUniqueId(), team)) {
-            player.sendMessage("§a" + target.getName() + " ajouté à l'équipe " + color.getName(Lang.FR) + " !");
-        } else {
-            player.sendMessage("§cL'équipe est complète !");
-        }
+
+        teamAdminService.addPlayer(player, target, teamManager.getTeam(color));
     }
 
-    private void handleTeamsRemove(Player player, String[] args) {
+    private void handleTeamsRemove(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams remove <joueur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams remove <joueur>"));
             return;
         }
+
         Player target = Bukkit.getPlayer(args[2]);
         if (target == null) {
-            player.sendMessage("§cJoueur introuvable: " + args[2]);
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.PLAYER_NOT_FOUND.get(lang, args[2]));
             return;
         }
-        teamManager.removePlayer(target.getUniqueId());
-        player.sendMessage("§a" + target.getName() + " retiré de son équipe !");
+
+        teamAdminService.removePlayer(player, target);
     }
 
-    private void handleTeamsHeart(Player player, String[] args) {
+    private void handleTeamsHeart(Player player, String[] args, Lang lang) {
         if (args.length < 4) {
-            player.sendMessage("§cUsage: /xii teams heart <couleur> <destroy|restore>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams heart <couleur> <destroy|restore>"));
             return;
         }
-        TeamColor color = getExistingTeamColor(player, args[2]);
+        TeamColor color = getExistingTeamColor(player, args[2], lang);
         if (color == null) return;
         GameTeam team = teamManager.getTeam(color);
 
         String action = args[3].toLowerCase();
         switch (action) {
-            case "destroy" -> {
-                teamManager.destroyHeart(team);
-                player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " détruit !");
-            }
-            case "restore" -> {
-                team.setHeartAlive(true);
-                player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " restauré !");
-            }
-            default -> player.sendMessage("§cUsage: /xii teams heart <couleur> <destroy|restore>");
+            case "destroy" -> teamAdminService.destroyHeart(player, team);
+            case "restore" -> teamAdminService.restoreHeart(player, team);
+            default -> player.sendMessage(Messages.USAGE.get(lang, "/xii teams heart <couleur> <destroy|restore>"));
         }
     }
 
-    private void handleTeamsEliminate(Player player, String[] args) {
+    private void handleTeamsEliminate(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams eliminate <couleur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams eliminate <couleur>"));
             return;
         }
-        TeamColor color = getExistingTeamColor(player, args[2]);
+
+        TeamColor color = getExistingTeamColor(player, args[2], lang);
         if (color == null) return;
-        GameTeam team = teamManager.getTeam(color);
-        team.destroyHeart();
-        for (UUID uuid : team.getPlayers()) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p != null) {
-                p.setGameMode(GameMode.SPECTATOR);
-                p.sendMessage("§cVous avez été éliminé !");
-            }
-        }
-        player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " éliminée !");
+
+        teamAdminService.eliminateTeam(player, teamManager.getTeam(color));
     }
 
-    private void handleTeamsRevive(Player player, String[] args) {
+    private void handleTeamsRevive(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams revive <couleur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams revive <couleur>"));
             return;
         }
-        TeamColor color = getExistingTeamColor(player, args[2]);
+        TeamColor color = getExistingTeamColor(player, args[2], lang);
         if (color == null) return;
-        GameTeam team = teamManager.getTeam(color);
-        team.setHeartAlive(true);
-        for (UUID uuid : team.getPlayers()) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p != null) {
-                p.setGameMode(GameMode.SURVIVAL);
-            }
-        }
-        player.sendMessage("§aÉquipe " + color.getName(Lang.FR) + " réanimée !");
+
+        teamAdminService.reviveTeam(player, teamManager.getTeam(color));
     }
 
-    private void handleTeamsTpBase(Player player, String[] args) {
+    private void handleTeamsTpBase(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams tpbase <couleur|@a|joueur>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams tpbase <couleur|@a|joueur>"));
             return;
         }
 
         String target = args[2];
 
         if (target.equals("@a")) {
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                GameTeam team = teamManager.getTeam(online.getUniqueId());
-                if (team != null && team.getSpawn() != null) {
-                    online.teleport(team.getSpawn());
-                }
-            }
-            player.sendMessage("§aTous les joueurs ont été téléportés à leur base !");
+            teamAdminService.tpBaseAll(player);
             return;
         }
 
         Player targetPlayer = Bukkit.getPlayer(target);
         if (targetPlayer != null) {
-            GameTeam team = teamManager.getTeam(targetPlayer.getUniqueId());
-            if (team == null) {
-                player.sendMessage("§c" + target + " n'est dans aucune équipe !");
-                return;
-            }
-            if (team.getSpawn() == null) {
-                player.sendMessage("§cLe spawn de cette équipe n'est pas défini !");
-                return;
-            }
-            targetPlayer.teleport(team.getSpawn());
-            player.sendMessage("§a" + target + " téléporté à sa base !");
+            teamAdminService.tpBasePlayer(player, targetPlayer);
             return;
         }
 
-        TeamColor color = getExistingTeamColor(player, target);
+        TeamColor color = getExistingTeamColor(player, target, lang);
         if (color == null) return;
-        GameTeam team = teamManager.getTeam(color);
-        if (team.getSpawn() == null) {
-            player.sendMessage("§cLe spawn de cette équipe n'est pas défini !");
-            return;
-        }
-        for (UUID uuid : team.getPlayers()) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p != null) {
-                p.teleport(team.getSpawn());
-            }
-        }
-        player.sendMessage("§aJoueurs de l'équipe " + color.getName(Lang.FR) + " téléportés !");
+
+        teamAdminService.tpBaseTeam(player, teamManager.getTeam(color));
     }
 
-    private void handleTeamsOptions(Player player, String[] args) {
+    private void handleTeamsOptions(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii teams options <allow|<couleur>>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams options <allow|<couleur>>"));
             return;
         }
 
-        // /xii teams options allow join/leave true/false
         if (args[2].equalsIgnoreCase("allow")) {
             if (args.length < 5) {
-                player.sendMessage("§cUsage: /xii teams options allow <join|leave> <true|false>");
+                player.sendMessage(Messages.OPTIONS_ALLOW_USAGE.get(lang));
                 return;
             }
             String what = args[3].toLowerCase();
             boolean value = Boolean.parseBoolean(args[4]);
             switch (what) {
-                case "join" -> {
-                    gameManager.setJoinEnabled(value);
-                    player.sendMessage("§aJoin " + (value ? "activé" : "désactivé") + " !");
-                }
-                case "leave" -> {
-                    gameManager.setLeaveEnabled(value);
-                    player.sendMessage("§aLeave " + (value ? "activé" : "désactivé") + " !");
-                }
-                default -> player.sendMessage("§cUsage: /xii teams options allow <join|leave> <true|false>");
+                case "join" -> teamAdminService.toggleJoin(player, value);
+                case "leave" -> teamAdminService.toggleLeave(player, value);
+                default -> player.sendMessage(Messages.OPTIONS_ALLOW_USAGE.get(lang));
             }
             return;
         }
 
-        // /xii teams options <couleur> <setspawn|setheart|maxmembers>
-        TeamColor color = getExistingTeamColor(player, args[2]);
+        TeamColor color = getExistingTeamColor(player, args[2], lang);
         if (color == null) return;
-        GameTeam team = teamManager.getTeam(color);
 
         if (args.length < 4) {
-            player.sendMessage("§cUsage: /xii teams options " + color.getFormattedName() + " <setspawn|setheart|maxmembers>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii teams options " + color.getFormattedName() + " maxmembers"));
             return;
         }
 
         String option = args[3].toLowerCase();
         switch (option) {
-            case "setspawn" -> {
-                team.setSpawn(player.getLocation());
-                player.sendMessage("§aSpawn de l'équipe " + color.getName(Lang.FR) + " défini !");
-            }
-            case "setheart" -> {
-                team.setHeartLocation(player.getLocation());
-                player.sendMessage("§aCœur de l'équipe " + color.getName(Lang.FR) + " défini !");
-            }
             case "maxmembers" -> {
                 if (args.length < 5) {
-                    player.sendMessage("§cUsage: /xii teams options " + color.getFormattedName() + " maxmembers <nombre>");
+                    player.sendMessage(Messages.OPTIONS_MAX_MEMBERS_USAGE.get(lang, color.getFormattedName()));
                     return;
                 }
                 int max;
                 try {
                     max = Integer.parseInt(args[4]);
                 } catch (NumberFormatException e) {
-                    player.sendMessage("§cNombre invalide !");
+                    soundService.play(player, GameSound.ERROR);
+                    player.sendMessage(Messages.INVALID_NUMBER.get(lang));
                     return;
                 }
-                team.setMaxPlayers(max);
-                player.sendMessage("§aLimite de l'équipe " + color.getName(Lang.FR) + " mise à " + max + " !");
+                teamAdminService.setMaxMembers(player, teamManager.getTeam(color), max);
             }
-            default -> player.sendMessage("§cOption inconnue: " + option);
+            default -> {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.TEAM_OPTIONS_UNKNOWN.get(lang, option));
+            }
         }
     }
 
     // ========== Helpers ==========
 
-    private TeamColor getExistingTeamColor(Player player, String input) {
+    private TeamColor getExistingTeamColor(Player player, String input, Lang lang) {
         TeamColor color;
         try {
             color = TeamColor.valueOf(input.toUpperCase());
         } catch (IllegalArgumentException e) {
-            player.sendMessage("§cCouleur inconnue: " + input);
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_UNKNOWN_COLOR.get(lang, input));
             return null;
         }
         if (teamManager.getTeam(color) == null) {
-            player.sendMessage("§cCette équipe n'existe pas !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.JOIN_TEAM_NOT_EXIST.get(lang));
             return null;
         }
         return color;
@@ -430,68 +408,51 @@ public class XCommands implements CommandExecutor, TabCompleter {
 
     // ========== /xii day ==========
 
-    private void handleDay(Player player, String[] args) {
+    private void handleDay(Player player, String[] args, Lang lang) {
         if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii day <start|stop|set>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii day <start|stop|set>"));
             return;
         }
         switch (args[1].toLowerCase()) {
-            case "start" -> {
-                if (gameManager.getState() != GameState.WAITING) {
-                    player.sendMessage("§cLa partie a déjà commencé !");
-                    return;
-                }
-                if (teamManager.getTeamCount() < 2) {
-                    player.sendMessage("§cIl faut au moins 2 équipes !");
-                    return;
-                }
-                gameManager.startGame();
-                Bukkit.broadcast(Component.text("\n§6§lXII DAYS §7a commencé !\n"));
-            }
-            case "stop" -> {
-                if (gameManager.getState() == GameState.WAITING) {
-                    player.sendMessage("§cLa partie n'a pas commencé !");
-                    return;
-                }
-                gameManager.endGame();
-                Bukkit.broadcast(Component.text("\n§c§lXII DAYS §7a été arrêté !\n"));
-            }
+            case "start" -> teamAdminService.startGame(player);
+            case "stop" -> teamAdminService.stopGame(player);
             case "set" -> {
                 if (args.length < 3) {
-                    player.sendMessage("§cUsage: /xii day set <1-12>");
+                    player.sendMessage(Messages.USAGE.get(lang, "/xii day set <1-12>"));
                     return;
                 }
                 int day;
                 try {
                     day = Integer.parseInt(args[2]);
                 } catch (NumberFormatException e) {
-                    player.sendMessage("§cNombre invalide !");
+                    soundService.play(player, GameSound.ERROR);
+                    player.sendMessage(Messages.INVALID_NUMBER.get(lang));
                     return;
                 }
-                if (day < 1 || day > 12) {
-                    player.sendMessage("§cLe jour doit être entre 1 et 12 !");
-                    return;
-                }
-                gameManager.getDayManager().setDay(day);
-                Bukkit.broadcast(Component.text("\n§6§lJour §c§l" + day + " §6§l!\n"));
+                teamAdminService.setDay(player, day);
             }
-            default -> player.sendMessage("§cSous-commande inconnue: " + args[1]);
+            default -> {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.TEAMS_UNKNOWN_SUB.get(lang, args[1]));
+            }
         }
     }
 
     // ========== /xii allow ==========
 
-    private void handleAllow(Player player, String[] args) {
+    private void handleAllow(Player player, String[] args, Lang lang) {
         if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii allow <item|block> <true|false>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii allow <item|block> <true|false>"));
             return;
         }
         String what = args[1].toLowerCase();
@@ -500,63 +461,74 @@ public class XCommands implements CommandExecutor, TabCompleter {
             case "item" -> {
                 ItemStack hand = player.getInventory().getItemInMainHand();
                 if (hand.getType() == Material.AIR) {
-                    player.sendMessage("§cTu ne tiens aucun item !");
+                    soundService.play(player, GameSound.ERROR);
+                    player.sendMessage(Messages.ALLOW_NO_ITEM.get(lang));
                     return;
                 }
                 if (allow) {
                     gameManager.getBlacklistedItems().remove(hand.getType());
-                    player.sendMessage("§a" + hand.getType().name() + " retiré de la blacklist !");
+                    soundService.play(player, GameSound.SUCCESS);
+                    player.sendMessage(Messages.ALLOW_ITEM_REMOVED.get(lang, hand.getType().name()));
                 } else {
                     gameManager.getBlacklistedItems().add(hand.getType());
-                    player.sendMessage("§c" + hand.getType().name() + " ajouté à la blacklist !");
+                    soundService.play(player, GameSound.SUCCESS_HIGH);
+                    player.sendMessage(Messages.ALLOW_ITEM_ADDED.get(lang, hand.getType().name()));
                 }
             }
             case "block" -> {
-                Block target = player.getTargetBlockExact(5);
+                org.bukkit.block.Block target = player.getTargetBlockExact(5);
                 if (target == null || target.getType() == Material.AIR) {
-                    player.sendMessage("§cTu ne vises aucun bloc !");
+                    soundService.play(player, GameSound.ERROR);
+                    player.sendMessage(Messages.ALLOW_NO_BLOCK.get(lang));
                     return;
                 }
                 if (allow) {
                     gameManager.getBlacklistedItems().remove(target.getType());
-                    player.sendMessage("§a" + target.getType().name() + " retiré de la blacklist !");
+                    soundService.play(player, GameSound.SUCCESS);
+                    player.sendMessage(Messages.ALLOW_BLOCK_REMOVED.get(lang, target.getType().name()));
                 } else {
                     gameManager.getBlacklistedItems().add(target.getType());
-                    player.sendMessage("§c" + target.getType().name() + " ajouté à la blacklist !");
+                    soundService.play(player, GameSound.SUCCESS_HIGH);
+                    player.sendMessage(Messages.ALLOW_BLOCK_ADDED.get(lang, target.getType().name()));
                 }
             }
-            default -> player.sendMessage("§cUsage: /xii allow <item|block> <true|false>");
+            default -> player.sendMessage(Messages.USAGE.get(lang, "/xii allow <item|block> <true|false>"));
         }
     }
 
     // ========== /xii points ==========
 
-    private void handlePoints(Player player, String[] args) {
+    private void handlePoints(Player player, String[] args, Lang lang) {
         if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii points <set|reset> <joueur|couleur> [valeur]");
+            player.sendMessage(Messages.POINTS_USAGE.get(lang));
             return;
         }
         switch (args[1].toLowerCase()) {
-            case "set" -> handlePointsSet(player, args);
-            case "reset" -> handlePointsReset(player, args);
-            default -> player.sendMessage("§cSous-commande inconnue: " + args[1]);
+            case "set" -> handlePointsSet(player, args, lang);
+            case "reset" -> handlePointsReset(player, args, lang);
+            default -> {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.POINTS_UNKNOWN_SUB.get(lang, args[1]));
+            }
         }
     }
 
-    private void handlePointsSet(Player player, String[] args) {
+    private void handlePointsSet(Player player, String[] args, Lang lang) {
         if (args.length < 4) {
-            player.sendMessage("§cUsage: /xii points set <joueur|couleur> <points>");
+            player.sendMessage(Messages.POINTS_SET_USAGE.get(lang));
             return;
         }
         int points;
         try {
             points = Integer.parseInt(args[3]);
         } catch (NumberFormatException e) {
-            player.sendMessage("§cNombre invalide !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.INVALID_NUMBER.get(lang));
             return;
         }
         String target = args[2];
@@ -565,27 +537,31 @@ public class XCommands implements CommandExecutor, TabCompleter {
             color = TeamColor.valueOf(target.toUpperCase());
             GameTeam team = teamManager.getTeam(color);
             if (team == null) {
-                player.sendMessage("§cCette équipe n'existe pas !");
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.JOIN_TEAM_NOT_EXIST.get(lang));
                 return;
             }
             TeamScore score = pointService.getTeamScore(team);
             score.setTotal(points);
-            player.sendMessage("§aPoints de l'équipe " + color.getName(Lang.FR) + " mis à " + points + " !");
+            soundService.play(player, GameSound.SUCCESS);
+            player.sendMessage(Messages.POINTS_TEAM_SET.get(lang, color.getName(lang), points));
         } catch (IllegalArgumentException e) {
             Player targetPlayer = Bukkit.getPlayer(target);
             if (targetPlayer == null) {
-                player.sendMessage("§cJoueur introuvable: " + target);
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.PLAYER_NOT_FOUND.get(lang, target));
                 return;
             }
             PlayerScore score = pointService.getPlayerScore(targetPlayer.getUniqueId());
             score.setTotal(points);
-            player.sendMessage("§aPoints de " + targetPlayer.getName() + " mis à " + points + " !");
+            soundService.play(player, GameSound.SUCCESS);
+            player.sendMessage(Messages.POINTS_PLAYER_SET.get(lang, targetPlayer.getName(), points));
         }
     }
 
-    private void handlePointsReset(Player player, String[] args) {
+    private void handlePointsReset(Player player, String[] args, Lang lang) {
         if (args.length < 3) {
-            player.sendMessage("§cUsage: /xii points reset <joueur|couleur>");
+            player.sendMessage(Messages.POINTS_RESET_USAGE.get(lang));
             return;
         }
         String target = args[2];
@@ -593,38 +569,52 @@ public class XCommands implements CommandExecutor, TabCompleter {
         try {
             color = TeamColor.valueOf(target.toUpperCase());
             GameTeam team = teamManager.getTeam(color);
+
             if (team == null) {
-                player.sendMessage("§cCette équipe n'existe pas !");
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.JOIN_TEAM_NOT_EXIST.get(lang));
                 return;
             }
+
             pointService.getTeamScore(team).reset();
-            player.sendMessage("§aPoints de l'équipe " + color.getName(Lang.FR) + " réinitialisés !");
+            soundService.play(player, GameSound.SUCCESS_HIGH);
+            player.sendMessage(Messages.POINTS_TEAM_RESET.get(lang, color.getName(lang)));
         } catch (IllegalArgumentException e) {
             Player targetPlayer = Bukkit.getPlayer(target);
+
             if (targetPlayer == null) {
-                player.sendMessage("§cJoueur introuvable: " + target);
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.PLAYER_NOT_FOUND.get(lang, target));
                 return;
             }
+
             pointService.getPlayerScore(targetPlayer.getUniqueId()).reset();
-            player.sendMessage("§aPoints de " + targetPlayer.getName() + " réinitialisés !");
+            soundService.play(player, GameSound.SUCCESS_HIGH);
+            player.sendMessage(Messages.POINTS_PLAYER_RESET.get(lang, targetPlayer.getName()));
         }
     }
 
     // ========== /xii admin ==========
 
-    private void handleAdmin(Player player, String[] args) {
+    private void handleAdmin(Player player, String[] args, Lang lang) {
         if (!player.hasPermission("xii.admin")) {
-            player.sendMessage("§cPermission refusée !");
+            soundService.play(player, GameSound.ERROR);
+            player.sendMessage(Messages.NO_PERMISSION.get(lang));
             return;
         }
+
         if (args.length < 2) {
-            player.sendMessage("§cUsage: /xii admin <setup|quit>");
+            player.sendMessage(Messages.USAGE.get(lang, "/xii admin <setup|quit>"));
             return;
         }
+
         switch (args[1].toLowerCase()) {
             case "setup" -> setupManager.setup();
             case "quit" -> setupManager.quit();
-            default -> player.sendMessage("§cSous-commande inconnue: " + args[1]);
+            default -> {
+                soundService.play(player, GameSound.ERROR);
+                player.sendMessage(Messages.TEAMS_UNKNOWN_SUB.get(lang, args[1]));
+            }
         }
     }
 
@@ -637,7 +627,7 @@ public class XCommands implements CommandExecutor, TabCompleter {
         if (cmd.equals("join")) {
             if (args.length == 1) {
                 return getExistingTeams().stream()
-                        .map(c -> c.getFormattedName())
+                        .map(TeamColor::getFormattedName)
                         .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
                         .toList();
             }
@@ -746,10 +736,9 @@ public class XCommands implements CommandExecutor, TabCompleter {
                                     .filter(s -> s.startsWith(args[3].toLowerCase()))
                                     .toList();
                         }
-                        // It's a team name → show options
                         try {
                             TeamColor.valueOf(args[2].toUpperCase());
-                            return Stream.of("setspawn", "setheart", "maxmembers")
+                            return Stream.of("maxmembers")
                                     .filter(s -> s.startsWith(args[3].toLowerCase()))
                                     .toList();
                         } catch (IllegalArgumentException ignored) {}

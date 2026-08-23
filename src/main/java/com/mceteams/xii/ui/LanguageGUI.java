@@ -1,39 +1,41 @@
 package com.mceteams.xii.ui;
 
-import net.kyori.adventure.text.Component;
+import com.mceteams.xii.enums.Messages;
+import com.mceteams.xii.manager.PlayerDataManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-
-import java.util.List;
 
 public class LanguageGUI {
+    private static final String FRANCE_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjkwMzM0OWZhNDViZGQ4NzEyNmQ5Y2QzYzZjMGFiYmE3ZGJkNmY1NmZiOGQ3ODcwMTg3M2ExZTdjOGVlMzNjZiJ9fX0=";
+    private static final String US_TEXTURE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZmNiYzMyY2IyNGQ1N2ZjZGMwMzFlODUxMjM1ZGEyZGFhZDNlMTkxNGI4NzA0M2JkMDEyNjMzZTZmMzJjNyJ9fX0=";
+
+    private final PlayerDataManager playerDataManager;
+
+    public LanguageGUI(PlayerDataManager playerDataManager) {
+        this.playerDataManager = playerDataManager;
+    }
+
     public Inventory create(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 9, "§6§lLanguage");
+        var lang = playerDataManager.getLang(player);
+        Inventory inv = Bukkit.createInventory(null, 9, Messages.GUI_LANGUAGE.get(lang));
 
         for (int i = 0; i < 9; i++) {
             inv.setItem(i, ItemBuilder.create(Material.GRAY_STAINED_GLASS_PANE, " "));
         }
 
-        // Tête FR
-        ItemStack headFR = new ItemStack(Material.PLAYER_HEAD);
-        org.bukkit.inventory.meta.SkullMeta skullFR = (org.bukkit.inventory.meta.SkullMeta) headFR.getItemMeta();
-        skullFR.displayName(Component.text("§f§lFrançais"));
-        skullFR.lore(List.of(Component.text("§7Langue du jeu")));
-        skullFR.setOwner("MHF_FR");
-        headFR.setItemMeta(skullFR);
-        inv.setItem(3, headFR);
+        inv.setItem(3, ItemBuilder.createSkull(
+                FRANCE_TEXTURE,
+                "§f§lFrançais",
+                "§7Langue du jeu"
+        ));
 
-        // Tête EN
-        ItemStack headEN = new ItemStack(Material.PLAYER_HEAD);
-        org.bukkit.inventory.meta.SkullMeta skullEN = (org.bukkit.inventory.meta.SkullMeta) headEN.getItemMeta();
-        skullEN.displayName(Component.text("§9§lEnglish"));
-        skullEN.lore(List.of(Component.text("§7Game language")));
-        skullEN.setOwner("MHF_GB");
-        headEN.setItemMeta(skullEN);
-        inv.setItem(5, headEN);
+        inv.setItem(5, ItemBuilder.createSkull(
+                US_TEXTURE,
+                "§9§lEnglish",
+                "§7Game language"
+        ));
 
         return inv;
     }
