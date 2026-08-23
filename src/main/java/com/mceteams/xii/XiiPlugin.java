@@ -50,7 +50,7 @@ public class XiiPlugin extends JavaPlugin implements Listener {
         playerDataManager = new PlayerDataManager(this);
         hotbarManager = new HotbarManager(teamManager);
         gameManager = new GameManager(teamManager, dayManager, hotbarManager, pointService, soundService, playerDataManager);
-        teamAdminService = new TeamAdminService(teamManager, gameManager, playerDataManager, soundService);
+        teamAdminService = new TeamAdminService(teamManager, gameManager, setupManager, playerDataManager, soundService);
         setupManager = new SetupManager(teamManager, gameManager, hotbarManager, pointService, playerDataManager, soundService);
         setupManager.startHotbarTask(this);
         ChatInputManager chatInputManager = new ChatInputManager();
@@ -211,6 +211,8 @@ public class XiiPlugin extends JavaPlugin implements Listener {
         Player player = event.getPlayer();
 
         if (setupManager.isSetup() && gameManager.getState() == GameState.WAITING) {
+            player.setGameMode(GameMode.ADVENTURE);
+            player.teleport(new org.bukkit.Location(getServer().getWorlds().get(0), 0, 100, 0));
             hotbarManager.giveHotbar(player);
         }
 

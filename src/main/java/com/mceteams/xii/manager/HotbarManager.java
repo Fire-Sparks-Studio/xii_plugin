@@ -30,7 +30,7 @@ public class HotbarManager {
         }
 
         if (inv.getItem(8) == null) {
-            inv.setItem(8, ItemBuilder.create(Material.LEVER, "§6§lLanguage", "§7Click to change of Language."));
+            inv.setItem(8, ItemBuilder.createSkull("eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDA2NWI0OTU3NzdiYTg0MmQyMmRjYTY2M2U5Zjc5NjE3ZDhiZDliOTgzZDQyNGUzNmRkN2Q5OTMwNGJhMjUwOCJ9fX0=", "§6§lLanguage", "§7Click to change of Language."));
         }
     }
 

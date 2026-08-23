@@ -428,13 +428,13 @@ public class GuiListener implements Listener {
         switch (rawSlot) {
             case 3 -> {
                 playerDataManager.setLang(player, Lang.FR);
-                soundService.play(player, GameSound.CHANGE);
+                soundService.play(player, GameSound.LANG_SELECT);
                 player.sendMessage(Messages.LANG_CHANGED_FR.get(Lang.FR));
                 player.closeInventory();
             }
             case 5 -> {
                 playerDataManager.setLang(player, Lang.EN);
-                soundService.play(player, GameSound.CHANGE);
+                soundService.play(player, GameSound.LANG_SELECT);
                 player.sendMessage(Messages.LANG_CHANGED_EN.get(Lang.EN));
                 player.closeInventory();
             }

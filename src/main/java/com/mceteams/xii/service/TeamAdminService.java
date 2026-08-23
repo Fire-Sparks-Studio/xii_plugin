@@ -7,11 +7,13 @@ import com.mceteams.xii.enums.Messages;
 import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.manager.GameManager;
 import com.mceteams.xii.manager.PlayerDataManager;
+import com.mceteams.xii.manager.SetupManager;
 import com.mceteams.xii.manager.TeamManager;
 import com.mceteams.xii.model.GameTeam;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.util.UUID;
@@ -19,12 +21,14 @@ import java.util.UUID;
 public class TeamAdminService {
     private final TeamManager teamManager;
     private final GameManager gameManager;
+    private final SetupManager setupManager;
     private final PlayerDataManager playerDataManager;
     private final SoundService soundService;
 
-    public TeamAdminService(TeamManager teamManager, GameManager gameManager, PlayerDataManager playerDataManager, SoundService soundService) {
+    public TeamAdminService(TeamManager teamManager, GameManager gameManager, SetupManager setupManager, PlayerDataManager playerDataManager, SoundService soundService) {
         this.teamManager = teamManager;
         this.gameManager = gameManager;
+        this.setupManager = setupManager;
         this.playerDataManager = playerDataManager;
         this.soundService = soundService;
     }
@@ -232,9 +236,43 @@ public class TeamAdminService {
             actor.sendMessage(Messages.DAY_MIN_TEAMS.get(lang));
             return Result.INVALID;
         }
-        gameManager.startGame();
-        soundService.playToAll(GameSound.GAME_START);
-        Bukkit.broadcast(Component.text(Messages.GAME_STARTED.get(lang)));
+
+        gameManager.forceState(GameState.PREPARATION);
+
+        final int[] count = {5};
+        org.bukkit.plugin.java.JavaPlugin plugin = (org.bukkit.plugin.java.JavaPlugin) Bukkit.getPluginManager().getPlugin("XII-Days");
+
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (count[0] > 1) {
+                soundService.playToAll(GameSound.COUNTDOWN);
+                String title = "§e§l" + count[0];
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    online.sendTitle(title, "", 0, 25, 5);
+                }
+                count[0]--;
+            } else {
+                soundService.playToAll(GameSound.COUNTDOWN_FINAL);
+                String title = "§e§l1";
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    online.sendTitle(title, "", 0, 25, 5);
+                }
+
+                gameManager.startGame();
+
+                World world = Bukkit.getWorlds().get(0);
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    GameTeam team = teamManager.getTeam(online.getUniqueId());
+                    if (team != null && team.getSpawn() != null) {
+                        online.teleport(team.getSpawn());
+                    } else {
+                        online.teleport(new org.bukkit.Location(world, SetupManager.CENTER_X + 0.5, SetupManager.FLOOR_Y + 1, SetupManager.CENTER_Z + 0.5));
+                    }
+                }
+
+                setupManager.clearWaitingPlatform(world);
+            }
+        }, 0L, 20L);
+
         return Result.SUCCESS;
     }
 

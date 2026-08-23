@@ -9,6 +9,7 @@ public enum GameSound {
     SELECT(Sound.UI_BUTTON_CLICK, 0.15f, 1.0f),
     BACK(Sound.UI_BUTTON_CLICK, 0.15f, 1.0f),
     CHANGE(Sound.UI_BUTTON_CLICK, 0.15f, 1.0f),
+    LANG_SELECT(Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 2.0f),
 
     // ===== Feedback (Niveau 2) =====
     SUCCESS(Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.5f),

@@ -111,6 +111,7 @@ public enum Messages {
     GAME_STARTED("§6§lXII DAYS §7a commencé !", "§6§lXII DAYS §7has started!"),
     GAME_STOPPED("§c§lXII DAYS §7a été arrêté.", "§c§lXII DAYS §7has been stopped."),
     DAY_ANNOUNCE("§6§lJOUR §f§l{0}", "§6§lDAY §f§l{0}"),
+    COUNTDOWN_TICK("§e§l{0}...", "§e§l{0}..."),
     SETUP_INITIALIZED("§a§lXII DAYS §7a été initialisé.", "§a§lXII DAYS §7has been initialized."),
     SETUP_RESET("§e§lXII DAYS §7a été réinitialisé.", "§e§lXII DAYS §7has been reset."),
 
@@ -127,8 +128,8 @@ public enum Messages {
     TP_SPAWN_NOT_SET("§cLe point de réapparition de cette équipe n'est pas défini.", "§cThis team's spawn point has not been set."),
     TP_ALL_DONE("§aLes joueurs de l'équipe §f{0} §aont été téléportés.", "§aAll players of team §f{0} §ahave been teleported."),
     TP_PLAYER_DONE("§a§f{0} §aa été téléporté à la base.", "§a§f{0} §ahas been teleported to base."),
-    LANG_CHANGED_FR("§aLangue définie sur §fFrançais§a.", "§aLanguage set to §fFrench§a."),
-    LANG_CHANGED_EN("§aLangue définie sur §fEnglish§a.", "§aLanguage set to §fEnglish§a."),
+    LANG_CHANGED_FR("§aLangue définie sur §6Français§a.", "§aLanguage set to §6French§a."),
+    LANG_CHANGED_EN("§aLangue définie sur §6English§a.", "§aLanguage set to §6English§a."),
     ALREADY_IN_TEAM("§cVous êtes déjà dans l'équipe §f{0}§c.", "§cYou're already in team §f{0}§c."),
 
     // ===== GUI Titles =====
