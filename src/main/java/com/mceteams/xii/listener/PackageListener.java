@@ -52,4 +52,17 @@ public class PackageListener implements Listener {
         // Si le joueur ferme avant, il devra recommencer.
         plugin.getPackageService().startOpeningAnimation(player, pack);
     }
+
+    /**
+     * Se faire TAPER ferme automatiquement les GUI de colis (animation
+     * ou transfert) - mécanique anti-ABUS : on ne loot pas impunément
+     * sous les coups ennemis. Le service sait reconnaître ses GUIs.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onEntityDamage(org.bukkit.event.entity.EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.Player player)) {
+            return;
+        }
+        plugin.getPackageService().handleHitDuringGui(player);
+    }
 }

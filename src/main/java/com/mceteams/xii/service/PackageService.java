@@ -247,6 +247,32 @@ public class PackageService {
         return transfers.containsKey(playerUuid);
     }
 
+    /**
+     * Le joueur s'est fait TAPER pendant qu'il avait une GUI de colis
+     * ouverte (animation ou transfert) => tout se ferme :
+     * - animation : annulée, le colis reste intact (à refaire) ;
+     * - transfert  : le reste est donné directement + coffre supprimé.
+     * Appelé par PackageListener sur EntityDamageEvent.
+     */
+    public void handleHitDuringGui(Player player) {
+        // Transfert en cours -> clôture comme une fermeture prématurée.
+        TransferSession session = transfers.get(player.getUniqueId());
+        if (session != null) {
+            handleTransferClose(player, session.chestInventory);
+            Bukkit.getScheduler().runTask(plugin,
+                    (Runnable) player::closeInventory);
+            return;
+        }
+
+        // Animation en cours -> fermeture simple ; la task d'animation
+        // se rend compte seule que l'inventaire n'est plus le sien et
+        // s'annule (le colis reste non revendiqué).
+        var top = player.getOpenInventory().getTopInventory();
+        if (top.getHolder() instanceof OpeningHolder) {
+            player.closeInventory();
+        }
+    }
+
     /** Cet inventaire est-il celui d'un transfert actif ? */
     public boolean isTransferInventory(Inventory inventory) {
         return transfers.values().stream()

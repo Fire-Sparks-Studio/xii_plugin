@@ -59,9 +59,11 @@ public class SpectatorService {
     public void enter(Player player) {
         var data = plugin.getPlayerManager().getData(player);
         data.setSpectator(true);
-        // APPLICATION DIFFÉRÉE D'UN TICK : avec IMMEDIATE_RESPAWN, la
-        // vanilla réinitialise vol/téléportation APRÈS l'événement de
-        // mort => appliquer dans le même tick serait écrasé.
+        // DOUBLE APPLICATION : immédiate + au tick suivant. Avec
+        // IMMEDIATE_RESPAWN la vanilla peut réinitialiser l'état APRÈS
+        // notre traitement ; le passage différé garantit l'état final,
+        // l'immédiat couvre le cas où rien ne l'écraserait.
+        applySpectatorState(player, false);
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline() && data.isSpectator()) {
                 applySpectatorState(player, false);
@@ -78,7 +80,8 @@ public class SpectatorService {
         var data = plugin.getPlayerManager().getData(player);
         data.setEliminated(true);
         data.setSpectator(true);
-        // Même logique différée que enter() (cf. commentaire ci-dessus).
+        // Même double application que enter().
+        applySpectatorState(player, true);
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (player.isOnline() && data.isSpectator()) {
                 applySpectatorState(player, true);

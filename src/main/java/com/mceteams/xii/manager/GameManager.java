@@ -645,6 +645,16 @@ public class GameManager {
                         .forEach(org.bukkit.entity.Entity::remove);
             }
         }
+        // Météorites déjà en vol si l'on retourne avant leur phase.
+        if (day < 8) {
+            for (var world : Bukkit.getWorlds()) {
+                world.getEntitiesByClass(org.bukkit.entity.LargeFireball.class)
+                        .stream()
+                        .filter(fireball -> fireball.getScoreboardTags().contains(
+                                com.mceteams.xii.service.MeteoriteService.METEORITE_TAG))
+                        .forEach(org.bukkit.entity.Entity::remove);
+            }
+        }
 
         // --- AVANCE RAPIDE : cumul des mécaniques déjà passées ----------
         boolean prep = this.state == GameState.PREPARATION;
