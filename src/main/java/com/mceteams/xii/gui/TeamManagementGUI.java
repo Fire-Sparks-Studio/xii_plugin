@@ -73,17 +73,19 @@ public class TeamManagementGUI implements InventoryHolder {
                 || !clicker.equals(player)) {
             return;
         }
-        ItemStack clicked = event.getCurrentItem();
-        if (clicked == null) {
-            return;
-        }
 
-        for (TeamColor color : TeamColor.values()) {
-            if (clicked.getType() == com.mceteams.xii.util.TeamUtil.woolOf(color)
-                    || clicked.getType() == Material.GRAY_DYE) {
-                handleTeamSlot(color);
-                return;
-            }
+        // Identification par POSITION (slots 10, 12, 14, 16 dans l'ordre
+        // de TeamColor.values()) et non par matériau : sinon tous les
+        // boutons "créer" (teinture grise) correspondraient à la même
+        // première couleur de la boucle !
+        int offset = event.getSlot() - 10;
+        if (offset < 0 || offset % 2 != 0) {
+            return; // hors des cases d'équipe
+        }
+        TeamColor[] colors = TeamColor.values();
+        int index = offset / 2;
+        if (index >= 0 && index < colors.length) {
+            handleTeamSlot(colors[index]);
         }
     }
 

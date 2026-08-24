@@ -457,11 +457,17 @@ public class GameManager {
         }
         cancelGameplayTasks();
 
+        // Classement (spec §27) : 1) joueurs vivants décroissants,
+        // 2) points décroissants.
+        // ATTENTION piège Java : un SEUL .reversed() à la FIN de la
+        // chaîne. Deux .reversed() successifs inverseraient aussi le
+        // premier critère => "l'équipe éliminée vainqueur" !
         List<GameTeam> ranking = plugin.getTeamManager().all().stream()
                 .sorted(Comparator
                         .comparingInt((GameTeam t) ->
-                                plugin.getTeamManager().aliveCount(t)).reversed()
-                        .thenComparingInt(t -> t.getScore().getTotal()).reversed())
+                                plugin.getTeamManager().aliveCount(t))
+                        .thenComparingInt(t -> t.getScore().getTotal())
+                        .reversed())
                 .toList();
 
         MessageUtil.broadcast(" ");

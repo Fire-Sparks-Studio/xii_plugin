@@ -71,10 +71,17 @@ public class DeathService {
                 ? " §7par §c" + killer.getName()
                 : "";
 
-        // KILL FINAL : la victime appartenait à une équipe SANS coeur
-        // => ce kill scelle son sort, on le met en avant (bleu ciel gras).
+        // KILL FINAL : deux cas possibles -
+        //   a) l'équipe de la victime n'a PLUS DE COEUR (elle ne peut
+        //      plus revenir : chaque kill est définitif) ;
+        //   b) ce kill retire le DERNIER membre vivant de son équipe
+        //      (l'équipe vient de tomber, coeur vivant ou non).
         var victimTeam = plugin.getTeamManager().getTeamOf(victim.getUniqueId());
-        boolean finalKill = victimTeam != null && !victimTeam.isHeartAlive();
+        boolean finalKill = false;
+        if (victimTeam != null) {
+            finalKill = !victimTeam.isHeartAlive()
+                    || plugin.getTeamManager().aliveCount(victimTeam) == 0;
+        }
 
         MessageUtil.broadcast("§c☠ §f" + victim.getName()
                 + " §7est mort" + killerInfo
