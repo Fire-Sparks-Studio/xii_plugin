@@ -55,6 +55,14 @@ public class InventoryListener implements Listener {
             return;
         }
 
+        // 1bis. GUI d'ouverture de colis : AUCUN clic autorisé pendant
+        // l'animation spirale (les vitres ne sont pas volables !).
+        if (event.getView().getTopInventory().getHolder()
+                instanceof com.mceteams.xii.service.PackageService.OpeningHolder) {
+            event.setCancelled(true);
+            return;
+        }
+
         // 2. Protection des items spéciaux : interdits de bouger, de
         // sortir, d'être dupliqués via hotbar swap, etc.
         if (involvesSpecialItem(event)) {
@@ -138,6 +146,12 @@ public class InventoryListener implements Listener {
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!systemEnabled()) {
+            return;
+        }
+        // GUI d'ouverture de colis : aucun drag autorisé.
+        if (event.getView().getTopInventory().getHolder()
+                instanceof com.mceteams.xii.service.PackageService.OpeningHolder) {
+            event.setCancelled(true);
             return;
         }
         for (org.bukkit.inventory.ItemStack item : event.getNewItems().values()) {

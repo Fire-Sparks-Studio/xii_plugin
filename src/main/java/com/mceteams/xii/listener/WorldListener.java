@@ -119,7 +119,7 @@ public class WorldListener implements Listener {
             var team = plugin.getCoreService().getTeamByCoreBlock(block);
             if (team != null) {
                 iterator.remove();          // pas de drop vanilla du beacon
-                plugin.getCoreService().breakCore(team, null, false);
+                plugin.getCoreService().breakCore(team, null, false, false);
             }
         }
     }

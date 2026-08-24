@@ -50,20 +50,26 @@ public class SpectatorService {
     /**
      * Fait entrer un joueur en mode spectateur TEMPORAIRE
      * (mort en attente de respawn, spec §29).
+     *
+     * PAS DE BOUSSOLE : tant que le coeur de son équipe est vivant, le
+     * joueur attend son respawn, il n'a pas besoin de naviguer entre
+     * les joueurs. La boussole est réservée aux spectateurs permanents.
      */
     public void enter(Player player) {
-        applySpectatorState(player);
+        applySpectatorState(player, false);
         var data = plugin.getPlayerManager().getData(player);
         data.setSpectator(true);
     }
 
     /**
      * Fait entrer un joueur en mode spectateur PERMANENT
-     * (sans équipe au lancement §15, élimination définitive §29).
+     * (sans équipe au lancement, élimination, équipe sans coeur...).
+     * Celui-là reçoit la BOUSSOLE de ciblage.
      */
     public void enterPermanent(Player player) {
-        enter(player);
+        applySpectatorState(player, true);
         plugin.getPlayerManager().getData(player).setEliminated(true);
+        plugin.getPlayerManager().getData(player).setSpectator(true);
     }
 
     /**
@@ -92,7 +98,7 @@ public class SpectatorService {
     // État Bukkit
     // -----------------------------------------------------------------
 
-    private void applySpectatorState(Player player) {
+    private void applySpectatorState(Player player, boolean withCompass) {
         player.setInvulnerable(true);                       // invulnérable
         player.setAllowFlight(true);                        // peut voler
         player.setFlying(true);                             // vole directement
@@ -102,7 +108,9 @@ public class SpectatorService {
                 0,
                 true,
                 false));
-        giveCompass(player);                                // hotbar spectateur
+        if (withCompass) {
+            giveCompass(player);                            // hotbar spectateur
+        }
     }
 
     private void restoreNormalState(Player player) {

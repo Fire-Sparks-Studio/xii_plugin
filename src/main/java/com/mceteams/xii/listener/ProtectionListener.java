@@ -48,6 +48,11 @@ public class ProtectionListener implements Listener {
             event.setCancelled(true);
             return;
         }
+        // Un spectateur ne casse JAMAIS de bloc, même en pleine partie.
+        if (plugin.getProtectionService().isSpectator(player)) {
+            event.setCancelled(true);
+            return;
+        }
         // Règles de bases en pleine partie : seuls les propriétaires
         // modifient leur base (le coeur a sa propre logique).
         var state = plugin.getGameManager().getState();
@@ -68,6 +73,11 @@ public class ProtectionListener implements Listener {
         }
         Player player = event.getPlayer();
         if (plugin.getProtectionService().shouldBlockWorldInteraction(player)) {
+            event.setCancelled(true);
+            return;
+        }
+        // Un spectateur ne pose JAMAIS de bloc.
+        if (plugin.getProtectionService().isSpectator(player)) {
             event.setCancelled(true);
             return;
         }
@@ -121,7 +131,9 @@ public class ProtectionListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        if (plugin.getProtectionService().shouldBlockPickup(player)) {
+        // Un spectateur ne ramasse rien, même en pleine partie.
+        if (plugin.getProtectionService().shouldBlockPickup(player)
+                || plugin.getProtectionService().isSpectator(player)) {
             event.setCancelled(true);
         }
     }
@@ -131,7 +143,9 @@ public class ProtectionListener implements Listener {
         if (!systemEnabled()) {
             return;
         }
-        if (plugin.getProtectionService().shouldBlockDrop(event.getPlayer())) {
+        // Un spectateur ne jette rien.
+        if (plugin.getProtectionService().shouldBlockDrop(event.getPlayer())
+                || plugin.getProtectionService().isSpectator(event.getPlayer())) {
             event.setCancelled(true);
         }
     }

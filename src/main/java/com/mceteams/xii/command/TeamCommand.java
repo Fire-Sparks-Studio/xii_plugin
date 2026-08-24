@@ -262,7 +262,7 @@ public class TeamCommand implements TabExecutor {
                     return;
                 }
                 // automatic=true : pas de points attribués pour un acte admin.
-                plugin.getCoreService().breakCore(team, null, true);
+                plugin.getCoreService().breakCore(team, null, true, true);
                 MessageUtil.send(sender,
                         "§4✖ Coeur de " + color.getColoredName() + " §4détruit.");
             }

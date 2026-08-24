@@ -228,10 +228,11 @@ public class GameManager {
 
         int seconds = plugin.getConfigManager().getCountdownSeconds();
         // Countdown de lancement : TITLES + pling grave chaque seconde,
-        // puis GROWL DE DRAGON quand la partie démarre.
+        // puis GROWL DE DRAGON quand la partie DÉMARRE réellement
+        // (téléportation aux bases dès la fin du countdown).
         activeCountdownTask = new CountdownTask(
                 plugin, seconds,
-                this::beginClassSelection,
+                this::beginPreparation,
                 false,                          // mode titles
                 null,                           // (pas d'action bar)
                 org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f,   // pling grave
@@ -258,37 +259,17 @@ public class GameManager {
     // Sélection des classes (spec §14)
     // -----------------------------------------------------------------
 
-    /** Après le countdown : CLASS_SELECTION pendant 30 secondes.
-     * La GUI est ouverte, le temps restant s'affiche en ACTION BAR
-     * (barre au-dessus de la hotbar), SANS aucun son. */
-    private void beginClassSelection() {
-        activeCountdownTask = null;
-        state = GameState.CLASS_SELECTION;
-        plugin.getSystemController().refresh();
-        plugin.getClassManager().openSelectionForAll();
-
-        int seconds = plugin.getConfigManager().getClassSelectionSeconds();
-        // Timer de sélection : ACTION BAR uniquement, AUCUN son
-        // (ni tick, ni fin) - spec utilisateur.
-        activeCountdownTask = new CountdownTask(
-                plugin, seconds,
-                () -> {
-                    plugin.getClassManager().assignRandomMissing();
-                    beginPreparation();
-                },
-                true,                                   // mode action bar
-                "§7Choisissez votre classe §8(§e%s s§8)",
-                null, 0f,                               // pas de son de tick
-                null, 0f);                              // pas de son de fin
-        activeCountdownTask.runTaskTimer(plugin, 0L, 20L);
-    }
-
     // -----------------------------------------------------------------
-    // Début officiel de la partie (spec §15)
+    // Début officiel de la partie (spec §15, ajusté : le jeu démarre
+    // DÈS LA FIN DU COUNTDOWN ; la sélection de classe se déroule PENDANT
+    // la préparation, sans bloquer le gameplay).
     // -----------------------------------------------------------------
 
     /**
-     * Fin de la sélection : répartition des joueurs puis PREPARATION.
+     * Fin du countdown de 5 secondes : téléportation aux bases, systèmes
+     * de jeu actifs, GUI de classe ouverte avec un compte à rebours de
+     * 30 secondes en barre d'action. À zéro : fermeture des GUI et
+     * classe aléatoire pour ceux qui n'ont pas choisi (spec §14).
      */
     private void beginPreparation() {
         activeCountdownTask = null;
@@ -336,8 +317,22 @@ public class GameManager {
         setState(state); // déclenche refresh + scoreboards
 
         startGameplayTasks();
+
+        // Sélection de classe PENDANT le début de partie : ouverture des
+        // GUI + compte à rebours 30 s en ACTION BAR, sans aucun son.
+        plugin.getClassManager().openSelectionForAll();
+        int classSeconds = plugin.getConfigManager().getClassSelectionSeconds();
+        activeCountdownTask = new CountdownTask(
+                plugin, classSeconds,
+                () -> plugin.getClassManager().finalizeSelection(),
+                true,                                   // mode action bar
+                "§7Choisissez votre classe §8(§e%s s§8)",
+                null, 0f,                               // pas de son de tick
+                null, 0f);                              // pas de son de fin
+        activeCountdownTask.runTaskTimer(plugin, 0L, 20L);
+
+        MessageUtil.broadcast("§6§lPHASE DE PRÉPARATION");
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
-        MessageUtil.broadcast(" §6§lPHASE DE PRÉPARATION");
         MessageUtil.broadcast(" §7Collectez des ressources et équipez-vous.");
         MessageUtil.broadcast(" §7Le combat commence dans §f30 minutes§7.");
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
@@ -366,9 +361,12 @@ public class GameManager {
             case INACTIVE -> { /* hors gameplay */ }
         }
 
-        // Affichage + restriction Mineur (ligne verrouillée) chaque seconde.
+        // Affichage + restriction Mineur + faim verrouillée chaque seconde.
         plugin.getScoreboardManager().updateAll();
         plugin.getClassService().sweepMinerLockedRow();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            com.mceteams.xii.util.PlayerUtil.lockHunger(online);
+        }
     }
 
     /** Transition PREPARATION -> COMBAT (les hooks ont déjà annoncé). */
@@ -403,6 +401,10 @@ public class GameManager {
             return;
         }
         if (subPhase instanceof com.mceteams.xii.enums.CombatSubPhase combat) {
+            // COMBAT (jour 7+) : tous les morts en attente reviennent au
+            // début de CHAQUE sous-phase (sauf équipe sans coeur).
+            plugin.getRespawnManager().processSubPhaseStart();
+
             switch (combat) {
                 // Le PvP global est déjà annoncé par le bandeau de phase.
                 case START -> { }
@@ -412,9 +414,15 @@ public class GameManager {
                 }
                 case MORE_DAMAGE -> MessageUtil.broadcast(
                         "§4⚔ §fDÉGÂTS x2 §7pendant toute la sous-phase !");
-                case ALL_CORE_DESTRUCTION -> plugin.getCoreService().destroyAllCores();
-                case MORE_METEORITES -> MessageUtil.broadcast(
-                        "§6☄ Météorites x2 §7- points terrain doublés !");
+                case ALL_CORE_DESTRUCTION ->
+                        plugin.getCoreService().destroyAllCores();
+                case MORE_METEORITES -> {
+                    // Jour 11 : TOUS les coeurs restants sont détruits
+                    // automatiquement (idempotent si déjà fait au jour 10).
+                    plugin.getCoreService().destroyAllCores();
+                    MessageUtil.broadcast(
+                            "§6☄ Météorites x2 §7- points terrain doublés !");
+                }
                 case SUDDEN_DEATH -> {
                     startSuddenDeathTask();
                     MessageUtil.broadcast(" ");

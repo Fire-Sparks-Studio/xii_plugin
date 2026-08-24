@@ -60,10 +60,20 @@ public class DeathService {
 
         // 5. Titre de mort + délai annoncé (texte FRANÇAIS, spec §29).
         int delay = plugin.getRespawnManager().schedule(victim.getUniqueId());
-        MessageUtil.sendTitle(victim,
-                "§cTU ES MORT",
-                "§7Réapparition dans §e" + delay + " seconde(s)",
-                10, 60, 10);
+        if (delay > 0) {
+            // PRÉPARATION : respawn minuté classique.
+            MessageUtil.sendTitle(victim,
+                    "§cTU ES MORT",
+                    "§7Réapparition dans §e" + delay + " seconde(s)",
+                    10, 60, 10);
+        } else {
+            // COMBAT (jour 7+) : pas de timer, retour au début de la
+            // prochaine sous-phase.
+            MessageUtil.sendTitle(victim,
+                    "§cTU ES MORT",
+                    "§7Réapparition au début de la §eprochaine sous-phase",
+                    10, 60, 10);
+        }
         SoundUtil.playDeath(victim);
 
         // Annonce à tous + vérification victoire anticipée (style Hypixel).
@@ -71,17 +81,10 @@ public class DeathService {
                 ? " §7par §c" + killer.getName()
                 : "";
 
-        // KILL FINAL : deux cas possibles -
-        //   a) l'équipe de la victime n'a PLUS DE COEUR (elle ne peut
-        //      plus revenir : chaque kill est définitif) ;
-        //   b) ce kill retire le DERNIER membre vivant de son équipe
-        //      (l'équipe vient de tomber, coeur vivant ou non).
+        // KILL FINAL : UNIQUEMENT si le coeur de l'équipe de la victime
+        // est détruit (chaque kill est alors définitif).
         var victimTeam = plugin.getTeamManager().getTeamOf(victim.getUniqueId());
-        boolean finalKill = false;
-        if (victimTeam != null) {
-            finalKill = !victimTeam.isHeartAlive()
-                    || plugin.getTeamManager().aliveCount(victimTeam) == 0;
-        }
+        boolean finalKill = victimTeam != null && !victimTeam.isHeartAlive();
 
         MessageUtil.broadcast("§c☠ §f" + victim.getName()
                 + " §7est mort" + killerInfo

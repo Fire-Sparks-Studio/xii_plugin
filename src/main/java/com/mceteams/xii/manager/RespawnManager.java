@@ -9,6 +9,7 @@ import org.bukkit.entity.Player;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -29,8 +30,13 @@ public class RespawnManager {
 
     /** Nombre de morts par joueur (alimente le délai croissant). */
     private final Map<UUID, Integer> deathCounts = new HashMap<>();
-    /** Timestamp (ms) auquel le respawn sera effectif. */
+    /** Timestamp (ms) auquel le respawn sera effectif (PRÉPARATION). */
     private final Map<UUID, Long> readyAt = new HashMap<>();
+    /**
+     * Joueurs morts en attente de respawn en COMBAT : pas de timer,
+     * ils reviennent tous AU DÉBUT DE LA PROCHAINE SOUS-PHASE.
+     */
+    private final Map<UUID, Boolean> combatPending = new HashMap<>();
 
     public RespawnManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -50,11 +56,24 @@ public class RespawnManager {
     }
 
     /**
-     * Enregistre une mort et programme son respawn.
+     * Enregistre une mort et programme son retour.
      *
-     * @return le délai appliqué en secondes (pour les messages).
+     * - PRÉPARATION : délai croissant 5s..30s (timer classique).
+     * - COMBAT (jour 7+) : PAS de timer ; le joueur attendra le début
+     *   de la prochaine sous-phase ({@link #processSubPhaseStart()}).
+     *
+     * @return le délai appliqué en secondes, ou -1 si reporté à la
+     *         prochaine sous-phase (pour les messages).
      */
     public int schedule(UUID playerUuid) {
+        boolean combatActive =
+                plugin.getGameManager().getState()
+                        == com.mceteams.xii.enums.GameState.COMBAT;
+        if (combatActive) {
+            combatPending.put(playerUuid, true);
+            return -1;
+        }
+
         int deaths = deathCounts.merge(playerUuid, 1, Integer::sum);
         int delay = computeDelaySeconds(
                 deaths,
@@ -65,8 +84,8 @@ public class RespawnManager {
     }
 
     /**
-     * Traite les respawn arrivés à échéance. Appelé par RespawnTask
-     * chaque seconde.
+     * Traite les respawn minutés arrivés à échéance (PRÉPARATION).
+     * Appelé par RespawnTask chaque seconde.
      */
     public void processDue() {
         long now = System.currentTimeMillis();
@@ -78,6 +97,21 @@ public class RespawnManager {
             }
             iterator.remove();
             handleRespawn(entry.getKey());
+        }
+    }
+
+    /**
+     * COMBAT : appelé À CHAQUE DÉBUT DE SOUS-PHASE. Tous les joueurs
+     * morts en attente reviennent dans leur base - SAUF si leur équipe
+     * n'a plus de coeur (élimination définitive).
+     */
+    public void processSubPhaseStart() {
+        if (combatPending.isEmpty()) {
+            return;
+        }
+        for (UUID uuid : List.copyOf(combatPending.keySet())) {
+            combatPending.remove(uuid);
+            handleRespawn(uuid);
         }
     }
 
@@ -132,12 +166,13 @@ public class RespawnManager {
 
     /** Un respawn est-il programmé pour ce joueur ? */
     public boolean isPending(UUID uuid) {
-        return readyAt.containsKey(uuid);
+        return readyAt.containsKey(uuid) || combatPending.containsKey(uuid);
     }
 
     /** Remise à zéro complète (nouvelle partie / arrêt). */
     public void clearAll() {
         deathCounts.clear();
         readyAt.clear();
+        combatPending.clear();
     }
 }

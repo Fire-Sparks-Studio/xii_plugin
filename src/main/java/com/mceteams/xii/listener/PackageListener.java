@@ -43,7 +43,9 @@ public class PackageListener implements Listener {
             return;
         }
 
-        // Délégation : attribution des points + désactivation du colis.
-        plugin.getPackageService().handleOpen(player, pack);
+        // LANCE L'ANIMATION d'ouverture (spirale ~5 s) : les points et
+        // l'accès au vrai coffre n'arrivent qu'À LA FIN de l'animation.
+        // Si le joueur ferme avant, il devra recommencer.
+        plugin.getPackageService().startOpeningAnimation(player, pack);
     }
 }

@@ -90,6 +90,24 @@ public class ClassManager {
         selectionOpened.clear();
     }
 
+    /**
+     * Fin des 30 secondes de sélection (appelé par le timer du GameManager) :
+     * 1. classe ALÉATOIRE pour chaque joueur équipé qui n'a pas choisi ;
+     * 2. fermeture forcée des GUI de sélection encore ouvertes.
+     */
+    public void finalizeSelection() {
+        assignRandomMissing();
+
+        // Ferme les ClassSelectionGUI encore ouvertes (joueurs n'ayant
+        // pas choisi : leur classe vient d'être attribuée aléatoirement).
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            var top = player.getOpenInventory().getTopInventory();
+            if (top.getHolder() instanceof ClassSelectionGUI) {
+                player.closeInventory();
+            }
+        }
+    }
+
     /** Remise à zéro (retour WAITING). */
     public void resetAll() {
         selectionOpened.clear();

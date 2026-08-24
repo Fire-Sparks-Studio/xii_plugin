@@ -8,14 +8,21 @@ import com.mceteams.xii.manager.PackageManager;
 import com.mceteams.xii.model.Package;
 import com.mceteams.xii.util.LocationUtil;
 import com.mceteams.xii.util.MessageUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -24,11 +31,18 @@ import java.util.concurrent.ThreadLocalRandom;
  * Logique métier des COLIS / packages (spec §17).
  *
  * Un colis = un coffre posé à un point ALÉATOIRE de la zone, rempli
- * avec la table de loot. Le premier joueur qui l'ouvre gagne les
- * points PACKAGE (et parfois RARE_ITEM selon la probabilité configurée).
+ * avec la table de loot.
  *
- * L'apparition est déclenchée par PackageTask (intervalles aléatoires),
- * plus fréquente pendant PACKAGE_UPGRADE (facteur lu dans la config).
+ * OUVERTURE ANIMÉE : le clic sur un colis ouvre une GUI de 27 vitres
+ * grises qui passent en vertes UNE PAR UNE en SPIRALE HORAIRE depuis
+ * le coin haut-gauche jusqu'au centre (~5 secondes). Chaque vitre
+ * joue un "pling" dont le pitch monte de +0.15 toutes les 2 vitres.
+ * À la fin : points PACKAGE (+ RARE_ITEM éventuel) et accès au coffre.
+ *
+ * Annonces :
+ * - spawn          : chat + titre avec coordonnées ;
+ * - récupération   : chat SANS nom ("Un colis a été récupéré !") ;
+ * - objet rare     : chat AVEC le nom du joueur (idem légendaire plus tard).
  */
 public class PackageService {
 
@@ -48,22 +62,18 @@ public class PackageService {
      *
      * ASYNCHRONE : le chunk cible est chargé via getChunkAtAsync avant
      * toute lecture de terrain (sinon gel du serveur, cf. LocationUtil).
-     *
-     * @return toujours null immédiatement ; le colis est créé plus tard
-     *         par callback (l'ancienne valeur de retour n'est plus utilisée).
      */
-    public Package spawnRandomPackage() {
+    public void spawnRandomPackage() {
         var zone = plugin.getZoneManager().getZone();
         if (zone == null || zone.getWorld() == null) {
-            return null;
+            return;
         }
         if (plugin.getGameManager().getState() != GameState.PREPARATION) {
-            return null; // mécanique limitée à la préparation
+            return; // mécanique limitée à la préparation
         }
 
         // Position résolue une fois le chunk chargé (thread principal).
         LocationUtil.randomSurfaceInAsync(zone, this::placePackageAt);
-        return null;
     }
 
     /** Place réellement le coffre du colis à la position donnée. */
@@ -89,17 +99,17 @@ public class PackageService {
                 containsRareItem);
         plugin.getPackageManager().register(pack);
 
-        // Annonce CHAT + TITRE pour tous les joueurs.
+        // Annonce CHAT + TITRE pour tous les joueurs (coordonnées partout).
         String coords = "§8(" + block.getX() + " " + block.getY()
                 + " " + block.getZ() + ")";
         MessageUtil.broadcast("§e✦ §fUn colis est apparu §7! " + coords);
-        for (Player online : org.bukkit.Bukkit.getOnlinePlayers()) {
+        for (Player online : Bukkit.getOnlinePlayers()) {
             MessageUtil.sendTitle(online,
                     "§e§lCOLIS",
-                    "§7Repérez les coordonnées dans le chat !",
+                    "§7Un colis est apparu " + coords,
                     10, 50, 10);
             com.mceteams.xii.util.SoundUtil.play(online,
-                    org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.8f);
+                    Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.8f);
         }
     }
 
@@ -130,18 +140,90 @@ public class PackageService {
     }
 
     // -----------------------------------------------------------------
-    // Ouverture
+    // Ouverture animée (spirale horaire, ~5 secondes)
     // -----------------------------------------------------------------
 
     /**
-     * Traite l'ouverture d'un colis par un joueur.
-     *
-     * @param opener joueur qui ouvre
-     * @param pack   colis concerné.
+     * Démarre l'animation d'ouverture pour un joueur : GUI 3x9 remplie
+     * de vitres grises qui verdissent en spirale horaire depuis le coin
+     * haut-gauche jusqu'au centre. À la fin, les points sont attribués
+     * et le VRAI coffre s'ouvre.
+     */
+    public void startOpeningAnimation(Player player, Package pack) {
+        Inventory gui = Bukkit.createInventory(
+                new OpeningHolder(pack.getId()), 27, "§eOuverture du colis...");
+
+        // Remplissage initial : vitres gris foncé.
+        ItemStack gray = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        for (int slot = 0; slot < 27; slot++) {
+            gui.setItem(slot, gray);
+        }
+        player.openInventory(gui);
+
+        // Ordre spirale horaire (haut-gauche -> centre).
+        List<Integer> spiralOrder = spiralOrder27();
+        ItemStack lime = new ItemStack(Material.LIME_STAINED_GLASS_PANE);
+
+        new BukkitRunnable() {
+            int step = 0;
+
+            @Override
+            public void run() {
+                // Le joueur a fermé l'inventaire / s'est déconnecté :
+                // animation annulée, le colis reste intact.
+                if (!player.isOnline()
+                        || !(player.getOpenInventory().getTopInventory()
+                        .getHolder() instanceof OpeningHolder holder)
+                        || !holder.packageId().equals(pack.getId())) {
+                    cancel();
+                    return;
+                }
+
+                if (step >= spiralOrder.size()) {
+                    cancel();
+                    finishOpening(player, pack, gui);
+                    return;
+                }
+
+                // Une vitre passe au vert + pling montant.
+                gui.setItem(spiralOrder.get(step), lime);
+                float pitch = 0.5f + (step / 2) * 0.15f; // +0.15 toutes les 2 vitres
+                com.mceteams.xii.util.SoundUtil.play(player,
+                        Sound.BLOCK_NOTE_BLOCK_PLING, 0.8f, pitch);
+                step++;
+            }
+        }.runTaskTimer(plugin, 0L, 2L); // 27 x 2 ticks = ~5.4 secondes
+    }
+
+    /**
+     * Fin d'animation : attribution des points puis ouverture du vrai
+     * coffre. Si un autre joueur a déjà revendiqué le colis entre-temps,
+     * on ouvre simplement le coffre sans redonner de points.
+     */
+    private void finishOpening(Player player, Package pack, Inventory gui) {
+        handleOpen(player, pack);
+
+        // Petite pose finale puis bascule vers l'inventaire du coffre.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
+            Block chestBlock = pack.getLocation().getBlock();
+            if (chestBlock.getState() instanceof Chest chest) {
+                player.openInventory(chest.getInventory());
+            } else {
+                player.closeInventory(); // coffre détruit entre-temps
+            }
+        }, 10L);
+    }
+
+    /**
+     * Traite l'ouverture (points + annonces). Idempotent : un colis ne
+     * peut être revendiqué qu'une fois.
      */
     public void handleOpen(Player opener, Package pack) {
         if (pack.isOpened()) {
-            return; // déjà revendiqué
+            return; // déjà revendiqué par quelqu'un d'autre
         }
         pack.setOpened(true);
         plugin.getPackageManager().unregister(pack.getId());
@@ -150,12 +232,16 @@ public class PackageService {
         plugin.getPointService().award(opener, PointCategory.PACKAGE,
                 plugin.getConfigManager().getPackagePoints(), "colis ouvert");
 
-        // Bonus éventuel : objet rare.
+        // Annonce SANS nom : juste l'information que le colis est parti.
+        MessageUtil.broadcast("§7✦ Un colis a été §frécupéré§7.");
+
+        // Bonus éventuel : objet rare (AVEC le nom du chanceux).
         if (pack.containsRareItem()) {
             plugin.getPointService().award(opener, PointCategory.RARE_ITEM,
                     plugin.getConfigManager().getRareItemPoints(), "objet rare");
-            MessageUtil.broadcast("§6" + opener.getName()
-                    + " §7a trouvé un §eobjet rare§7 !");
+            MessageUtil.broadcast("§6★ " + opener.getName()
+                    + " §7a trouvé un objet §e§lRARE§7 !");
+            // TODO : objet LÉGENDAIRE (même pattern, annonce dédiée plus tard).
         } else {
             MessageUtil.sendActionBar(opener, "§aColis récupéré !");
         }
@@ -171,14 +257,64 @@ public class PackageService {
         int max = plugin.getConfigManager().getPackageMaxIntervalSeconds();
 
         var phaseManager = plugin.getPhaseManager();
-        boolean upgraded = phaseManager.getPhase() == com.mceteams.xii.enums.GamePhase.PREPARATION
+        boolean upgraded =
+                phaseManager.getPhase() == com.mceteams.xii.enums.GamePhase.PREPARATION
                 && phaseManager.getPreparationSubPhase()
-                == com.mceteams.xii.enums.PreparationSubPhase.PACKAGE_UPGRADE;
+                        == com.mceteams.xii.enums.PreparationSubPhase.PACKAGE_UPGRADE;
         if (upgraded) {
             double factor = plugin.getConfigManager().getPackageUpgradeFactor();
             min = (int) Math.max(1, min / factor);
             max = (int) Math.max(min + 1, max / factor);
         }
         return min + rng.nextInt(Math.max(1, max - min));
+    }
+
+    /**
+     * Ordre de traversal EN SPIRALE HORAIRE d'une grille 3x9 :
+     * rangée haut gauche->droite, bord droit haut->bas, rangée bas
+     * droite->gauche, bord gauche bas->haut, puis spirale interne...
+     * jusqu'au centre. Correspond exactement à la demande visuelle.
+     */
+    static List<Integer> spiralOrder27() {
+        List<Integer> order = new ArrayList<>(27);
+        final int rows = 3;
+        final int cols = 9;
+        int rStart = 0, rEnd = rows - 1, cStart = 0, cEnd = cols - 1;
+
+        while (rStart <= rEnd && cStart <= cEnd) {
+            for (int c = cStart; c <= cEnd; c++) {           // haut : -> 
+                order.add(rStart * cols + c);
+            }
+            rStart++;
+            for (int r = rStart; r <= rEnd; r++) {           // droite : v
+                order.add(r * cols + cEnd);
+            }
+            cEnd--;
+            if (rStart <= rEnd) {
+                for (int c = cEnd; c >= cStart; c--) {       // bas : <-
+                    order.add(rEnd * cols + c);
+                }
+                rEnd--;
+            }
+            if (cStart <= cEnd) {
+                for (int r = rEnd; r >= rStart; r--) {       // gauche : ^
+                    order.add(r * cols + cStart);
+                }
+                cStart++;
+            }
+        }
+        return order;
+    }
+
+    /**
+     * Holder identifiable de la GUI d'ouverture (pattern InventoryHolder) :
+     * permet à InventoryListener d'annuler tous les clics dedans et de
+     * détecter une fermeture prématurée. Conserve l'id du colis visé.
+     */
+    public record OpeningHolder(UUID packageId) implements InventoryHolder {
+        @Override
+        public Inventory getInventory() {
+            return null; // jamais utilisé : le holder sert de marqueur
+        }
     }
 }

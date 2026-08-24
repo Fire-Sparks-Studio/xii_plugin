@@ -38,6 +38,13 @@ public class CombatListener implements Listener {
         if (!systemEnabled()) {
             return;
         }
+        // Un spectateur ne peut PAS frapper (invisible mais parfois
+        // en survie : on bloque à la source).
+        if (event.getDamager() instanceof Player damagerPlayer
+                && plugin.getProtectionService().isSpectator(damagerPlayer)) {
+            event.setCancelled(true);
+            return;
+        }
         if (!(event.getDamager() instanceof Player attacker)
                 || !(event.getEntity() instanceof Player victim)) {
             return;

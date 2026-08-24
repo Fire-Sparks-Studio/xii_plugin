@@ -82,6 +82,19 @@ public final class PlayerUtil {
     }
 
     /**
+     * Verrouille la faim en jeu : barre de nourriture TOUJOURS pleine
+     * mais SATURATION A ZÉRO (pas de régénération passive par la faim).
+     * Appelé chaque seconde par l'horloge de jeu.
+     */
+    public static void lockHunger(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        player.setFoodLevel(20);
+        player.setSaturation(0f);
+    }
+
+    /**
      * Retire uniquement l'effet d'invisibilité (sortie de spectateur).
      */
     public static void removeInvisibility(Player player) {

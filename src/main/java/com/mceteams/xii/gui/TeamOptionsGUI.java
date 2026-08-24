@@ -138,7 +138,7 @@ public class TeamOptionsGUI implements InventoryHolder {
                                     + color.getColoredName() + "§c ?",
                             () -> {
                                 plugin.getCoreService()
-                                        .breakCore(team, null, true);
+                                        .breakCore(team, null, true, true);
                                 MessageUtil.send(player,
                                         "§4✖ Coeur détruit.");
                                 rebuild();

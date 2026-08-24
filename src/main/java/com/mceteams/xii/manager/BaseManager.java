@@ -90,6 +90,15 @@ public class BaseManager {
         Location core = anchor.clone()
                 .add(0, plugin.getConfigManager().getCoreOffsetY(), 0);
 
+        // MESURE PROVISOIRE : tant que les structures .nbt définitives ne
+        // contiennent pas leur propre coeur, on pose un BEACON visible
+        // près du spawn pour permettre les tests de destruction.
+        // (On n'écrase jamais un bloc existant : si la structure fournit
+        // déjà son coeur à cet endroit, il reste en place.)
+        if (core.getBlock().getType().isAir()) {
+            core.getBlock().setType(org.bukkit.Material.BEACON);
+        }
+
         bases.put(color, new GameBase(
                 color, anchor, anchor.clone(), protectionRadius, spawn, core));
 

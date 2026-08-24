@@ -86,10 +86,12 @@ public class CoreService {
      * Détruit le coeur d'une équipe.
      *
      * @param team      équipe dont le coeur est détruit
-     * @param breaker   joueur responsable (null si automatique/explosion)
-     * @param automatic true si destruction automatique (ALL_CORE_DESTRUCTION)
+     * @param breaker   joueur responsable (null si explosion/auto/admin)
+     * @param silentPoints true => aucun point attribué (admin/auto)
+     * @param byAdmin   true => l'annonce précise "par un administrateur"
      */
-    public void breakCore(GameTeam team, Player breaker, boolean automatic) {
+    public void breakCore(GameTeam team, Player breaker,
+                          boolean silentPoints, boolean byAdmin) {
         if (team == null || !team.isHeartAlive()) {
             return; // déjà détruit
         }
@@ -98,21 +100,26 @@ public class CoreService {
         team.setHeartAlive(false);
         removeCoreBlock(team.getColor());
 
-        // 2. Points au responsable (sauf destruction automatique).
-        if (!automatic && breaker != null) {
+        // 2. Points au responsable (sauf destruction auto/admin).
+        if (!silentPoints && breaker != null) {
             plugin.getPointService().award(breaker,
                     PointCategory.CORE,
                     plugin.getConfigManager().getCorePoints(),
                     "coeur détruit");
         }
 
-        // 3. Annonce PERSONNALISÉE :
+        // 3. Annonce CHAT personnalisée :
         //    - membre de l'équipe touchée : "votre coeur a été détruit..."
         //    - autres : "le coeur de l'équipe X a été détruit..."
-        //    Le nom du destructeur est coloré avec SA couleur d'équipe.
-        String destroyerPart = breaker != null
-                ? " par " + coloredPlayerName(breaker)
-                : "";
+        //    Attribution : "par <joueur coloré>" ou "par un administrateur".
+        String destroyerPart;
+        if (byAdmin) {
+            destroyerPart = " §7par §fun administrateur";
+        } else if (breaker != null) {
+            destroyerPart = " par " + coloredPlayerName(breaker);
+        } else {
+            destroyerPart = "";
+        }
 
         for (Player online : Bukkit.getOnlinePlayers()) {
             var playerTeam = plugin.getTeamManager().getTeamOf(online.getUniqueId());
@@ -120,6 +127,11 @@ public class CoreService {
                 MessageUtil.send(online,
                         "§f§lDESTRUCTION COEUR > §rvotre coeur a été détruit"
                                 + destroyerPart + ".");
+                // TITRE dédié aux membres de l'équipe touchée.
+                MessageUtil.sendTitle(online,
+                        "§c§lCOEUR DETRUIT !",
+                        "§fVous ne pouvez plus réapparaitre.",
+                        10, 80, 20);
             } else {
                 MessageUtil.send(online,
                         "§f§lDESTRUCTION COEUR > §rle coeur de "
@@ -128,9 +140,11 @@ public class CoreService {
                                 + "§r a été détruit" + destroyerPart + ".");
             }
         }
-        SoundUtil.broadcast(org.bukkit.Sound.ENTITY_WITHER_SPAWN, 1f, 0.6f);
 
-        // 4. Mise à jour de l'élimination + victoire éventuelle.
+        // 4. Son : GROWL DE DRAGON (pitch 1), comme le début de partie.
+        SoundUtil.broadcast(org.bukkit.Sound.ENTITY_ENDER_DRAGON_GROWL, 1f, 1f);
+
+        // 5. Mise à jour de l'élimination + victoire éventuelle.
         plugin.getTeamManager().updateElimination(team);
         plugin.getGameManager().checkVictoryConditions();
     }
@@ -148,7 +162,7 @@ public class CoreService {
         }
         for (GameTeam team : plugin.getTeamManager().all()) {
             if (team.isHeartAlive()) {
-                breakCore(team, null, true);
+                breakCore(team, null, true, false);
                 anyDestroyed = true;
             }
         }

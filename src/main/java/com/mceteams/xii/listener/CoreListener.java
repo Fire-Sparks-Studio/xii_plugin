@@ -53,7 +53,7 @@ public class CoreListener implements Listener {
         }
 
         // Délégation complète : points + annonce + éventuelle élimination.
-        plugin.getCoreService().breakCore(team, player, false);
+        plugin.getCoreService().breakCore(team, player, false, false);
     }
 
     /**
@@ -66,7 +66,7 @@ public class CoreListener implements Listener {
             var team = plugin.getCoreService().getTeamByCoreBlock(event.getBlock());
             if (team != null) {
                 // Cassé hors de notre contrôle : destruction attribuée au joueur.
-                plugin.getCoreService().breakCore(team, event.getPlayer(), false);
+                plugin.getCoreService().breakCore(team, event.getPlayer(), false, false);
             }
         }
     }
