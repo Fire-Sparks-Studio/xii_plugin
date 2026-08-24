@@ -58,12 +58,11 @@ import org.bukkit.plugin.java.JavaPlugin;
  * Responsabilité UNIQUE : initialiser et relier les composants dans le
  * bon ordre (spec §38). Aucune logique de gameplay ici.
  *
- * Séquence au démarrage (spec §9) :
+ * Séquence au démarrage :
  * 1. chargement configuration ;
  * 2. chargement données persistantes (zone) ;
- * 3. vérification zone + monde associé ;
- * 4. zone valide => WAITING ; monde disparu => zone invalidée,
- *    serveur normal ; aucune partie jamais reprise.
+ * 3. toute zone d'une session précédente est PURGÉE : le serveur
+ *    repart en mode normal, /zone set est obligatoire pour jouer.
  */
 public class XiiPlugin extends JavaPlugin {
 
@@ -186,7 +185,7 @@ public class XiiPlugin extends JavaPlugin {
         registerListeners();
         registerCommands();
 
-        // 11) Reprise d'état après redémarrage (spec §9).
+        // 11) Purge d'une éventuelle zone de session précédente.
         restoreZoneState();
 
         getLogger().info("===[READY]===");
@@ -245,24 +244,20 @@ public class XiiPlugin extends JavaPlugin {
     }
 
     /**
-     * Vérifie la zone persistée et restaure l'état WAITING si valide
-     * (spec §9) ; invalide la zone si son monde a disparu.
+     * RÈGLE UTILISATEUR (remplace spec §9) : au démarrage, AUCUNE reprise
+     * automatique. Une zone persistée d'une session précédente est
+     * IGNORÉE et purgée : le serveur repart en mode Minecraft normal,
+     * et l'opérateur doit refaire /zone set pour relancer le jeu.
      */
     private void restoreZoneState() {
         var persistedZone = dataManager.loadZone();
         if (persistedZone == null) {
-            return; // serveur normal tant que pas de /zone set (spec §3)
+            return; // serveur normal tant que pas de /zone set
         }
-        if (persistedZone.getWorld() == null) {
-            // Monde disparu : zone invalide => données nettoyées, serveur normal.
-            dataManager.clearZone();
-            getLogger().warning("[Zone] Monde '" + persistedZone.getWorldName()
-                    + "' introuvable : données de zone réinitialisées.");
-            return;
-        }
-        // Zone valide : reprise en WAITING (jamais de partie reprise).
-        zoneManager.setLoadedZone(persistedZone);
-        gameManager.resumeAfterRestart();
+        // Zone d'une session précédente => purgée volontairement.
+        dataManager.clearZone();
+        getLogger().info("[Zone] Zone précédente ignorée (redémarrage). "
+                + "Faites /zone set pour reconfigurer la zone de jeu.");
     }
 
     // -----------------------------------------------------------------

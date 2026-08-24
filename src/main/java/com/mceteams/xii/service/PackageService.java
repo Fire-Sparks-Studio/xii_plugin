@@ -129,26 +129,7 @@ public class PackageService {
             return false;
         }
 
-        // Sélection de table selon la progression (décision du manager).
-        // TOUT est protégé : si la génération échoue pour une raison X,
-        // on LOG l'erreur (visible en console) et on pose un contenu de
-        // secours - un coffre vide ne doit jamais arriver.
-        List<ItemStack> loot;
-        var table = plugin.getLootManager().getPackageTable(
-                plugin.getPhaseManager().getPreparationSubPhase());
-        try {
-            loot = plugin.getLootService().generate(table);
-            plugin.getLogger().info("[Loot] " + table + " -> "
-                    + loot.size() + " stack(s)");
-        } catch (Throwable throwable) {
-            plugin.getLogger().severe("[Loot] Génération échouée ("
-                    + table + ") : " + throwable);
-            throwable.printStackTrace();
-            loot = new ArrayList<>();
-            loot.add(new ItemStack(Material.IRON_INGOT, 6));
-            loot.add(new ItemStack(Material.COAL, 10));
-            loot.add(new ItemStack(Material.BREAD, 3));
-        }
+        List<ItemStack> loot = generateLootForPackages();
 
         // Placement aléatoire dans des slots distincts.
         List<Integer> slots = new ArrayList<>();
@@ -318,6 +299,58 @@ public class PackageService {
     }
 
     /**
+     * Génère le contenu d'un colis : table choisie par LootManager
+     * (progression) + tirages pondérés par LootService.
+     * TOUT est protégé : en cas d'échec, contenu de secours - un coffre
+     * vide ne doit JAMAIS arriver. Chaque génération est loggée.
+     */
+    private List<ItemStack> generateLootForPackages() {
+        var table = plugin.getLootManager().getPackageTable(
+                plugin.getPhaseManager().getPreparationSubPhase());
+        try {
+            List<ItemStack> loot = plugin.getLootService().generate(table);
+            plugin.getLogger().info("[Loot] " + table + " -> "
+                    + loot.size() + " stack(s)");
+            if (!loot.isEmpty()) {
+                return loot;
+            }
+            plugin.getLogger().warning("[Loot] Table " + table
+                    + " vide => contenu de secours.");
+        } catch (Throwable throwable) {
+            plugin.getLogger().severe("[Loot] Génération échouée ("
+                    + table + ") : " + throwable);
+            throwable.printStackTrace();
+        }
+        // Contenu de secours garanti non vide.
+        List<ItemStack> fallback = new ArrayList<>();
+        fallback.add(new ItemStack(Material.IRON_INGOT, 6));
+        fallback.add(new ItemStack(Material.COAL, 10));
+        fallback.add(new ItemStack(Material.BREAD, 3));
+        return fallback;
+    }
+
+    /**
+     * GARDE-FOU À L'OUVERTURE : si le coffre est vide au moment où le
+     * joueur termine l'animation (quelle que soit la cause racine),
+     * on RÉGÉNÈRE son contenu immédiatement.
+     */
+    private void ensureChestLoot(Inventory chestInventory) {
+        if (chestInventory == null || !chestInventory.isEmpty()) {
+            return;
+        }
+        plugin.getLogger().warning("[Loot] Coffre de colis VIDE à "
+                + "l'ouverture => régénération.");
+        List<ItemStack> loot = generateLootForPackages();
+        int slot = 0;
+        for (ItemStack stack : loot) {
+            if (slot >= chestInventory.getSize()) {
+                break;
+            }
+            chestInventory.setItem(slot++, stack);
+        }
+    }
+
+    /**
      * Démarre le transfert automatique du contenu du coffre vers le
      * joueur (un item toutes les 2 ticks, avec son de ramassage).
      */
@@ -333,6 +366,9 @@ public class PackageService {
             player.openInventory(chest.getInventory());
             return;
         }
+
+        // GARDE-FOU : coffre vide à l'ouverture => régénération immédiate.
+        ensureChestLoot(chest.getInventory());
 
         TransferSession session = new TransferSession(
                 chest.getInventory(), pack.getLocation());

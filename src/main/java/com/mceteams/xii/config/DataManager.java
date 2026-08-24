@@ -7,8 +7,9 @@ import org.bukkit.configuration.file.FileConfiguration;
 /**
  * Données persistantes du jeu (data.yml) - spec §38.
  *
- * On ne persiste QUE la zone : une partie en cours n'est jamais
- * reprise après redémarrage, le plugin revient en WAITING (spec §9).
+ * On ne persiste QUE la zone. RÈGLE UTILISATEUR : après un
+ * redémarrage, la zone persistée est IGNORÉE et purgée - le serveur
+ * repart en mode normal, /zone set est requis pour relancer le jeu.
  */
 public class DataManager {
 

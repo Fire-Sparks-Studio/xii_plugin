@@ -66,24 +66,9 @@ public class GameManager {
     }
 
     // -----------------------------------------------------------------
-    // Démarrage du serveur (spec §9)
-    // -----------------------------------------------------------------
-
-    /**
-     * Reprend le mode WAITING après un redémarrage (zone valide).
-     * Les parties ne sont jamais reprises : on repart de WAITING.
-     */
-    public void resumeAfterRestart() {
-        applyGameRules();
-        // Les structures sont déjà dans le monde ; on reconstruit
-        // uniquement les MODELS (bases, donjons, cœurs, coffres).
-        rebuildModels();
-        enterWaiting(true);
-        plugin.getLogger().info("[Game] Zone détectée : retour en WAITING.");
-    }
-
-    // -----------------------------------------------------------------
     // /zone set (spec §10)
+    // NB : plus AUCUNE reprise automatique après redémarrage - la zone
+    // persistée est purgée au boot (règle utilisateur, cf. XiiPlugin).
     // -----------------------------------------------------------------
 
     /**
