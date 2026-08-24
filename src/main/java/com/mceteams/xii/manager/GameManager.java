@@ -191,20 +191,46 @@ public class GameManager {
 
     /**
      * /party start : lance le compte à rebours de 5 secondes.
+     *
+     * GARDE-FOUS (obligatoires avant tout lancement) :
+     * - une zone doit être définie (/zone set) ;
+     * - au moins une équipe doit exister (/teams create).
+     *
+     * @return un message d'erreur FR si le lancement est refusé,
+     *         null si le countdown démarre.
      */
-    public void startParty() {
-        if (state != GameState.WAITING) {
-            return;
+    public String startParty() {
+        // 1. La zone doit être configurée : sans zone, pas de partie.
+        if (!plugin.getZoneManager().hasZone()) {
+            return "Aucune zone définie. Utilisez §f/zone set§c d'abord.";
         }
+        // 2. L'état doit être WAITING.
+        if (state != GameState.WAITING) {
+            return "La partie ne peut être lancée que depuis l'attente.";
+        }
+        // 3. Il faut au moins une équipe.
+        if (plugin.getTeamManager().isEmpty()) {
+            return "Aucune équipe créée. Utilisez §f/teams create <couleur>§c d'abord.";
+        }
+
         state = GameState.COUNTDOWN;
         plugin.getSystemController().refresh(); // retire sélecteur + item admin
         MessageUtil.broadcast("§eLancement de la partie dans §f"
                 + plugin.getConfigManager().getCountdownSeconds() + " secondes§e !");
 
         int seconds = plugin.getConfigManager().getCountdownSeconds();
-        activeCountdownTask = new CountdownTask(plugin, seconds,
-                () -> beginClassSelection());
+        // Countdown de lancement : TITLES + pling grave chaque seconde,
+        // puis GROWL DE DRAGON quand la partie démarre.
+        activeCountdownTask = new CountdownTask(
+                plugin, seconds,
+                this::beginClassSelection,
+                false,                          // mode titles
+                null,                           // (pas d'action bar)
+                org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f,   // pling grave
+                org.bukkit.Sound.ENTITY_ENDER_DRAGON_GROWL, 1.0f // départ !
+        );
         activeCountdownTask.runTaskTimer(plugin, 0L, 20L);
+        return null;
     }
 
     /**
@@ -224,7 +250,9 @@ public class GameManager {
     // Sélection des classes (spec §14)
     // -----------------------------------------------------------------
 
-    /** Après le countdown : CLASS_SELECTION pendant 30 secondes. */
+    /** Après le countdown : CLASS_SELECTION pendant 30 secondes.
+     * La GUI est ouverte, le temps restant s'affiche en ACTION BAR
+     * (barre au-dessus de la hotbar), SANS aucun son. */
     private void beginClassSelection() {
         activeCountdownTask = null;
         state = GameState.CLASS_SELECTION;
@@ -232,11 +260,18 @@ public class GameManager {
         plugin.getClassManager().openSelectionForAll();
 
         int seconds = plugin.getConfigManager().getClassSelectionSeconds();
-        activeCountdownTask = new CountdownTask(plugin, seconds,
+        // Timer de sélection : ACTION BAR uniquement, AUCUN son
+        // (ni tick, ni fin) - spec utilisateur.
+        activeCountdownTask = new CountdownTask(
+                plugin, seconds,
                 () -> {
                     plugin.getClassManager().assignRandomMissing();
                     beginPreparation();
-                });
+                },
+                true,                                   // mode action bar
+                "§7Choisissez votre classe §8(§e%s s§8)",
+                null, 0f,                               // pas de son de tick
+                null, 0f);                              // pas de son de fin
         activeCountdownTask.runTaskTimer(plugin, 0L, 20L);
     }
 

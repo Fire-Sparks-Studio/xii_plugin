@@ -23,8 +23,8 @@ import org.bukkit.inventory.ItemStack;
  */
 public class LobbyItemManager {
 
-    /** Slot hotbar de l'item admin : index 1 (2e case, convention 0-8). */
-    public static final int ADMIN_SLOT = 1;
+    /** Slot hotbar de l'item admin : index 0 (première case). */
+    public static final int ADMIN_SLOT = 0;
     /** Slot hotbar du sélecteur d'équipe : index 4 (case du MILIEU). */
     public static final int TEAM_SELECTOR_SLOT = 4;
 

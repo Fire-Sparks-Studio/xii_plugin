@@ -89,12 +89,15 @@ public class AdminGUI implements InventoryHolder {
 
         switch (slot) {
             case 10 -> {
-                // Lancer la partie.
-                if (plugin.getGameManager().getState() == GameState.WAITING) {
-                    player.closeInventory();
-                    plugin.getGameManager().startParty();
+                // Lancer la partie (validation centralisée : zone + équipes).
+                String error = plugin.getGameManager().startParty();
+                if (error != null) {
+                    MessageUtil.send(player, "§c" + error);
+                    // La GUI reste ouverte avec ses boutons actualisables.
+                    fillButtons();
+                    player.updateInventory();
                 } else {
-                    MessageUtil.send(player, "§cImpossible maintenant.");
+                    player.closeInventory();
                 }
             }
             case 12 -> {

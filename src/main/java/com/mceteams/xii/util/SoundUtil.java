@@ -29,9 +29,14 @@ public final class SoundUtil {
         }
     }
 
-    /** "Clic" de countdown (5..1). */
+    /** "Clic" de countdown (5..1) : pling GRAVE (pitch 0.5). */
     public static void playCountdownTick(Player player) {
-        play(player, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
+        play(player, Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 0.5f);
+    }
+
+    /** Growl de dragon : signal le DÉBUT officiel du lancement. */
+    public static void playDragonGrowl(Player player) {
+        play(player, Sound.ENTITY_ENDER_DRAGON_GROWL, 1.0f, 1.0f);
     }
 
     /** Son final du countdown / début de phase. */

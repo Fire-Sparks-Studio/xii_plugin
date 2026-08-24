@@ -47,20 +47,15 @@ public class PartyCommand implements TabExecutor {
         return true;
     }
 
-    /** /party start : uniquement depuis WAITING. */
+    /** /party start : uniquement depuis WAITING, zone + équipe requises.
+     * La validation est centralisée dans GameManager.startParty(). */
     private void handleStart(CommandSender sender) {
-        var state = plugin.getGameManager().getState();
-        if (state != com.mceteams.xii.enums.GameState.WAITING) {
-            MessageUtil.send(sender, "§cLa partie ne peut être lancée "
-                    + "que depuis l'attente.");
-            return;
+        String error = plugin.getGameManager().startParty();
+        if (error != null) {
+            MessageUtil.send(sender, "§c" + error);
+        } else {
+            MessageUtil.send(sender, "§aLancement en cours...");
         }
-        if (plugin.getTeamManager().isEmpty()) {
-            MessageUtil.send(sender, "§cCréez au moins une équipe d'abord.");
-            return;
-        }
-        plugin.getGameManager().startParty();
-        MessageUtil.send(sender, "§aLancement en cours...");
     }
 
     /**

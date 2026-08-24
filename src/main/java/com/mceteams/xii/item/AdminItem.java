@@ -7,13 +7,12 @@ import org.bukkit.inventory.ItemStack;
 import java.util.List;
 
 /**
- * Fabrique de l'item d'administration (spec §5) : TRIPWIRE.
+ * Fabrique de l'item d'administration (spec §5) : TRIPWIRE HOOK.
  *
- * NOTE VERSION 26.2 : la spécification demande TRIPWIRE, mais depuis
- * les versions récentes ce matériau n'existe PLUS sous forme d'item
- * (bloc seul). On utilise donc STRING ("ficelle"), qui est l'objet
- * historique associé au fil déclencheur/tripwire, tout en conservant
- * l'identifiant PDC interne "admin" et le comportement attendu.
+ * NOTE VERSION 26.2 : la spécification demande TRIPWIRE, mais ce
+ * matériau n'existe plus sous forme d'item (bloc seul). On utilise
+ * donc TRIPWIRE_HOOK ("crochet de déclencheur"), l'objet directement
+ * lié au tripwire, avec l'identifiant PDC interne "admin".
  *
  * Donné uniquement aux OPÉRATEURS pendant l'attente. Ouvre le GUI
  * d'administration (lancement, équipes, joueurs, paramètres).
@@ -25,10 +24,10 @@ public class AdminItem {
 
     /**
      * Matériau résolu au chargement de la classe :
-     * TRIPWIRE s'il redevient un item un jour, sinon STRING.
+     * TRIPWIRE s'il redevient un item un jour, sinon TRIPWIRE_HOOK.
      */
     public static final Material MATERIAL =
-            Material.TRIPWIRE.isItem() ? Material.TRIPWIRE : Material.STRING;
+            Material.TRIPWIRE.isItem() ? Material.TRIPWIRE : Material.TRIPWIRE_HOOK;
 
     /** Construit l'item d'administration. */
     public static ItemStack build() {
