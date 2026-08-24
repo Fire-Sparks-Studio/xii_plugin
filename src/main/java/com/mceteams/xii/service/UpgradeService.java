@@ -105,9 +105,9 @@ public class UpgradeService {
             }
         }
 
-        // Identification : type UPGRADE + clé dans les données PDC.
-        com.mceteams.xii.util.ItemUtil.tag(item,
-                com.mceteams.xii.util.ItemUtil.TYPE_UPGRADE);
+        // Identification : clé d'upgrade dans les données PDC.
+        // NB : PAS de tag "item_type" => l'item reste LIBREMENT
+        // déplaçable dans l'inventaire (ce n'est pas un item spécial).
         com.mceteams.xii.util.ItemUtil.setItemData(item,
                 "upgrade:" + type.getKey());
         return item;

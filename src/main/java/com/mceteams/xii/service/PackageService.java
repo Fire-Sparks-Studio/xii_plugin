@@ -23,6 +23,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -114,62 +115,48 @@ public class PackageService {
         }
     }
 
-    /** Remplit le coffre du colis ; @return true si objet rare dedans. */
+    /**
+     * Remplit le coffre du colis via le SYSTÈME DE LOOT
+     * (table sélectionnée par LootManager selon la sous-phase,
+     * génération pondérée par LootService).
+     *
+     * @return true si le contenu contient un objet RARE/LÉGENDAIRE
+     *         (upgrade Rare+ ou Totem) - utilisé pour les annonces.
+     */
     private boolean fillChest(Block chestBlock) {
         BlockState state = chestBlock.getState();
         if (!(state instanceof Chest chest)) {
             return false;
         }
-        ConfigManager config = plugin.getConfigManager();
-        boolean rare = random.nextDouble() < config.getRareItemChance();
 
-        for (ConfigManager.LootEntry entry : config.getLootTable()) {
-            int amount = entry.randomAmount(random);
-            if (amount > 0) {
-                chest.getInventory().setItem(
-                        random.nextInt(chest.getInventory().getSize()),
-                        new ItemStack(entry.material(), amount));
-            }
+        // Sélection de table selon la progression (décision du manager).
+        var table = plugin.getLootManager().getPackageTable(
+                plugin.getPhaseManager().getPreparationSubPhase());
+        // Génération pondérée (service).
+        List<ItemStack> loot = plugin.getLootService().generate(table);
+
+        // Placement aléatoire dans des slots distincts.
+        List<Integer> slots = new ArrayList<>();
+        for (int i = 0; i < chest.getInventory().getSize(); i++) {
+            slots.add(i);
         }
+        java.util.Collections.shuffle(slots, random);
 
-        // Objet rare : une UPGRADE (ou le TOTEM) tirée selon la rareté :
-        // Commun 60% · Rare 30% · Épique 9% · Légendaire 1%.
-        // TAGGÉ PDC => droppé à la mort du porteur.
-        if (rare) {
-            ItemStack rareItem = rollRareUpgradeItem();
-            chest.getInventory().setItem(0, rareItem);
+        boolean containsRareOrLegendary = false;
+        int slotIndex = 0;
+        for (ItemStack stack : loot) {
+            if (slotIndex >= slots.size()) {
+                break; // table trop généreuse pour le coffre
+            }
+            chest.getInventory().setItem(slots.get(slotIndex++), stack);
+            if (com.mceteams.xii.util.ItemUtil.isRareOrLegendary(stack)) {
+                containsRareOrLegendary = true;
+            }
         }
         chest.update();
-        return rare;
+        return containsRareOrLegendary;
     }
 
-    /**
-     * Tire un objet upgrade pondéré par rareté et construit son item.
-     */
-    private ItemStack rollRareUpgradeItem() {
-        double roll = random.nextDouble();
-        com.mceteams.xii.enums.ItemRarity rarity =
-                roll < 0.60 ? com.mceteams.xii.enums.ItemRarity.COMMON
-                : roll < 0.90 ? com.mceteams.xii.enums.ItemRarity.RARE
-                : roll < 0.99 ? com.mceteams.xii.enums.ItemRarity.EPIC
-                : com.mceteams.xii.enums.ItemRarity.LEGENDARY;
-
-        // Candidats de cette rareté (le légendaire = uniquement le Totem).
-        List<com.mceteams.xii.enums.PlayerUpgrade> candidates = new ArrayList<>();
-        for (com.mceteams.xii.enums.PlayerUpgrade upgrade :
-                com.mceteams.xii.enums.PlayerUpgrade.values()) {
-            if (upgrade.getRarity() == rarity) {
-                candidates.add(upgrade);
-            }
-        }
-        if (candidates.isEmpty()) {
-            candidates.add(com.mceteams.xii.enums.PlayerUpgrade.VITALITE);
-        }
-
-        com.mceteams.xii.enums.PlayerUpgrade chosen =
-                candidates.get(random.nextInt(candidates.size()));
-        return plugin.getUpgradeService().createItem(chosen);
-    }
 
     // -----------------------------------------------------------------
     // Ouverture animée (spirale horaire, ~5 secondes)
@@ -201,12 +188,16 @@ public class PackageService {
 
             @Override
             public void run() {
-                // Le joueur a fermé l'inventaire / s'est déconnecté :
-                // animation annulée, le colis reste intact.
+                // Le joueur a fermé l'inventaire / s'est déconnecté /
+                // s'est fait taper : chargement INTERROMPU => son dédié,
+                // le colis reste intact (à refaire).
                 if (!player.isOnline()
                         || !(player.getOpenInventory().getTopInventory()
                         .getHolder() instanceof OpeningHolder holder)
                         || !holder.packageId().equals(pack.getId())) {
+                    if (player.isOnline()) {
+                        playInterruption(player);
+                    }
                     cancel();
                     return;
                 }
@@ -343,7 +334,9 @@ public class PackageService {
                     return;
                 }
 
-                // Premier item disponible dans le coffre ?
+                // Premier item disponible : parcours GAUCHE -> DROITE,
+                // LIGNE PAR LIGNE de HAUT EN BAS (slots 0..26 dans l'ordre,
+                // PAS en spirale contrairement à l'animation d'ouverture).
                 int sourceSlot = -1;
                 ItemStack moving = null;
                 for (int slot = 0; slot < session.chestInventory.getSize(); slot++) {
@@ -361,13 +354,13 @@ public class PackageService {
                     return;
                 }
 
-                // Transfert d'UN stack + son de pickup.
+                // Transfert d'UN stack + son "click" de DROPPER.
                 session.chestInventory.setItem(sourceSlot, null);
                 var leftovers = player.getInventory().addItem(moving);
                 leftovers.values().forEach(rest ->
                         player.getWorld().dropItemNaturally(player.getLocation(), rest));
                 com.mceteams.xii.util.SoundUtil.play(player,
-                        Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.0f);
+                        Sound.BLOCK_DISPENSER_DISPENSE, 0.7f, 1.2f);
             }
         };
         session.task.runTaskTimer(plugin, 2L, 2L);
@@ -383,8 +376,24 @@ public class PackageService {
     }
 
     /**
-     * Fermeture PRÉMATURÉE par le joueur : tout le reste est donné
-     * directement puis le coffre disparaît. Appelé par InventoryListener.
+     * Son d'INTERRUPTION imprévue : deux plings SUCCESSIFS à des tons
+     * différents (descendants, façon "musical") - pas un accord.
+     * Joué quand un chargement de colis est interrompu (fermeture,
+     * coup reçu...).
+     */
+    private void playInterruption(Player player) {
+        com.mceteams.xii.util.SoundUtil.play(player,
+                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.4f);
+        Bukkit.getScheduler().runTaskLater(plugin, () ->
+                        com.mceteams.xii.util.SoundUtil.play(player,
+                                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 0.55f),
+                3L);
+    }
+
+    /**
+     * Fermeture PRÉMATURÉE par le joueur : les items RESTANTS sont
+     * DROPpés AU SOL au coffre, puis le coffre disparaît.
+     * Appelé par InventoryListener (fermeture) et PackageListener (coup).
      */
     public void handleTransferClose(Player player, Inventory closedInventory) {
         TransferSession session = transfers.get(player.getUniqueId());
@@ -394,17 +403,18 @@ public class PackageService {
         cancelSession(session);
         transfers.remove(player.getUniqueId());
 
+        // Son d'interruption + DROP AU SOL des items restants.
+        playInterruption(player);
         for (int slot = 0; slot < session.chestInventory.getSize(); slot++) {
             ItemStack item = session.chestInventory.getItem(slot);
             if (item != null && !item.getType().isAir()) {
                 session.chestInventory.setItem(slot, null);
-                var leftovers = player.getInventory().addItem(item);
-                leftovers.values().forEach(rest ->
-                        player.getWorld().dropItemNaturally(player.getLocation(), rest));
+                session.chestLocation.getWorld()
+                        .dropItemNaturally(session.chestLocation, item);
             }
         }
         removeChestBlock(session);
-        MessageUtil.sendActionBar(player, "§aColis récupéré !");
+        MessageUtil.sendActionBar(player, "§cTransfert interrompu - colis au sol.");
     }
 
     /** Joueur déconnecté pendant le transfert : items jetés au sol. */

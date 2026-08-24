@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 4;
+    private static final int CONFIG_VERSION = 6;
 
     // -----------------------------------------------------------------
     // UPGRADES (items consommables)
@@ -65,8 +65,6 @@ public class ConfigManager {
 
     /** Cache des points par minerai (chargé une fois). */
     private final Map<Material, Integer> miningPoints = new EnumMap<>(Material.class);
-    /** Cache du loot (matériau -> [min, max]). */
-    private final List<LootEntry> lootTable = new ArrayList<>();
 
     public ConfigManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -124,23 +122,6 @@ public class ConfigManager {
             miningPoints.put(Material.ANCIENT_DEBRIS, debris);
         }
 
-        // --- Table de loot ----------------------------------------
-        lootTable.clear();
-        for (String entry : config.getStringList("loot-table")) {
-            // Format attendu : MATERIAU:min:max
-            String[] parts = entry.split(":");
-            if (parts.length != 3) {
-                continue;
-            }
-            try {
-                Material material = Material.valueOf(parts[0].trim().toUpperCase());
-                int min = Integer.parseInt(parts[1].trim());
-                int max = Integer.parseInt(parts[2].trim());
-                lootTable.add(new LootEntry(material, min, max));
-            } catch (IllegalArgumentException exception) {
-                plugin.getLogger().warning("Entrée de loot invalide : " + entry);
-            }
-        }
     }
 
     /** Petit holder pour accéder au fichier config de façon concise. */
@@ -330,22 +311,5 @@ public class ConfigManager {
         return config.getInt("teams.max-players", 8);
     }
 
-    /** @return la table de loot chargée (non modifiable). */
-    public List<LootEntry> getLootTable() {
-        return List.copyOf(lootTable);
-    }
 
-    /**
-     * Petite structure interne : une entrée de la table de loot.
-     */
-    public record LootEntry(Material material, int min, int max) {
-
-        /** Tire une quantité aléatoire entre min et max. */
-        public int randomAmount(java.util.Random random) {
-            if (max <= min) {
-                return min;
-            }
-            return min + random.nextInt(max - min + 1);
-        }
-    }
 }

@@ -128,6 +128,7 @@ public class GameManager {
         plugin.getStructureManager().clearHistory();
         plugin.getTeamManager().resetTransientState();
         plugin.getRespawnManager().clearAll();
+        plugin.getLootManager().resetForNewGame(); // garantie Totem remise à zéro
         plugin.getPhaseManager().reset();
         resetAllPlayerData();
 
@@ -273,6 +274,7 @@ public class GameManager {
      */
     private void beginPreparation() {
         activeCountdownTask = null;
+        plugin.getLootManager().resetForNewGame();
 
         // 3 : inventaires nettoyés ; 5/6 : items et systèmes de lobby off.
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -558,6 +560,7 @@ public class GameManager {
         // Réinitialisation des états temporaires.
         plugin.getTeamManager().resetTransientState();
         plugin.getRespawnManager().clearAll();
+        plugin.getLootManager().resetForNewGame(); // garantie Totem remise à zéro
         plugin.getClassManager().resetAll();
         plugin.getDungeonManager().resetAccess();
         plugin.getCombatService().resetMatchState();
@@ -587,6 +590,7 @@ public class GameManager {
         rebuildModels();
         plugin.getTeamManager().resetTransientState();
         plugin.getRespawnManager().clearAll();
+        plugin.getLootManager().resetForNewGame(); // garantie Totem remise à zéro
         plugin.getClassManager().resetAll();
         plugin.getDungeonManager().resetAccess();
         plugin.getCombatService().resetMatchState();

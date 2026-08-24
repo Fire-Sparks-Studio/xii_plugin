@@ -39,9 +39,7 @@ public class InteractionListener implements Listener {
             // UPGRADE consommable : délégation au service (consomme
             // l'item et applique l'effet / ouvre le totem).
             String itemData = com.mceteams.xii.util.ItemUtil.getItemData(item);
-            if (itemData != null && itemData.startsWith("upgrade:")
-                    && com.mceteams.xii.util.ItemUtil.isType(item,
-                            com.mceteams.xii.util.ItemUtil.TYPE_UPGRADE)) {
+            if (itemData != null && itemData.startsWith("upgrade:")) {
                 event.setCancelled(true);
                 plugin.getUpgradeService().handleUse(player, item,
                         itemData.substring("upgrade:".length()));

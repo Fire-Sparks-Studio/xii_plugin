@@ -25,7 +25,7 @@ public enum PlayerClass {
             "§7Malus : §c5 coeurs (10 PV)"),
 
     TANK("Robuste", "§a",
-            "§7Avantage : §f15 PV",
+            "§7Avantage : §f15 coeurs (30 PV)",
             "§7Malus : §c-15% dégâts infligés, -15% vitesse"),
 
     AGILE("Agile", "§b",

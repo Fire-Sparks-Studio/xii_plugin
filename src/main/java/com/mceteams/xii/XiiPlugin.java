@@ -24,6 +24,7 @@ import com.mceteams.xii.manager.BaseManager;
 import com.mceteams.xii.manager.ClassManager;
 import com.mceteams.xii.manager.DungeonManager;
 import com.mceteams.xii.manager.GameManager;
+import com.mceteams.xii.manager.LootManager;
 import com.mceteams.xii.manager.PackageManager;
 import com.mceteams.xii.manager.PhaseManager;
 import com.mceteams.xii.manager.PlayerManager;
@@ -38,6 +39,7 @@ import com.mceteams.xii.service.CombatService;
 import com.mceteams.xii.service.CoreService;
 import com.mceteams.xii.service.DeathService;
 import com.mceteams.xii.service.ExplorationService;
+import com.mceteams.xii.service.LootService;
 import com.mceteams.xii.service.MeteoriteService;
 import com.mceteams.xii.service.MiningService;
 import com.mceteams.xii.service.PackageService;
@@ -86,6 +88,10 @@ public class XiiPlugin extends JavaPlugin {
     private RespawnManager respawnManager;
     private PackageManager packageManager;
     private GameManager gameManager;
+
+    // --- Système de loot -----------------------------------------------
+    private LootManager lootManager;
+    private LootService lootService;
 
     // --- Services -----------------------------------------------------------
     private PointService pointService;
@@ -153,6 +159,10 @@ public class XiiPlugin extends JavaPlugin {
         this.protectionService = new ProtectionService(this);
         // Nouvelle mécanique : items d'upgrade + totem de résurrection.
         this.upgradeService = new UpgradeService(this);
+
+        // 7bis) SYSTÈME DE LOOT : manager (tables) puis service (génération).
+        this.lootManager = new LootManager();
+        this.lootService = new LootService(this, lootManager);
 
         // 7) Managers qui s'appuient sur les services.
         this.respawnManager = new RespawnManager(this);
@@ -289,6 +299,8 @@ public class XiiPlugin extends JavaPlugin {
     public MeteoriteService getMeteoriteService() { return meteoriteService; }
     public ProtectionService getProtectionService() { return protectionService; }
     public UpgradeService getUpgradeService() { return upgradeService; }
+    public LootManager getLootManager() { return lootManager; }
+    public LootService getLootService() { return lootService; }
 
     public ScoreboardManager getScoreboardManager() { return scoreboardManager; }
     public TabManager getTabManager() { return tabManager; }

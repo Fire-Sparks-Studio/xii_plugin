@@ -72,9 +72,9 @@ public class ClassService {
         int vitality = data.getUpgradeLevel(com.mceteams.xii.enums.PlayerUpgrade.VITALITE);
         double maxHealth = playerClass == null ? VANILLA_MAX_HEALTH
                 : switch (playerClass) {
-                    case WORKER -> 10.0;   // Travailleur : 10 PV
-                    case TANK -> 15.0;     // Robuste : 15 PV
-                    case WARRIOR -> 14.0;  // Guerrier : 14 PV
+                    case WORKER -> 10.0;   // Travailleur : 5 coeurs / 10 PV
+                    case TANK -> 30.0;     // Robuste : 15 COEURS / 30 PV
+                    case WARRIOR -> 14.0;  // Guerrier : 7 coeurs / 14 PV
                     default -> VANILLA_MAX_HEALTH;
                 };
         maxHealth += 2.0 * vitality;

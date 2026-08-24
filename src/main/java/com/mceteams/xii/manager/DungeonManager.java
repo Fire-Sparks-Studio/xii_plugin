@@ -146,7 +146,7 @@ public class DungeonManager {
     private void scanAndFillAllDungeons() {
         for (Dungeon dungeon : dungeons) {
             scanLootChests(dungeon);   // chunks garantis chargés => instantané
-            fillChests(dungeon);       // remplissage initial (verrouillé jusqu'à DUNGEONS)
+            fillChests(dungeon, false); // remplissage initial (verrouillé jusqu'à DUNGEONS)
         }
     }
 
@@ -180,10 +180,13 @@ public class DungeonManager {
     }
 
     /**
-     * Remplit (ou remplit à nouveau) les coffres d'un donjon.
+     * Remplit (ou remplit à nouveau) les coffres d'un donjon via le
+     * SYSTÈME DE LOOT.
+     *
+     * @param rareTier true => table DUNGEON_RARE (après DUNGEON_RESTOCK),
+     *                 false => table DUNGEON_NORMAL (premier remplissage).
      */
-    public void fillChests(Dungeon dungeon) {
-        ConfigManager config = plugin.getConfigManager();
+    public void fillChests(Dungeon dungeon, boolean rareTier) {
         for (Location chestLocation : dungeon.getLootChests()) {
             Block block = chestLocation.getBlock();
             if (block.getType() != Material.CHEST) {
@@ -193,14 +196,26 @@ public class DungeonManager {
             if (!(state instanceof Chest chest)) {
                 continue;
             }
+
+            // Table choisie par LootManager (curse chance incluse).
+            var table = plugin.getLootManager()
+                    .getDungeonTable(rareTier);
+            List<org.bukkit.inventory.ItemStack> loot =
+                    plugin.getLootService().generate(table);
+
             chest.getInventory().clear();
-            for (ConfigManager.LootEntry entry : config.getLootTable()) {
-                int amount = entry.randomAmount(random);
-                if (amount > 0) {
-                    chest.getInventory().setItem(
-                            random.nextInt(chest.getInventory().getSize()),
-                            new org.bukkit.inventory.ItemStack(entry.material(), amount));
+            java.util.List<Integer> slots = new java.util.ArrayList<>();
+            for (int i = 0; i < chest.getInventory().getSize(); i++) {
+                slots.add(i);
+            }
+            java.util.Collections.shuffle(slots, random);
+
+            int slotIndex = 0;
+            for (org.bukkit.inventory.ItemStack stack : loot) {
+                if (slotIndex >= slots.size()) {
+                    break;
                 }
+                chest.getInventory().setItem(slots.get(slotIndex++), stack);
             }
             chest.update();
         }
@@ -220,7 +235,7 @@ public class DungeonManager {
     public void restockAll() {
         for (Dungeon dungeon : dungeons) {
             // Re-scan léger : des coffres peuvent avoir été détruits.
-            fillChests(dungeon);
+            fillChests(dungeon, true); // restock = table RARE
         }
         MessageUtil.broadcast("§b↻ §fLes donjons §7ont été §brestockés§7 !");
     }
