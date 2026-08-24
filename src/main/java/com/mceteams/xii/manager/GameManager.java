@@ -607,15 +607,18 @@ public class GameManager {
         if (!isRunning()) {
             return "Aucune partie en cours.";
         }
+
+        // FIX : synchronise l'état global AVANT le saut - le hook du jour
+        // cible se déclenche PENDANT phaseManager.skipToDay() et doit
+        // trouver le bon GameState (sinon mécaniques à moitié appliquées).
+        GameState previousState = this.state;
+        this.state = day <= 6 ? GameState.PREPARATION : GameState.COMBAT;
+
         boolean ok = plugin.getPhaseManager().skipToDay(day);
         if (!ok) {
+            this.state = previousState; // jour invalide : aucun changement
             return "Jour invalide (1 à 12).";
         }
-
-        // FIX MAJEUR : synchronise l'état GLOBAL avec la phase cible.
-        // (avant : l'état restait PREPARATION même en jour 12 => aucune
-        // mécanique de combat ne fonctionnait après un saut !)
-        this.state = day <= 6 ? GameState.PREPARATION : GameState.COMBAT;
 
         // --- RETOUR EN ARRIÈRE : désactivation des événements postérieurs
         if (day < 7) {
@@ -627,6 +630,8 @@ public class GameManager {
                     plugin.getCoreService().restoreCore(team.getColor());
                 }
             }
+            // ET les JOUEURS sont réanimés (fini les spectateurs oubliés) :
+            reviveEveryone();
         } else {
             // En combat, le loot des donjons est forcément ouvert.
             if (!plugin.getDungeonManager().isLootAccessible()) {
@@ -642,7 +647,6 @@ public class GameManager {
         }
 
         // --- AVANCE RAPIDE : cumul des mécaniques déjà passées ----------
-        // (le hook du jour cible se déclenche en plus via PhaseManager)
         boolean prep = this.state == GameState.PREPARATION;
         if (prep && day >= 2) {
             startPackageTask();      // colis disponibles
@@ -669,6 +673,55 @@ public class GameManager {
         restartPeriodicTasksForCurrentSubPhase();
         setState(this.state); // refresh systèmes + scoreboards + tab
         return null;
+    }
+
+    /**
+     * Réanime TOUS les membres d'équipes (utilisé au retour en
+     * préparation après un /party set antérieur) :
+     * sortie du spectateur, vie pleine, retour à la base.
+     * Les joueurs SANS équipe restent spectateurs permanents.
+     */
+    private void reviveEveryone() {
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            var data = plugin.getPlayerManager().getData(online);
+            var team = plugin.getTeamManager().getTeamOf(online.getUniqueId());
+            if (team == null) {
+                continue; // sans équipe : spectateur permanent maintenu
+            }
+            data.setAlive(true);
+            data.setEliminated(false);
+            data.setDeathCause(null);
+            data.clearLastDamage();
+            if (data.isSpectator()) {
+                plugin.getSpectatorService().exit(online);
+            }
+            com.mceteams.xii.util.PlayerUtil.heal(online);
+
+            Location spawnPoint = team.getSpawn();
+            if (spawnPoint == null) {
+                var base = plugin.getBaseManager().getBase(team.getColor());
+                spawnPoint = base != null ? base.getSpawn() : null;
+            }
+            if (spawnPoint == null) {
+                spawnPoint = getLobbySpawn();
+            }
+            if (spawnPoint != null) {
+                online.teleport(spawnPoint);
+            }
+            plugin.getClassService().applyPassives(online, data);
+        }
+
+        // Les données des joueurs HORS LIGNE sont aussi remises à neuf.
+        for (var data : plugin.getPlayerManager().all()) {
+            if (plugin.getTeamManager().getTeamOf(data.getUuid()) != null) {
+                data.setAlive(true);
+                data.setEliminated(false);
+                data.setDeathCause(null);
+                data.clearLastDamage();
+            }
+        }
+        // Files d'attente de respawn purgées (les timers n'ont plus de sens).
+        plugin.getRespawnManager().clearPending();
     }
 
     // -----------------------------------------------------------------

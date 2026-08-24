@@ -20,6 +20,9 @@ public class RespawnTask extends BukkitRunnable {
 
     @Override
     public void run() {
+        // Traite les respawn à échéance (préparation).
         plugin.getRespawnManager().processDue();
+        // Rafraîchit le compte à rebours DANS LE TITRE chaque seconde.
+        plugin.getRespawnManager().updateWaitingTitles();
     }
 }

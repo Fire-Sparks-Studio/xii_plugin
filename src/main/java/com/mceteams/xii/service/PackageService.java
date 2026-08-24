@@ -196,25 +196,189 @@ public class PackageService {
     }
 
     /**
-     * Fin d'animation : attribution des points puis ouverture du vrai
-     * coffre. Si un autre joueur a déjà revendiqué le colis entre-temps,
-     * on ouvre simplement le coffre sans redonner de points.
+     * Fin d'animation : attribution des points puis TRANSFERT PROGRESSIF
+     * du contenu du coffre vers l'inventaire du joueur.
      */
     private void finishOpening(Player player, Package pack, Inventory gui) {
         handleOpen(player, pack);
 
-        // Petite pose finale puis bascule vers l'inventaire du coffre.
+        // Petite pose finale puis bascule vers le transfert item par item.
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) {
                 return;
             }
             Block chestBlock = pack.getLocation().getBlock();
-            if (chestBlock.getState() instanceof Chest chest) {
-                player.openInventory(chest.getInventory());
+            if (chestBlock.getState() instanceof Chest) {
+                startTransfer(player, pack);
             } else {
                 player.closeInventory(); // coffre détruit entre-temps
             }
         }, 10L);
+    }
+
+    // -----------------------------------------------------------------
+    // Transfert progressif du contenu (un item à la fois)
+    // -----------------------------------------------------------------
+
+    /**
+     * Session de transfert d'un colis vers un joueur :
+     * - les CLICS sont interdits (rien n'est prenable à la main) ;
+     * - les items passent AUTOMATIQUEMENT un par un dans l'inventaire ;
+     * - si le joueur FERME l'inventaire => tout le reste est donné
+     *   directement et le COFFRE EST SUPPRIMÉ.
+     */
+    private static final class TransferSession {
+        final Inventory chestInventory;
+        final Location chestLocation;
+        BukkitRunnable task;
+
+        TransferSession(Inventory chestInventory, Location chestLocation) {
+            this.chestInventory = chestInventory;
+            this.chestLocation = chestLocation;
+        }
+    }
+
+    /** Sessions actives : joueur -> transfert en cours. */
+    private final java.util.Map<UUID, TransferSession> transfers =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Ce joueur a-t-il un transfert de colis en cours ? */
+    public boolean isTransferring(UUID playerUuid) {
+        return transfers.containsKey(playerUuid);
+    }
+
+    /** Cet inventaire est-il celui d'un transfert actif ? */
+    public boolean isTransferInventory(Inventory inventory) {
+        return transfers.values().stream()
+                .anyMatch(s -> s.chestInventory.equals(inventory));
+    }
+
+    /**
+     * Démarre le transfert automatique du contenu du coffre vers le
+     * joueur (un item toutes les 2 ticks, avec son de ramassage).
+     */
+    private void startTransfer(Player player, Package pack) {
+        // Sécurité : un autre transfert sur CE coffre ? Ouverture normale.
+        boolean chestAlreadyClaimed = transfers.values().stream()
+                .anyMatch(s -> s.chestLocation.equals(pack.getLocation()));
+        Block chestBlock = pack.getLocation().getBlock();
+        if (!(chestBlock.getState() instanceof Chest chest)) {
+            return;
+        }
+        if (chestAlreadyClaimed) {
+            player.openInventory(chest.getInventory());
+            return;
+        }
+
+        TransferSession session = new TransferSession(
+                chest.getInventory(), pack.getLocation());
+        transfers.put(player.getUniqueId(), session);
+        player.openInventory(session.chestInventory);
+
+        session.task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                // Joueur parti (déco) : items jetés au sol au coffre,
+                // coffre supprimé, session nettoyée.
+                if (!player.isOnline()) {
+                    dumpAndRemoveChest(session);
+                    return;
+                }
+
+                // Premier item disponible dans le coffre ?
+                int sourceSlot = -1;
+                ItemStack moving = null;
+                for (int slot = 0; slot < session.chestInventory.getSize(); slot++) {
+                    ItemStack candidate = session.chestInventory.getItem(slot);
+                    if (candidate != null && !candidate.getType().isAir()) {
+                        sourceSlot = slot;
+                        moving = candidate;
+                        break;
+                    }
+                }
+
+                if (moving == null) {
+                    // Coffre vide : fin propre.
+                    completeTransfer(player, session);
+                    return;
+                }
+
+                // Transfert d'UN stack + son de pickup.
+                session.chestInventory.setItem(sourceSlot, null);
+                var leftovers = player.getInventory().addItem(moving);
+                leftovers.values().forEach(rest ->
+                        player.getWorld().dropItemNaturally(player.getLocation(), rest));
+                com.mceteams.xii.util.SoundUtil.play(player,
+                        Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.0f);
+            }
+        };
+        session.task.runTaskTimer(plugin, 2L, 2L);
+    }
+
+    /** Fin réussie : fermeture + suppression physique du coffre. */
+    private void completeTransfer(Player player, TransferSession session) {
+        cancelSession(session);
+        transfers.remove(player.getUniqueId());
+        Bukkit.getScheduler().runTask(plugin, (Runnable) player::closeInventory);
+        removeChestBlock(session);
+        MessageUtil.sendActionBar(player, "§aColis entièrement récupéré !");
+    }
+
+    /**
+     * Fermeture PRÉMATURÉE par le joueur : tout le reste est donné
+     * directement puis le coffre disparaît. Appelé par InventoryListener.
+     */
+    public void handleTransferClose(Player player, Inventory closedInventory) {
+        TransferSession session = transfers.get(player.getUniqueId());
+        if (session == null || !session.chestInventory.equals(closedInventory)) {
+            return; // pas notre transfert
+        }
+        cancelSession(session);
+        transfers.remove(player.getUniqueId());
+
+        for (int slot = 0; slot < session.chestInventory.getSize(); slot++) {
+            ItemStack item = session.chestInventory.getItem(slot);
+            if (item != null && !item.getType().isAir()) {
+                session.chestInventory.setItem(slot, null);
+                var leftovers = player.getInventory().addItem(item);
+                leftovers.values().forEach(rest ->
+                        player.getWorld().dropItemNaturally(player.getLocation(), rest));
+            }
+        }
+        removeChestBlock(session);
+        MessageUtil.sendActionBar(player, "§aColis récupéré !");
+    }
+
+    /** Joueur déconnecté pendant le transfert : items jetés au sol. */
+    private void dumpAndRemoveChest(TransferSession session) {
+        cancelSession(session);
+        for (int slot = 0; slot < session.chestInventory.getSize(); slot++) {
+            ItemStack item = session.chestInventory.getItem(slot);
+            if (item != null && !item.getType().isAir()) {
+                session.chestInventory.setItem(slot, null);
+                session.chestLocation.getWorld()
+                        .dropItemNaturally(session.chestLocation, item);
+            }
+        }
+        removeChestBlock(session);
+    }
+
+    /** Arrête la task d'une session (best-effort). */
+    private void cancelSession(TransferSession session) {
+        if (session.task != null) {
+            try {
+                session.task.cancel();
+            } catch (IllegalStateException ignored) {
+                // pas schedulée / déjà annulée
+            }
+        }
+    }
+
+    /** Supprime physiquement le bloc coffre du colis. */
+    private void removeChestBlock(TransferSession session) {
+        if (session.chestLocation.getBlock().getType() == Material.CHEST) {
+            session.chestLocation.getBlock().setType(Material.AIR);
+        }
     }
 
     /**

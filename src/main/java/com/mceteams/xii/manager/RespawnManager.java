@@ -116,6 +116,29 @@ public class RespawnManager {
     }
 
     /**
+     * Affiche le COMPTE À REBOURS DANS LE TITRE chaque seconde pour les
+     * joueurs morts en attente (préparation). Appelé par RespawnTask.
+     */
+    public void updateWaitingTitles() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<UUID, Long> entry : readyAt.entrySet()) {
+            long remaining = entry.getValue() - now;
+            if (remaining <= 0) {
+                continue; // traité par processDue
+            }
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            int seconds = (int) Math.ceil(remaining / 1000.0);
+            com.mceteams.xii.util.MessageUtil.sendTitle(player,
+                    "§cTU ES MORT",
+                    "§7Réapparition dans §e" + seconds + " s",
+                    0, 25, 0);
+        }
+    }
+
+    /**
      * Exécute le respawn d'un joueur :
      * - COMBAT + coeur détruit => élimination DÉFINITIVE ;
      * - sinon => retour dans sa base (spec §19 dernier point).
@@ -131,16 +154,19 @@ public class RespawnManager {
         }
 
         var team = plugin.getTeamManager().getTeamOf(uuid);
-
         // Équipe sans coeur en COMBAT : plus aucun respawn possible (§29).
         boolean combatActive =
-                plugin.getGameManager().getState() == com.mceteams.xii.enums.GameState.COMBAT;
+                plugin.getGameManager().getState()
+                        == com.mceteams.xii.enums.GameState.COMBAT;
         if (combatActive && team != null && !team.isHeartAlive()) {
             data.setEliminated(true);
             data.setAlive(false);
             plugin.getSpectatorService().enterPermanent(player);
             MessageUtil.broadcast("§c✘ §e" + player.getName()
                     + " §7est définitivement §céliminé§7 !");
+            // Met l'ÉQUIPE éliminée si c'était le dernier debout
+            // (annonce EQUIPE ELIMINEE incluse dans la méthode).
+            plugin.getTeamManager().updateElimination(team);
             plugin.getGameManager().checkVictoryConditions();
             return;
         }
@@ -172,6 +198,15 @@ public class RespawnManager {
     /** Remise à zéro complète (nouvelle partie / arrêt). */
     public void clearAll() {
         deathCounts.clear();
+        readyAt.clear();
+        combatPending.clear();
+    }
+
+    /**
+     * Purge uniquement les FILES D'ATTENTE (timers + combat), en
+     * conservant les compteurs de morts. Utilisé par /party set.
+     */
+    public void clearPending() {
         readyAt.clear();
         combatPending.clear();
     }

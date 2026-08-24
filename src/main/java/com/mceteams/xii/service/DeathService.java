@@ -91,6 +91,13 @@ public class DeathService {
         var victimTeam = plugin.getTeamManager().getTeamOf(victim.getUniqueId());
         boolean finalKill = victimTeam != null && !victimTeam.isHeartAlive();
 
+        // Si le coeur est déjà mort et que la victime était le dernier
+        // debout : l'équipe passe ELIMINEE immédiatement (annonce incluse),
+        // sans attendre le traitement du respawn.
+        if (victimTeam != null && !victimTeam.isHeartAlive()) {
+            plugin.getTeamManager().updateElimination(victimTeam);
+        }
+
         MessageUtil.broadcast("§c☠ §f" + victim.getName()
                 + " §7est mort" + killerInfo
                 + (finalKill ? " §b§lKILL FINAL" : "") + ".");

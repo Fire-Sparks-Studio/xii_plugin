@@ -63,6 +63,13 @@ public class InventoryListener implements Listener {
             return;
         }
 
+        // 1ter. TRANSFERT de colis en cours : tous les clics sont bloqués,
+        // les items passent automatiquement un par un (PackageService).
+        if (plugin.getPackageService().isTransferring(player.getUniqueId())) {
+            event.setCancelled(true);
+            return;
+        }
+
         // 2. Protection des items spéciaux : interdits de bouger, de
         // sortir, d'être dupliqués via hotbar swap, etc.
         if (involvesSpecialItem(event)) {
@@ -154,6 +161,12 @@ public class InventoryListener implements Listener {
             event.setCancelled(true);
             return;
         }
+        // Transfert de colis en cours : aucun drag non plus.
+        if (event.getWhoClicked() instanceof Player player
+                && plugin.getPackageService().isTransferring(player.getUniqueId())) {
+            event.setCancelled(true);
+            return;
+        }
         for (org.bukkit.inventory.ItemStack item : event.getNewItems().values()) {
             if (com.mceteams.xii.util.ItemUtil.isSpecialItem(item)) {
                 event.setCancelled(true);
@@ -189,6 +202,12 @@ public class InventoryListener implements Listener {
         if (!(event.getPlayer() instanceof Player player)) {
             return;
         }
+
+        // Transfert de colis fermé prématurément : tout le reste est
+        // donné directement et le coffre est supprimé (PackageService).
+        plugin.getPackageService().handleTransferClose(player,
+                event.getInventory());
+
         // Sécurité anti-duplication : au plus UN exemplaire par type interne.
         deduplicateSpecialItems(player);
     }
