@@ -10,9 +10,13 @@ import org.bukkit.event.block.BlockBreakEvent;
 /**
  * Détection des attaques sur les COEURS d'équipe (spec §28).
  *
- * Le listener détecte la tentative de casse du bloc coeur et délègue
- * à CoreService (points, élimination, annonces). La destruction via
- * explosion est gérée par WorldListener.
+ * Actif pendant TOUTE partie en cours (préparation + combat) :
+ * - un membre ne peut JAMAIS casser son propre coeur (message) ;
+ * - en PRÉPARATION, les ennemis sont de toute façon bloqués par les
+ *   règles de base (ProtectionListener LOW) => aucun accès ;
+ * - en COMBAT, un ennemi qui casse déclenche la destruction complète.
+ *
+ * La destruction via explosion est gérée par WorldListener.
  */
 public class CoreListener implements Listener {
 
@@ -22,14 +26,16 @@ public class CoreListener implements Listener {
         this.plugin = plugin;
     }
 
-    /** Système coeur actif ? (spec §33) */
+    /** Actif dès qu'une partie existe (préparation ou combat). */
     private boolean systemEnabled() {
-        return plugin.getGameSystems().isCoreListenerEnabled();
+        var state = plugin.getGameManager().getState();
+        return state == com.mceteams.xii.enums.GameState.PREPARATION
+                || state == com.mceteams.xii.enums.GameState.COMBAT;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onBlockBreak(BlockBreakEvent event) {
-        if (!systemEnabled()) {
+        if (!systemEnabled() || event.isCancelled()) {
             return;
         }
         Player player = event.getPlayer();
@@ -44,30 +50,17 @@ public class CoreListener implements Listener {
         // gère lui-même l'état et le retrait physique du bloc.
         event.setCancelled(true);
 
-        // Un membre ne peut pas détruire son propre coeur.
+        // Un membre ne peut JAMAIS détruire son propre coeur.
         var breakerTeam = plugin.getTeamManager().getTeamOf(player.getUniqueId());
         if (breakerTeam != null && breakerTeam == team) {
             com.mceteams.xii.util.MessageUtil.send(player,
-                    "§cVous ne pouvez pas détruire votre propre cœur !");
+                    "§c✘ Vous ne pouvez pas détruire votre propre coeur !");
+            com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                    "§c✘ Coeur intouchable !");
             return;
         }
 
-        // Délégation complète : points + annonce + éventuelle élimination.
+        // Délégation complète : points + annonces + éventuelle élimination.
         plugin.getCoreService().breakCore(team, player, false, false);
-    }
-
-    /**
-     * Sécurité MONITOR : si le coeur a été cassé par un autre chemin
-     * (créatif op, glitch), on force la logique métier.
-     */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onBlockBreakMonitor(BlockBreakEvent event) {
-        if (!event.isCancelled() && systemEnabled()) {
-            var team = plugin.getCoreService().getTeamByCoreBlock(event.getBlock());
-            if (team != null) {
-                // Cassé hors de notre contrôle : destruction attribuée au joueur.
-                plugin.getCoreService().breakCore(team, event.getPlayer(), false, false);
-            }
-        }
     }
 }

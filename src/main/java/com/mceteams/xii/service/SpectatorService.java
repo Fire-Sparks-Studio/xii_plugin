@@ -5,6 +5,7 @@ import com.mceteams.xii.item.TeamSelectorItem;
 import com.mceteams.xii.util.ItemUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -52,8 +53,8 @@ public class SpectatorService {
      * (mort en attente de respawn, spec §29).
      *
      * PAS DE BOUSSOLE : tant que le coeur de son équipe est vivant, le
-     * joueur attend son respawn, il n'a pas besoin de naviguer entre
-     * les joueurs. La boussole est réservée aux spectateurs permanents.
+     * joueur attend son respawn. La boussole est réservée aux
+     * spectateurs permanents.
      */
     public void enter(Player player) {
         applySpectatorState(player, false);
@@ -68,8 +69,67 @@ public class SpectatorService {
      */
     public void enterPermanent(Player player) {
         applySpectatorState(player, true);
-        plugin.getPlayerManager().getData(player).setEliminated(true);
-        plugin.getPlayerManager().getData(player).setSpectator(true);
+        var data = plugin.getPlayerManager().getData(player);
+        data.setEliminated(true);
+        data.setSpectator(true);
+    }
+
+    /**
+     * RÉAPPLIQUE l'état spectateur (joueur déjà mort qui meurt à
+     * nouveau : chute dans le vide pendant la mort subite, etc.).
+     * Le téléporte aussi au centre du lobby s'il tombe dans le vide,
+     * pour éviter une boucle de morts.
+     */
+    public void reapply(Player player) {
+        if (!isSpectator(player.getUniqueId())) {
+            return;
+        }
+        var data = plugin.getPlayerManager().getData(player);
+        applySpectatorState(player, data.isEliminated());
+
+        // Anti-boucle-de-void : sous la hauteur minimale => lobby.
+        var world = player.getWorld();
+        int minY = world.getMinHeight();
+        if (player.getLocation().getY() < minY + 10) {
+            Location safe = plugin.getGameManager().getLobbySpawn();
+            if (safe != null) {
+                player.teleport(safe);
+            }
+        }
+    }
+
+    /**
+     * État spectateur complet :
+     * - INVISIBILITÉ RÉELLE : l'effet potion ne cache PAS l'armure ni
+     *   l'objet en main => on utilise hidePlayer pour chaque viewer ;
+     * - invulnérable, vol autorisé, vitesse de vol accélérée ;
+     * - mode survie conservé (hotbar custom possible).
+     * Toutes les actions sont bloquées par les listeners.
+     */
+    private void applySpectatorState(Player player, boolean withCompass) {
+        // Invisibilité totale auprès de tous les autres joueurs.
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (!viewer.equals(player)) {
+                viewer.hidePlayer(plugin, player);
+            }
+        }
+        // (le joueur lui-même se voit : pas grave, il est seul à le voir)
+
+        player.setInvulnerable(true);                       // invulnérable
+        player.setAllowFlight(true);                        // peut voler
+        player.setFlying(true);                             // vole directement
+        player.setFlySpeed(0.4f);                           // vol confortable
+        player.addPotionEffect(new PotionEffect(            // invisible (double)
+                PotionEffectType.INVISIBILITY,
+                PotionEffect.INFINITE_DURATION,
+                0,
+                true,
+                false));
+        if (withCompass) {
+            giveCompass(player);                            // hotbar spectateur
+        } else {
+            removeCompass(player);
+        }
     }
 
     /**
@@ -98,26 +158,18 @@ public class SpectatorService {
     // État Bukkit
     // -----------------------------------------------------------------
 
-    private void applySpectatorState(Player player, boolean withCompass) {
-        player.setInvulnerable(true);                       // invulnérable
-        player.setAllowFlight(true);                        // peut voler
-        player.setFlying(true);                             // vole directement
-        player.addPotionEffect(new PotionEffect(            // invisible
-                PotionEffectType.INVISIBILITY,
-                PotionEffect.INFINITE_DURATION,
-                0,
-                true,
-                false));
-        if (withCompass) {
-            giveCompass(player);                            // hotbar spectateur
-        }
-    }
-
     private void restoreNormalState(Player player) {
+        // Rend à nouveau visible auprès de tous.
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (!viewer.equals(player)) {
+                viewer.showPlayer(plugin, player);
+            }
+        }
         player.setInvulnerable(false);
         com.mceteams.xii.util.PlayerUtil.removeInvisibility(player);
         player.setFlying(false);
         player.setAllowFlight(false);
+        player.setFlySpeed(0.1f); // vitesse de vol vanilla
         removeCompass(player);
     }
 

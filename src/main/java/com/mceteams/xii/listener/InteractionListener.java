@@ -72,13 +72,19 @@ public class InteractionListener implements Listener {
             return;
         }
 
+        // --- SPECTATEUR : blocage TOTAL de tout le reste --------------
+        // (casser, poser, frapper, manger, ouvrir, utiliser...) La
+        // boussole a déjà été traitée ci-dessus.
+        if (plugin.getProtectionService().isSpectator(player)) {
+            event.setCancelled(true);
+            return;
+        }
+
         // --- Blocage générique des interactions "monde" ---------------
-        // En état protégé (lobby...) ou pour un spectateur : rien à faire.
+        // En état protégé (lobby...) : rien à faire sur le monde.
         boolean protectedState =
                 plugin.getProtectionService().shouldBlockWorldInteraction(player);
-        if (protectedState || plugin.getProtectionService().isSpectator(player)) {
-            // On n'annule que les interactions liées au monde/blocs,
-            // pas le mouvement ni l'air sans objet.
+        if (protectedState) {
             if (action == Action.RIGHT_CLICK_BLOCK
                     || action == Action.LEFT_CLICK_BLOCK
                     || action == Action.PHYSICAL) {

@@ -43,6 +43,10 @@ public class PackageListener implements Listener {
             return;
         }
 
+        // CRUCIAL : annule l'interaction SINON vanilla ouvre le vrai coffre
+        // par-dessus notre GUI d'animation (aucune attente visible).
+        event.setCancelled(true);
+
         // LANCE L'ANIMATION d'ouverture (spirale ~5 s) : les points et
         // l'accès au vrai coffre n'arrivent qu'À LA FIN de l'animation.
         // Si le joueur ferme avant, il devra recommencer.

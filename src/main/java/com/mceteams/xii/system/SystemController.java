@@ -109,15 +109,11 @@ public class SystemController {
      * NB : l'accessibilité du loot des donjons n'est pas un flag système,
      * elle est suivie par DungeonManager. */
     private SystemState preparationState() {
-        PreparationSubPhase sub = plugin.getPhaseManager().getPreparationSubPhase();
-
-        // Les colis apparaissent dès PACKAGES, puis davantage en PACKAGE_UPGRADE :
-        // c'est le PackageTask qui module la fréquence, ici on active le système.
-        boolean packagesActive = sub != null
-                && (sub == PreparationSubPhase.PACKAGES
-                || sub == PreparationSubPhase.POINT_UPGRADES
-                || sub == PreparationSubPhase.PACKAGE_UPGRADE
-                || sub == PreparationSubPhase.DUNGEON_RESTOCK);
+        // Les colis APPARAISSENT dès PACKAGES mais restent OUVRABLES
+        // pendant toute la préparation (un colis non réclamé doit pouvoir
+        // l'être même en DUNGEONS/POINT_UPGRADES...). C'est le PackageTask
+        // qui module la fréquence d'apparition, ici on active le système.
+        boolean packagesActive = true;
 
         return new SystemState(
                 true,           // protection (bases protégées, donjons protégés)
@@ -129,7 +125,10 @@ public class SystemController {
                 true,           // death (morts + respawn)
                 true,           // exploration
                 packagesActive,
-                false,          // core : les cœurs sont intouchables en préparation
+                true,           // core : le listener doit VIVRE en préparation
+                                // pour REFUSER au propriétaire de casser son
+                                // propre coeur (message) - l'accès des ennemis
+                                // reste bloqué par les règles de base.
                 false,          // météorites : uniquement en combat
                 false,          // classSelection terminée
                 true);          // spectator (morts temporaires)

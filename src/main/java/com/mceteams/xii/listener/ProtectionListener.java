@@ -151,7 +151,7 @@ public class ProtectionListener implements Listener {
     }
 
     // -----------------------------------------------------------------
-    // Faim gelée pendant toute partie active (confort compétitif)
+    // Faim gelée + inventaires interdits aux spectateurs
     // -----------------------------------------------------------------
 
     @EventHandler
@@ -159,8 +159,30 @@ public class ProtectionListener implements Listener {
         if (!systemEnabled()) {
             return;
         }
-        if (event.getEntity() instanceof Player) {
-            event.setCancelled(true); // barre de faim verrouillée au max
+        if (event.getEntity() instanceof Player player) {
+            event.setCancelled(true);       // barre de faim verrouillée
+            player.setSaturation(0f);       // mais SANS saturation
         }
+    }
+
+    /**
+     * Un spectateur ne peut PAS ouvrir de conteneur (coffres, fours...).
+     * Nos propres GUIs passent par openInventory et déclenchent aussi
+     * cet événement : on laisse passer celles du plugin.
+     */
+    @EventHandler
+    public void onInventoryOpen(org.bukkit.event.inventory.InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) {
+            return;
+        }
+        if (!plugin.getProtectionService().isSpectator(player)) {
+            return;
+        }
+        // Nos GUIs ont un holder plugin => autorisées.
+        if (event.getInventory().getHolder() instanceof org.bukkit.inventory.InventoryHolder holder
+                && holder.getClass().getName().startsWith("com.mceteams.xii")) {
+            return;
+        }
+        event.setCancelled(true);
     }
 }

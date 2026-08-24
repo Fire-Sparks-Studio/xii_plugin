@@ -41,8 +41,9 @@ public class PartyCommand implements TabExecutor {
             case "start" -> handleStart(sender);
             case "stop" -> handleStop(sender);
             case "set" -> handleSetDay(sender, args);
+            case "package" -> handlePackage(sender);
             default -> MessageUtil.send(sender,
-                    "§cSous-commandes : start, stop, set");
+                    "§cSous-commandes : start, stop, set, package");
         }
         return true;
     }
@@ -102,12 +103,28 @@ public class PartyCommand implements TabExecutor {
         }
     }
 
+    /**
+     * /party package : force l'apparition IMMÉDIATE d'un colis
+     * (utile pour tester sans attendre l'intervalle aléatoire).
+     * Fonctionne uniquement pendant la PRÉPARATION.
+     */
+    private void handlePackage(CommandSender sender) {
+        if (plugin.getGameManager().getState()
+                != com.mceteams.xii.enums.GameState.PREPARATION) {
+            MessageUtil.send(sender,
+                    "§cLes colis n'apparaissent que pendant la préparation.");
+            return;
+        }
+        plugin.getPackageService().spawnRandomPackage();
+        MessageUtil.send(sender, "§e✦ Colis en cours d'apparition...");
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command,
                                       String alias, String[] args) {
         List<String> suggestions = new ArrayList<>();
         if (args.length == 1) {
-            suggestions.addAll(List.of("start", "stop", "set"));
+            suggestions.addAll(List.of("start", "stop", "set", "package"));
         } else if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
             for (int day = 1; day <= 12; day++) {
                 suggestions.add(String.valueOf(day));

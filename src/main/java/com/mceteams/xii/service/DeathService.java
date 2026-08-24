@@ -41,7 +41,12 @@ public class DeathService {
     public void handleDeath(Player victim, DeathCause cause, Player killer) {
         PlayerData data = plugin.getPlayerManager().getData(victim);
         if (!data.isAlive()) {
-            return; // déjà mort (double événement) => ignorer
+            // Déjà mort (spectateur qui re-meurt : chute dans le vide
+            // pendant la mort subite...) => on ré-applique proprement
+            // l'état spectateur au lieu de le laisser se faire rendre
+            // par la vanilla à un spawn aléatoire.
+            plugin.getSpectatorService().reapply(victim);
+            return;
         }
 
         // 1. Enregistrement.
