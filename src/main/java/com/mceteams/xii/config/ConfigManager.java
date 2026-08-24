@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 2;
+    private static final int CONFIG_VERSION = 3;
 
     private final XiiPlugin plugin;
     private FileConfiguration config;

@@ -6,7 +6,7 @@
 
 # Version du schéma : si le fichier installé est plus ancien, il est
 # automatiquement remplacé (l'ancien est sauvegardé en .bak).
-config-version: 2
+config-version: 3
 
 # -----------------------------------------------------------------
 # Zone de jeu
@@ -36,7 +36,7 @@ bases:
 durations:
   countdown: 5            # compte à rebours avant la sélection de classe
   class-selection: 30     # durée de la sélection de classe
-  sub-phase: 600          # 10 minutes par sous-phase (préparation & combat)
+  sub-phase: 300          # 5 minutes par sous-phase => combat après 30 min
   ending: 30              # temps d'affichage des résultats avant retour WAITING
 
 # -----------------------------------------------------------------

@@ -339,7 +339,7 @@ public class GameManager {
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
         MessageUtil.broadcast(" §6§lPHASE DE PRÉPARATION");
         MessageUtil.broadcast(" §7Collectez des ressources et équipez-vous.");
-        MessageUtil.broadcast(" §7Le combat commence dans §f60 minutes§7.");
+        MessageUtil.broadcast(" §7Le combat commence dans §f30 minutes§7.");
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
     }
 
