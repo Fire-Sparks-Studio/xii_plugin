@@ -50,6 +50,9 @@ public class TeamCommand implements TabExecutor {
             case "remove" -> handleRemove(sender, args);
             case "add" -> handleAdd(sender, args);
             case "set" -> handleSet(sender, args);
+            case "eliminate" -> handleEliminate(sender, args);
+            case "revive" -> handleRevive(sender, args);
+            case "heart" -> handleHeart(sender, args);
             default -> sendUsage(sender);
         }
         return true;
@@ -194,6 +197,87 @@ public class TeamCommand implements TabExecutor {
     }
 
     // -----------------------------------------------------------------
+    // Administration gameplay : éliminer / réhabiliter / coeur
+    // -----------------------------------------------------------------
+
+    /** /teams eliminate <couleur> : élimination forcée. */
+    private void handleEliminate(CommandSender sender, String[] args) {
+        if (!checkAdmin(sender)) return;
+        if (args.length < 2) {
+            MessageUtil.send(sender, "§cUsage : /teams eliminate <couleur>");
+            return;
+        }
+        TeamColor color = TeamUtil.parse(args[1]);
+        if (color == null) {
+            MessageUtil.send(sender, "§cCouleur inconnue.");
+            return;
+        }
+        boolean ok = plugin.getTeamManager().forceEliminate(color);
+        MessageUtil.send(sender, ok
+                ? "§c✘ Équipe " + color.getColoredName() + " §céliminée."
+                : "§cImpossible (inexistante ou déjà éliminée).");
+    }
+
+    /** /teams revive <couleur> : réhabilitation d'une équipe éliminée. */
+    private void handleRevive(CommandSender sender, String[] args) {
+        if (!checkAdmin(sender)) return;
+        if (args.length < 2) {
+            MessageUtil.send(sender, "§cUsage : /teams revive <couleur>");
+            return;
+        }
+        TeamColor color = TeamUtil.parse(args[1]);
+        if (color == null) {
+            MessageUtil.send(sender, "§cCouleur inconnue.");
+            return;
+        }
+        boolean ok = plugin.getTeamManager().reviveTeam(color);
+        MessageUtil.send(sender, ok
+                ? "§a✔ Équipe " + color.getColoredName() + " §aréhabilitée."
+                : "§cImpossible (inexistante ou non éliminée).");
+    }
+
+    /**
+     * /teams heart destroy <couleur>  => détruit le coeur (sans points).
+     * /teams heart restore <couleur>  => restaure le coeur.
+     */
+    private void handleHeart(CommandSender sender, String[] args) {
+        if (!checkAdmin(sender)) return;
+        if (args.length < 3) {
+            MessageUtil.send(sender,
+                    "§cUsage : /teams heart <destroy|restore> <couleur>");
+            return;
+        }
+        TeamColor color = TeamUtil.parse(args[2]);
+        if (color == null) {
+            MessageUtil.send(sender, "§cCouleur inconnue.");
+            return;
+        }
+        String action = args[1].toLowerCase();
+
+        switch (action) {
+            case "destroy" -> {
+                var team = plugin.getTeamManager().getTeam(color);
+                if (team == null) {
+                    MessageUtil.send(sender, "§cÉquipe inexistante.");
+                    return;
+                }
+                // automatic=true : pas de points attribués pour un acte admin.
+                plugin.getCoreService().breakCore(team, null, true);
+                MessageUtil.send(sender,
+                        "§4✖ Coeur de " + color.getColoredName() + " §4détruit.");
+            }
+            case "restore" -> {
+                boolean ok = plugin.getCoreService().restoreCore(color);
+                MessageUtil.send(sender, ok
+                        ? "§a✔ Coeur de " + color.getColoredName() + " §arestauré."
+                        : "§cImpossible (inexistante ou coeur déjà vivant).");
+            }
+            default -> MessageUtil.send(sender,
+                    "§cAction inconnue : destroy ou restore.");
+        }
+    }
+
+    // -----------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------
 
@@ -214,7 +298,8 @@ public class TeamCommand implements TabExecutor {
     }
 
     private void sendUsage(CommandSender sender) {
-        MessageUtil.send(sender, "§cSous-commandes : create, remove, add, set");
+        MessageUtil.send(sender, "§cSous-commandes : create, remove, add, set, "
+                + "eliminate, revive, heart");
     }
 
     // -----------------------------------------------------------------
@@ -226,24 +311,23 @@ public class TeamCommand implements TabExecutor {
                                       String alias, String[] args) {
         List<String> suggestions = new ArrayList<>();
         if (args.length == 1) {
-            suggestions.addAll(List.of("create", "remove", "add", "set"));
+            suggestions.addAll(List.of("create", "remove", "add", "set",
+                    "eliminate", "revive", "heart"));
         } else if (args.length == 2) {
-            if (args[0].equalsIgnoreCase("create")
-                    || args[0].equalsIgnoreCase("set")
-                    || args[0].equalsIgnoreCase("remove")) {
-                for (TeamColor color : TeamColor.values()) {
-                    suggestions.add(color.name().toLowerCase());
-                }
-            } else if (args[0].equalsIgnoreCase("add")) {
-                Bukkit.getOnlinePlayers().forEach(p -> suggestions.add(p.getName()));
+            switch (args[0].toLowerCase()) {
+                case "create", "set", "remove", "eliminate", "revive" ->
+                        addColors(suggestions);
+                case "heart" -> suggestions.addAll(List.of("destroy", "restore"));
+                case "add" -> Bukkit.getOnlinePlayers()
+                        .forEach(p -> suggestions.add(p.getName()));
+                default -> { }
             }
         } else if (args.length == 3) {
-            if (args[0].equalsIgnoreCase("set")) {
-                suggestions.add("size");
-            } else if (args[0].equalsIgnoreCase("add")) {
-                for (TeamColor color : TeamColor.values()) {
-                    suggestions.add(color.name().toLowerCase());
-                }
+            switch (args[0].toLowerCase()) {
+                case "set" -> suggestions.add("size");
+                case "add" -> addColors(suggestions);
+                case "heart" -> addColors(suggestions);
+                default -> { }
             }
         } else if (args.length == 4 && args[0].equalsIgnoreCase("set")) {
             suggestions.addAll(List.of("4", "6", "8", "12"));
@@ -254,5 +338,12 @@ public class TeamCommand implements TabExecutor {
         return suggestions.stream()
                 .filter(s -> s.toLowerCase().startsWith(typed))
                 .toList();
+    }
+
+    /** Ajoute les 4 couleurs (minuscules) aux suggestions. */
+    private void addColors(List<String> suggestions) {
+        for (TeamColor color : TeamColor.values()) {
+            suggestions.add(color.name().toLowerCase());
+        }
     }
 }

@@ -157,6 +157,39 @@ public class CoreService {
         }
     }
 
+    /**
+     * RESTAURE le coeur d'une équipe (commande admin) :
+     * - remet l'état "vivant" ;
+     * - repose physiquement un bloc BEACON à la position enregistrée ;
+     * - annonce la restauration à tous.
+     *
+     * @return false si l'équipe est inconnue ou si le coeur vivait déjà.
+     */
+    public boolean restoreCore(TeamColor color) {
+        GameTeam team = plugin.getTeamManager().getTeam(color);
+        if (team == null || team.isHeartAlive()) {
+            return false;
+        }
+        team.setHeartAlive(true);
+
+        // Repose un bloc visible à l'emplacement du coeur (les structures
+        // du développeur restent la référence visuelle ; le BEACON sert
+        // de replacement standard après une destruction/administration).
+        Location core = coreLocations.get(color);
+        if (core != null && core.getWorld() != null) {
+            core.getBlock().setType(org.bukkit.Material.BEACON);
+        }
+
+        MessageUtil.broadcast(" ");
+        MessageUtil.broadcast("§f§lRESTAURATION COEUR > §rle coeur de "
+                + team.getColor().getColorCode()
+                + "l'équipe " + team.getColor().getDisplayName()
+                + "§r §fa été restauré§r.");
+        MessageUtil.broadcast(" ");
+        SoundUtil.broadcast(org.bukkit.Sound.BLOCK_BEACON_ACTIVATE, 1f, 1f);
+        return true;
+    }
+
     /** Supprime physiquement le bloc coeur (set AIR). */
     private void removeCoreBlock(TeamColor color) {
         Location core = coreLocations.get(color);

@@ -7,6 +7,7 @@ import com.mceteams.xii.util.MessageUtil;
 import com.mceteams.xii.util.TeamUtil;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Team;
 
@@ -263,17 +264,123 @@ public class TeamManager {
     public boolean updateElimination(GameTeam team) {
         if (!team.isEliminated() && isDefinitivelyDead(team)) {
             team.setEliminated(true);
-            if (hasPlugin()) {
-                // Format : EQUIPE ELIMINEE > L'équipe Jaune a été éliminée.
-                // (label blanc gras, nom d'équipe dans sa couleur, reset)
-                MessageUtil.broadcast("§f§lEQUIPE ELIMINEE > §r"
-                        + team.getColor().getColorCode()
-                        + "L'équipe " + team.getColor().getDisplayName()
-                        + "§r a été éliminée.");
-            }
+            announceElimination(team);
             return true;
         }
         return false;
+    }
+
+    /** Message d'élimination au format officiel (partagé). */
+    private void announceElimination(GameTeam team) {
+        if (!hasPlugin()) {
+            return;
+        }
+        MessageUtil.broadcast("§f§lEQUIPE ELIMINEE > §r"
+                + team.getColor().getColorCode()
+                + "L'équipe " + team.getColor().getDisplayName()
+                + "§r a été éliminée.");
+    }
+
+    /**
+     * ELIMINATION FORCÉE par un administrateur (/teams eliminate).
+     * L'équipe est marquée éliminée ; en pleine partie, ses membres en
+     * ligne passent spectateur permanents ; victoire revérifiée.
+     *
+     * @return false si l'équipe n'existe pas ou est déjà éliminée.
+     */
+    public boolean forceEliminate(TeamColor color) {
+        GameTeam team = teams.get(color);
+        if (team == null || team.isEliminated()) {
+            return false;
+        }
+        team.setEliminated(true);
+
+        boolean midGame = hasPlugin()
+                && (plugin.getGameManager().getState()
+                        == com.mceteams.xii.enums.GameState.PREPARATION
+                || plugin.getGameManager().getState()
+                        == com.mceteams.xii.enums.GameState.COMBAT);
+
+        for (UUID memberId : team.getPlayers()) {
+            var players = playersOrNull();
+            if (players != null) {
+                var data = players.getData(memberId);
+                data.setAlive(false);
+                data.setEliminated(true);
+            }
+            if (midGame) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member != null && member.isOnline()) {
+                    plugin.getSpectatorService().enterPermanent(member);
+                    MessageUtil.send(member,
+                            "§c✘ Votre équipe a été éliminée par un administrateur.");
+                }
+            }
+        }
+
+        announceElimination(team);
+        if (hasPlugin() && midGame) {
+            plugin.getGameManager().checkVictoryConditions();
+        }
+        return true;
+    }
+
+    /**
+     * RÉHABILITATION d'une équipe éliminée (/teams revive) :
+     * - statut d'élimination retiré ;
+     * - tous les membres repassent vivants/non éliminés ;
+     * - les membres EN LIGNE sortent du spectateur et retournent à la base.
+     *
+     * NB : le coeur n'est pas touché ici (/teams heart restore à part).
+     *
+     * @return false si l'équipe n'existe pas ou n'était pas éliminée.
+     */
+    public boolean reviveTeam(TeamColor color) {
+        GameTeam team = teams.get(color);
+        if (team == null || !team.isEliminated()) {
+            return false;
+        }
+        team.setEliminated(false);
+
+        var players = playersOrNull();
+        for (UUID memberId : team.getPlayers()) {
+            if (players != null) {
+                var data = players.getData(memberId);
+                data.setEliminated(false);
+                data.setAlive(true);
+                data.setDeathCause(null);
+            }
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null && member.isOnline()) {
+                plugin.getSpectatorService().exit(member);
+                com.mceteams.xii.util.PlayerUtil.heal(member);
+                // Retour à la base (repli : centre de la zone).
+                Location spawnPoint = team.getSpawn();
+                if (spawnPoint == null && hasPlugin()) {
+                    var base = plugin.getBaseManager().getBase(color);
+                    spawnPoint = base != null ? base.getSpawn() : null;
+                }
+                if (spawnPoint != null) {
+                    member.teleport(spawnPoint);
+                }
+                if (players != null) {
+                    plugin.getClassService().applyPassives(member,
+                            players.getData(memberId));
+                }
+                MessageUtil.send(member,
+                        "§a✔ Votre équipe est de retour dans la partie !");
+            }
+        }
+
+        if (hasPlugin()) {
+            MessageUtil.broadcast(" ");
+            MessageUtil.broadcast("§f§lEQUIPE REHABILITEE > §r"
+                    + team.getColor().getColorCode()
+                    + "L'équipe " + team.getColor().getDisplayName()
+                    + "§r §fest de retour dans la partie§r.");
+            MessageUtil.broadcast(" ");
+        }
+        return true;
     }
 
     // -----------------------------------------------------------------
