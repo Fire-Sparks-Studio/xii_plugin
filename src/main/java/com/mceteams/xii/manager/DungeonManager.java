@@ -255,6 +255,29 @@ public class DungeonManager {
         return false;
     }
 
+    /**
+     * Cette position est-elle à l'intérieur de la zone d'UN donjon ?
+     * Utilisé par ProtectionService : pas de PvP dans les donjons tant
+     * que leurs loots ne sont pas accessibles.
+     */
+    public boolean isInDungeonArea(org.bukkit.Location location) {
+        if (location == null || location.getWorld() == null) {
+            return false;
+        }
+        for (Dungeon dungeon : dungeons) {
+            var center = dungeon.getCenter();
+            if (!center.getWorld().equals(location.getWorld())) {
+                continue;
+            }
+            double dx = location.getX() - center.getX();
+            double dz = location.getZ() - center.getZ();
+            if (Math.sqrt(dx * dx + dz * dz) <= LOOT_RADIUS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Vide tout (retour WAITING / zone supprimée). */
     public void clearAll() {
         dungeons.clear();

@@ -89,8 +89,18 @@ public class PackageService {
                 containsRareItem);
         plugin.getPackageManager().register(pack);
 
-        MessageUtil.broadcast("§e✦ §fUn colis est apparu§7 ! §8(x" + block.getX()
-                + " y" + block.getY() + " z" + block.getZ() + ")");
+        // Annonce CHAT + TITRE pour tous les joueurs.
+        String coords = "§8(" + block.getX() + " " + block.getY()
+                + " " + block.getZ() + ")";
+        MessageUtil.broadcast("§e✦ §fUn colis est apparu §7! " + coords);
+        for (Player online : org.bukkit.Bukkit.getOnlinePlayers()) {
+            MessageUtil.sendTitle(online,
+                    "§e§lCOLIS",
+                    "§7Repérez les coordonnées dans le chat !",
+                    10, 50, 10);
+            com.mceteams.xii.util.SoundUtil.play(online,
+                    org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.8f);
+        }
     }
 
     /** Remplit le coffre du colis ; @return true si objet rare dedans. */

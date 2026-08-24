@@ -59,6 +59,32 @@ public class MiningService {
             Map.entry(Material.ANCIENT_DEBRIS, Material.NETHERITE_SCRAP)
     );
 
+    /**
+     * Noms FRANÇAIS des minerais (affichés dans la barre d'action au
+     * lieu du nom technique Minecraft type "IRON_ORE").
+     */
+    private static final Map<Material, String> ORE_NAMES_FR = Map.ofEntries(
+            Map.entry(Material.COAL_ORE, "Charbon"),
+            Map.entry(Material.DEEPSLATE_COAL_ORE, "Charbon"),
+            Map.entry(Material.COPPER_ORE, "Cuivre"),
+            Map.entry(Material.DEEPSLATE_COPPER_ORE, "Cuivre"),
+            Map.entry(Material.IRON_ORE, "Fer"),
+            Map.entry(Material.DEEPSLATE_IRON_ORE, "Fer"),
+            Map.entry(Material.GOLD_ORE, "Or"),
+            Map.entry(Material.DEEPSLATE_GOLD_ORE, "Or"),
+            Map.entry(Material.NETHER_GOLD_ORE, "Or du Nether"),
+            Map.entry(Material.REDSTONE_ORE, "Redstone"),
+            Map.entry(Material.DEEPSLATE_REDSTONE_ORE, "Redstone"),
+            Map.entry(Material.LAPIS_ORE, "Lapis-lazuli"),
+            Map.entry(Material.DEEPSLATE_LAPIS_ORE, "Lapis-lazuli"),
+            Map.entry(Material.DIAMOND_ORE, "Diamant"),
+            Map.entry(Material.DEEPSLATE_DIAMOND_ORE, "Diamant"),
+            Map.entry(Material.EMERALD_ORE, "Émeraude"),
+            Map.entry(Material.DEEPSLATE_EMERALD_ORE, "Émeraude"),
+            Map.entry(Material.ANCIENT_DEBRIS, "Débris ancien"),
+            Map.entry(Material.AMETHYST_CLUSTER, "Améthyste")
+    );
+
     // -----------------------------------------------------------------
     // Traitement d'une casse
     // -----------------------------------------------------------------
@@ -92,8 +118,10 @@ public class MiningService {
         }
 
         // Attribution des points via PointService (multiplicateurs gérés là-bas).
+        // Le nom affiché est le nom FRANÇAIS du minerai.
+        String oreName = ORE_NAMES_FR.getOrDefault(type, type.name().toLowerCase());
         plugin.getPointService().award(player, PointCategory.MINING,
-                basePoints, "minerai " + type.name().toLowerCase());
+                basePoints, "minerai de " + oreName);
 
         // Bonus Mineur : fonte automatique du drop (§31).
         PlayerDataHolder holder = classOf(player);

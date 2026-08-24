@@ -7,6 +7,7 @@ import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.util.MessageUtil;
 import com.mceteams.xii.util.SoundUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -105,13 +106,28 @@ public class CoreService {
                     "coeur détruit");
         }
 
-        // 3. Annonce (style Hypixel).
-        String by = breaker != null ? " §7par §c" + breaker.getName() : "";
-        MessageUtil.broadcast(" ");
-        MessageUtil.broadcast(" §4§l✖ LE COEUR DE L'ÉQUIPE "
-                + team.getColor().getColoredName() + " §4§lA ÉTÉ DÉTRUIT"
-                + by + "§4 !");
-        MessageUtil.broadcast(" ");
+        // 3. Annonce PERSONNALISÉE :
+        //    - membre de l'équipe touchée : "votre coeur a été détruit..."
+        //    - autres : "le coeur de l'équipe X a été détruit..."
+        //    Le nom du destructeur est coloré avec SA couleur d'équipe.
+        String destroyerPart = breaker != null
+                ? " par " + coloredPlayerName(breaker)
+                : "";
+
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            var playerTeam = plugin.getTeamManager().getTeamOf(online.getUniqueId());
+            if (playerTeam == team) {
+                MessageUtil.send(online,
+                        "§f§lDESTRUCTION COEUR > §rvotre coeur a été détruit"
+                                + destroyerPart + ".");
+            } else {
+                MessageUtil.send(online,
+                        "§f§lDESTRUCTION COEUR > §rle coeur de "
+                                + team.getColor().getColorCode()
+                                + "l'équipe " + team.getColor().getDisplayName()
+                                + "§r a été détruit" + destroyerPart + ".");
+            }
+        }
         SoundUtil.broadcast(org.bukkit.Sound.ENTITY_WITHER_SPAWN, 1f, 0.6f);
 
         // 4. Mise à jour de l'élimination + victoire éventuelle.
@@ -147,6 +163,17 @@ public class CoreService {
         if (core != null && core.getWorld() != null) {
             core.getBlock().setType(org.bukkit.Material.AIR);
         }
+    }
+
+    /**
+     * Nom du joueur coloré avec SA couleur d'équipe (blanc si sans équipe).
+     */
+    private String coloredPlayerName(Player player) {
+        var team = plugin.getTeamManager().getTeamOf(player.getUniqueId());
+        String colorCode = team != null
+                ? team.getColor().getColorCode()
+                : "§f";
+        return colorCode + player.getName();
     }
 
     /** Nouvelle partie : les positions restent, les états sont reset via TeamManager. */

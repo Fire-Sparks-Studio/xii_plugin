@@ -2,8 +2,6 @@ package com.mceteams.xii.service;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.GameState;
-import com.mceteams.xii.manager.BaseManager;
-import com.mceteams.xii.model.GameBase;
 import com.mceteams.xii.model.PlayerData;
 import org.bukkit.entity.Player;
 
@@ -15,13 +13,13 @@ import org.bukkit.entity.Player;
  * - CombatListener : PvP selon les bases et les phases ;
  * - InteractionListener : coffres de donjons verrouillés.
  *
- * Règles PvP (interprétation fidèle de la spec) :
+ * Règles PvP (ajustées au retour gameplay) :
  * - WAITING/COUNTDOWN/CLASS_SELECTION/ENDING : aucun PvP.
- * - PRÉPARATION : PvP interdit, SAUF contre un intrus situé dans une
- *   base ennemie ("un joueur adverse qui entre dans la base peut
- *   être attaqué", §18).
- * - COMBAT : PvP global (les restrictions de base changent, §21),
- *   sauf entre coéquipiers (jamais).
+ * - PRÉPARATION : PvP AUTORISÉ partout, SAUF :
+ *     . dans les BASES (aucun combat à l'intérieur, §18) ;
+ *     . dans les DONJONS tant que leurs loots ne sont pas accessibles
+ *       (zones "verrouillées" avant la sous-phase DUNGEONS).
+ * - COMBAT : PvP global (§21), sauf entre coéquipiers (jamais).
  */
 public class ProtectionService {
 
@@ -60,15 +58,17 @@ public class ProtectionService {
         }
 
         // --- PRÉPARATION ---------------------------------------------
-        BaseManager baseManager = plugin.getBaseManager();
-
-        // La victime se trouve-t-elle dans une base qui n'est PAS la sienne ?
-        GameBase victimBase = baseManager.baseAt(victim.getLocation());
-        boolean victimIsIntruder = victimBase != null
-                && (victimTeam == null || !victimBase.getColor().equals(victimTeam.getColor()));
-
-        // Intrus dans une base ennemie => il peut être attaqué (§18).
-        return victimIsIntruder;
+        // 1. Interdiction dans TOUTES les bases (§18).
+        if (plugin.getBaseManager().baseAt(victim.getLocation()) != null) {
+            return false;
+        }
+        // 2. Interdiction dans les donjons tant que le loot est fermé.
+        if (!canOpenDungeonChest()
+                && plugin.getDungeonManager().isInDungeonArea(victim.getLocation())) {
+            return false;
+        }
+        // Partout ailleurs en préparation : PvP autorisé.
+        return true;
     }
 
     // -----------------------------------------------------------------

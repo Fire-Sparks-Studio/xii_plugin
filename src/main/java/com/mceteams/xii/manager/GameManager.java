@@ -486,6 +486,20 @@ public class GameManager {
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
         MessageUtil.broadcast(" ");
 
+        // Titres de fin : VICTOIRE ! pour l'équipe gagnante,
+        // FIN DE PARTIE ! pour tous les autres.
+        // On efface d'abord tout titre résiduel (mort, respawn...).
+        GameTeam winnerTeam = ranking.isEmpty() ? null : ranking.get(0);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            online.resetTitle();
+            var team = plugin.getTeamManager().getTeamOf(online.getUniqueId());
+            boolean winner = winnerTeam != null && team == winnerTeam;
+            MessageUtil.sendTitle(online,
+                    winner ? "§6§lVICTOIRE !" : "§c§lFIN DE PARTIE !",
+                    "",
+                    10, 100, 20);
+        }
+
         state = GameState.ENDING;
         plugin.getSystemController().refresh();
 
@@ -688,6 +702,7 @@ public class GameManager {
         world.setGameRule(org.bukkit.GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, 0);
         world.setGameRule(org.bukkit.GameRules.SPAWN_MOBS, false);         // mobs contrôlés
         world.setGameRule(org.bukkit.GameRules.KEEP_INVENTORY, true);      // pas de drop à la mort
+        world.setGameRule(org.bukkit.GameRules.IMMEDIATE_RESPAWN, true);   // écran de mort instantané
         world.setTime(1000L); // jour permanent
         world.setStorm(false);
     }
