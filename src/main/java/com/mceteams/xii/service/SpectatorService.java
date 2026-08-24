@@ -57,9 +57,16 @@ public class SpectatorService {
      * spectateurs permanents.
      */
     public void enter(Player player) {
-        applySpectatorState(player, false);
         var data = plugin.getPlayerManager().getData(player);
         data.setSpectator(true);
+        // APPLICATION DIFFÉRÉE D'UN TICK : avec IMMEDIATE_RESPAWN, la
+        // vanilla réinitialise vol/téléportation APRÈS l'événement de
+        // mort => appliquer dans le même tick serait écrasé.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline() && data.isSpectator()) {
+                applySpectatorState(player, false);
+            }
+        });
     }
 
     /**
@@ -68,10 +75,15 @@ public class SpectatorService {
      * Celui-là reçoit la BOUSSOLE de ciblage.
      */
     public void enterPermanent(Player player) {
-        applySpectatorState(player, true);
         var data = plugin.getPlayerManager().getData(player);
         data.setEliminated(true);
         data.setSpectator(true);
+        // Même logique différée que enter() (cf. commentaire ci-dessus).
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline() && data.isSpectator()) {
+                applySpectatorState(player, true);
+            }
+        });
     }
 
     /**
@@ -85,6 +97,8 @@ public class SpectatorService {
             return;
         }
         var data = plugin.getPlayerManager().getData(player);
+        // Application immédiate ici : pas de respawn vanilla en cours
+        // (le joueur est déjà mort depuis un moment).
         applySpectatorState(player, data.isEliminated());
 
         // Anti-boucle-de-void : sous la hauteur minimale => lobby.
@@ -94,6 +108,23 @@ public class SpectatorService {
             Location safe = plugin.getGameManager().getLobbySpawn();
             if (safe != null) {
                 player.teleport(safe);
+            }
+        }
+    }
+
+    /**
+     * Cache tous les spectateurs auprès d'un joueur VENANT DE SE
+     * CONNECTER : sans ça, le nouveau arrivant voit les morts invisibles
+     * (armure flottante) car hidePlayer n'a été fait que pour les
+     * joueurs présents au moment de l'entrée en spectateur.
+     */
+    public void hideAllSpectatorsFrom(Player joiningPlayer) {
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.equals(joiningPlayer)) {
+                continue;
+            }
+            if (isSpectator(online.getUniqueId())) {
+                joiningPlayer.hidePlayer(plugin, online);
             }
         }
     }

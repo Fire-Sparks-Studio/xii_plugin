@@ -35,6 +35,10 @@ public class ConnectionListener implements Listener {
         Player player = event.getPlayer();
         GameState state = plugin.getGameManager().getState();
 
+        // Les spectateurs (morts/éliminés) doivent être invisibles pour
+        // le nouveau arrivant aussi.
+        plugin.getSpectatorService().hideAllSpectatorsFrom(player);
+
         // Serveur normal : aucune interférence (spec §3/§9).
         if (state == GameState.NONE) {
             return;

@@ -371,7 +371,12 @@ public class GameManager {
 
     /** Transition PREPARATION -> COMBAT (les hooks ont déjà annoncé). */
     private void onCombatEntered() {
-        plugin.getSystemController().refresh();
+        // FIX MAJEUR : synchronise AUSSI GameState sur COMBAT. Sans ça,
+        // l'état restait PREPARATION => règles PvP de préparation actives
+        // (impossible d'attaquer, flags météorites/coeurs éteints...).
+        state = GameState.COMBAT;
+        setState(state);
+        plugin.getRespawnManager().processSubPhaseStart();
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
         MessageUtil.broadcast(" §4§lPHASE DE COMBAT");
         MessageUtil.broadcast(" §cLe PvP est désormais autorisé §4partout§c. Bonne chance.");
@@ -606,10 +611,63 @@ public class GameManager {
         if (!ok) {
             return "Jour invalide (1 à 12).";
         }
-        // Le hook a déjà déclenché les mécaniques du jour : on synchronise
-        // les tasks (ex : sauter directement aux météorites).
+
+        // FIX MAJEUR : synchronise l'état GLOBAL avec la phase cible.
+        // (avant : l'état restait PREPARATION même en jour 12 => aucune
+        // mécanique de combat ne fonctionnait après un saut !)
+        this.state = day <= 6 ? GameState.PREPARATION : GameState.COMBAT;
+
+        // --- RETOUR EN ARRIÈRE : désactivation des événements postérieurs
+        if (day < 7) {
+            // Loot des donjons refermé.
+            plugin.getDungeonManager().resetAccess();
+            // Coeurs restaurés : on repart sur une préparation propre.
+            for (var team : plugin.getTeamManager().all()) {
+                if (!team.isHeartAlive()) {
+                    plugin.getCoreService().restoreCore(team.getColor());
+                }
+            }
+        } else {
+            // En combat, le loot des donjons est forcément ouvert.
+            if (!plugin.getDungeonManager().isLootAccessible()) {
+                plugin.getDungeonManager().unlockLoot();
+            }
+        }
+        // Dragons restants si l'on quitte la mort subite.
+        if (day < 12) {
+            for (var world : Bukkit.getWorlds()) {
+                world.getEntitiesByClass(org.bukkit.entity.EnderDragon.class)
+                        .forEach(org.bukkit.entity.Entity::remove);
+            }
+        }
+
+        // --- AVANCE RAPIDE : cumul des mécaniques déjà passées ----------
+        // (le hook du jour cible se déclenche en plus via PhaseManager)
+        boolean prep = this.state == GameState.PREPARATION;
+        if (prep && day >= 2) {
+            startPackageTask();      // colis disponibles
+        }
+        if (day >= 3 && !plugin.getDungeonManager().isLootAccessible()) {
+            plugin.getDungeonManager().unlockLoot();
+        }
+        if (day == 6) {
+            plugin.getDungeonManager().restockAll();
+        }
+        if (day >= 8) {
+            startMeteoriteTask();    // météorites actives
+        }
+        if (day >= 10) {
+            plugin.getCoreService().destroyAllCores(); // coeurs détruits
+        }
+        if (day == 12) {
+            startSuddenDeathTask();
+        }
+
+        // Libère les joueurs morts en attente (nouvelle sous-phase).
+        plugin.getRespawnManager().processSubPhaseStart();
+
         restartPeriodicTasksForCurrentSubPhase();
-        plugin.getSystemController().refresh();
+        setState(this.state); // refresh systèmes + scoreboards + tab
         return null;
     }
 
