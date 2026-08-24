@@ -46,6 +46,18 @@ public class ProtectionListener implements Listener {
         Player player = event.getPlayer();
         if (plugin.getProtectionService().shouldBlockWorldInteraction(player)) {
             event.setCancelled(true);
+            return;
+        }
+        // Règles de bases en pleine partie : seuls les propriétaires
+        // modifient leur base (le coeur a sa propre logique).
+        var state = plugin.getGameManager().getState();
+        if ((state == com.mceteams.xii.enums.GameState.PREPARATION
+                || state == com.mceteams.xii.enums.GameState.COMBAT)
+                && !plugin.getProtectionService()
+                        .canModifyBlock(player, event.getBlock())) {
+            event.setCancelled(true);
+            com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                    "§c✘ Vous ne pouvez rien casser dans cette base.");
         }
     }
 
@@ -57,6 +69,16 @@ public class ProtectionListener implements Listener {
         Player player = event.getPlayer();
         if (plugin.getProtectionService().shouldBlockWorldInteraction(player)) {
             event.setCancelled(true);
+            return;
+        }
+        var state = plugin.getGameManager().getState();
+        if ((state == com.mceteams.xii.enums.GameState.PREPARATION
+                || state == com.mceteams.xii.enums.GameState.COMBAT)
+                && !plugin.getProtectionService()
+                        .canModifyBlock(player, event.getBlock())) {
+            event.setCancelled(true);
+            com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                    "§c✘ Vous ne pouvez rien poser dans cette base.");
         }
     }
 

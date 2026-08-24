@@ -174,14 +174,14 @@ public class ScoreboardManager {
 
             String line;
             if (team == null || team.isEliminated()) {
-                // Équipe inexistante ou éliminée => croix rouge.
+                // Équipe inexistante ou éliminée => croix rouge (pas de nombre).
                 line = color.getColorCode() + color.getDisplayName() + " §c✘";
             } else if (team.isHeartAlive()) {
-                // Coeur en vie => coeur plein + nombre de joueurs vivants.
-                line = color.getColorCode() + color.getDisplayName()
-                        + " §a♥ §f" + plugin.getTeamManager().aliveCount(team);
+                // Coeur en vie => coeur plein SEUL (pas de nombre).
+                line = color.getColorCode() + color.getDisplayName() + " §a♥";
             } else {
-                // Coeur détruit mais joueurs encore debout => coeur vide.
+                // Coeur détruit mais joueurs encore debout =>
+                // coeur vide + NOMBRE de joueurs vivants.
                 line = color.getColorCode() + color.getDisplayName()
                         + " §c♡ §f" + plugin.getTeamManager().aliveCount(team);
             }

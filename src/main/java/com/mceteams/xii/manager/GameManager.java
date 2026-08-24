@@ -431,19 +431,31 @@ public class GameManager {
     // -----------------------------------------------------------------
 
     /**
-     * Vérifie les conditions de victoire anticipée (appelé après chaque
-     * mort/élimination) : il ne reste qu'une équipe vivante.
+     * Vérifie les conditions de victoire anticipée.
+     *
+     * RÈGLE OFFICIELLE (ajustement gameplay) : la victoire n'est
+     * prononcée QUE lorsqu'il reste EXACTEMENT UNE équipe debout
+     * (non éliminée), peu importe l'état de son coeur.
+     *
+     * Une équipe n'est éliminée que si son coeur est détruit ET qu'elle
+     * n'a plus aucun joueur vivant/ressuscitable. Des membres morts
+     * avec un COEUR VIVANT ne comptent pas comme élimination (ils
+     * réapparaissent) => plus aucune fin de partie prématurée.
+     *
+     * Garde-fou : au moins 2 équipes doivent avoir été créées, sinon
+     * une partie solo se terminerait instantanément.
      */
     public void checkVictoryConditions() {
         if (!isRunning()) {
             return;
         }
-        long aliveTeams = plugin.getTeamManager().all().stream()
+        long totalTeams = plugin.getTeamManager().all().size();
+        long standingTeams = plugin.getTeamManager().all().stream()
                 .filter(team -> !team.isEliminated())
-                .filter(team -> plugin.getTeamManager().aliveCount(team) > 0)
                 .count();
-        if (aliveTeams <= 1) {
-            endGame("Dernière équipe en vie");
+
+        if (totalTeams >= 2 && standingTeams == 1) {
+            endGame("Dernière équipe debout");
         }
     }
 

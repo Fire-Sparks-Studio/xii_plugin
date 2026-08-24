@@ -2,6 +2,7 @@ package com.mceteams.xii.service;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.GameState;
+import com.mceteams.xii.model.GameBase;
 import com.mceteams.xii.model.PlayerData;
 import org.bukkit.entity.Player;
 
@@ -58,17 +59,57 @@ public class ProtectionService {
         }
 
         // --- PRÉPARATION ---------------------------------------------
-        // 1. Interdiction dans TOUTES les bases (§18).
-        if (plugin.getBaseManager().baseAt(victim.getLocation()) != null) {
-            return false;
+        org.bukkit.Location victimLocation = victim.getLocation();
+
+        // 1. Dans une base : SEULS les défenseurs (équipe propriétaire)
+        //    peuvent frapper un intrus. Tout le reste est interdit
+        //    (intrus entre eux, attaquant extérieur, etc.).
+        GameBase victimBase = plugin.getBaseManager().baseAt(victimLocation);
+        if (victimBase != null) {
+            return attackerTeam != null
+                    && attackerTeam.getColor() == victimBase.getColor();
         }
+
         // 2. Interdiction dans les donjons tant que le loot est fermé.
         if (!canOpenDungeonChest()
-                && plugin.getDungeonManager().isInDungeonArea(victim.getLocation())) {
+                && plugin.getDungeonManager().isInDungeonArea(victimLocation)) {
             return false;
         }
         // Partout ailleurs en préparation : PvP autorisé.
         return true;
+    }
+
+    /**
+     * Droits de MODIFICATION de bloc (casser/poser) pendant le gameplay.
+     *
+     * - PRÉPARATION : dans une base, SEULES les équipes propriétaires
+     *   modifient leur propre base (le coeur reste géré par CoreListener,
+     *   un membre ne peut pas casser le sien). Hors base : libre.
+     * - COMBAT : modification libre partout (les coeurs restent protégés
+     *   par leur propre logique de casse).
+     * - Autres états : false (géré par shouldBlockWorldInteraction).
+     */
+    public boolean canModifyBlock(Player player, org.bukkit.block.Block block) {
+        GameState state = plugin.getGameManager().getState();
+        if (state != GameState.PREPARATION && state != GameState.COMBAT) {
+            return false;
+        }
+        var data = plugin.getPlayerManager().getData(player);
+        if (data.isSpectator()) {
+            return false; // un spectateur ne modifie jamais le monde
+        }
+        if (state == GameState.COMBAT) {
+            return true;
+        }
+
+        // --- PRÉPARATION ---------------------------------------------
+        GameBase base = plugin.getBaseManager().baseAt(block.getLocation());
+        if (base == null) {
+            return true; // hors base : libre
+        }
+        // Dans la base : uniquement l'équipe propriétaire.
+        var playerTeam = plugin.getTeamManager().getTeamOf(player.getUniqueId());
+        return playerTeam != null && playerTeam.getColor() == base.getColor();
     }
 
     // -----------------------------------------------------------------
