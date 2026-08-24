@@ -6,7 +6,20 @@
 
 # Version du schéma : si le fichier installé est plus ancien, il est
 # automatiquement remplacé (l'ancien est sauvegardé en .bak).
-config-version: 3
+config-version: 4
+
+# -----------------------------------------------------------------
+# Items d'UPGRADE et TOTEM (consommés par clic droit)
+# -----------------------------------------------------------------
+upgrades:
+  saignement-chance: 0.30             # chance d'appliquer le saignement
+  saignement-duree-ticks: 80          # durée du saignement (4 s)
+  saignement-cooldown-secondes: 8     # anti-spam par victime
+  garde-cooldown-secondes: 10         # délai entre deux proc Garde
+  prospecteur-chance-par-niveau: 0.10 # +1 drop de minerai par niveau
+  # Textures des custom heads (base64, optionnel - sinon icônes vanilla) :
+  # texture:
+  #   vitalite: "eyJ0ZXh0dXJlcyI6..."
 
 # -----------------------------------------------------------------
 # Zone de jeu

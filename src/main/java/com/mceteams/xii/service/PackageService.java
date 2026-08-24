@@ -99,8 +99,9 @@ public class PackageService {
                 containsRareItem);
         plugin.getPackageManager().register(pack);
 
-        // Annonce CHAT + TITRE pour tous les joueurs (coordonnées partout).
-        String coords = "§8(" + block.getX() + " " + block.getY()
+        // Annonce CHAT + TITRE pour tous les joueurs (coordonnées partout,
+        // en BLEU CIEL).
+        String coords = "§b(" + block.getX() + " " + block.getY()
                 + " " + block.getZ() + ")";
         MessageUtil.broadcast("§e✦ §fUn colis est apparu §7! " + coords);
         for (Player online : Bukkit.getOnlinePlayers()) {
@@ -131,12 +132,43 @@ public class PackageService {
             }
         }
 
-        // Objet rare : bonus symbolique posé par-dessus le loot standard.
+        // Objet rare : une UPGRADE (ou le TOTEM) tirée selon la rareté :
+        // Commun 60% · Rare 30% · Épique 9% · Légendaire 1%.
+        // TAGGÉ PDC => droppé à la mort du porteur.
         if (rare) {
-            chest.getInventory().setItem(0, new ItemStack(Material.GOLDEN_APPLE, 1));
+            ItemStack rareItem = rollRareUpgradeItem();
+            chest.getInventory().setItem(0, rareItem);
         }
         chest.update();
         return rare;
+    }
+
+    /**
+     * Tire un objet upgrade pondéré par rareté et construit son item.
+     */
+    private ItemStack rollRareUpgradeItem() {
+        double roll = random.nextDouble();
+        com.mceteams.xii.enums.ItemRarity rarity =
+                roll < 0.60 ? com.mceteams.xii.enums.ItemRarity.COMMON
+                : roll < 0.90 ? com.mceteams.xii.enums.ItemRarity.RARE
+                : roll < 0.99 ? com.mceteams.xii.enums.ItemRarity.EPIC
+                : com.mceteams.xii.enums.ItemRarity.LEGENDARY;
+
+        // Candidats de cette rareté (le légendaire = uniquement le Totem).
+        List<com.mceteams.xii.enums.PlayerUpgrade> candidates = new ArrayList<>();
+        for (com.mceteams.xii.enums.PlayerUpgrade upgrade :
+                com.mceteams.xii.enums.PlayerUpgrade.values()) {
+            if (upgrade.getRarity() == rarity) {
+                candidates.add(upgrade);
+            }
+        }
+        if (candidates.isEmpty()) {
+            candidates.add(com.mceteams.xii.enums.PlayerUpgrade.VITALITE);
+        }
+
+        com.mceteams.xii.enums.PlayerUpgrade chosen =
+                candidates.get(random.nextInt(candidates.size()));
+        return plugin.getUpgradeService().createItem(chosen);
     }
 
     // -----------------------------------------------------------------
@@ -435,6 +467,26 @@ public class PackageService {
         } else {
             MessageUtil.sendActionBar(opener, "§aColis récupéré !");
         }
+    }
+
+    /**
+     * Le spawn AUTOMATIQUE est-il autorisé maintenant ?
+     * Uniquement pendant les sous-phases dédiées (jour 2,4,5,6) - PAS au
+     * jour 1 (START) ni au jour 3 (DUNGEONS).
+     *
+     * NB : l'OUVERTURE des colis déjà posés reste possible pendant TOUTE
+     * la préparation (flag packageEnabled global) ; ceci ne concerne que
+     * l'apparition par le PackageTask.
+     */
+    public boolean canSpawnNow() {
+        if (plugin.getGameManager().getState() != GameState.PREPARATION) {
+            return false;
+        }
+        var sub = plugin.getPhaseManager().getPreparationSubPhase();
+        return sub == com.mceteams.xii.enums.PreparationSubPhase.PACKAGES
+                || sub == com.mceteams.xii.enums.PreparationSubPhase.POINT_UPGRADES
+                || sub == com.mceteams.xii.enums.PreparationSubPhase.PACKAGE_UPGRADE
+                || sub == com.mceteams.xii.enums.PreparationSubPhase.DUNGEON_RESTOCK;
     }
 
     /**

@@ -361,9 +361,10 @@ public class GameManager {
             case INACTIVE -> { /* hors gameplay */ }
         }
 
-        // Affichage + restriction Mineur + faim verrouillée chaque seconde.
+        // Affichage + restriction Mineur + faim verrouillée + upgrades.
         plugin.getScoreboardManager().updateAll();
         plugin.getClassService().sweepMinerLockedRow();
+        plugin.getUpgradeService().tickSecond();
         for (Player online : Bukkit.getOnlinePlayers()) {
             com.mceteams.xii.util.PlayerUtil.lockHunger(online);
         }
@@ -875,6 +876,7 @@ public class GameManager {
             data.setDisconnected(false);
             data.setDeathCause(null);
             data.getScore().reset();
+            data.getUpgrades().clear(); // upgrades perdues entre les parties
             data.clearLastDamage();
         }
     }

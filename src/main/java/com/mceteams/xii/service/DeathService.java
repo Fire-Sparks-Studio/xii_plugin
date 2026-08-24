@@ -8,6 +8,7 @@ import com.mceteams.xii.model.PlayerData;
 import com.mceteams.xii.util.MessageUtil;
 import com.mceteams.xii.util.SoundUtil;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.UUID;
 
@@ -52,6 +53,13 @@ public class DeathService {
         // 1. Enregistrement.
         data.setAlive(false);
         data.setDeathCause(cause);
+
+        // 1bis. DROP SPÉCIFIQUE : les produits de MINERAI (fondus ou non)
+        // et les objets RARES/LÉGENDAIRES tombent au sol à l'endroit de
+        // la mort. TOUT le reste de l'inventaire est conservé
+        // (keepInventory). Les items spéciaux du plugin (barrières
+        // Mineur, items lobby) ne sont jamais droppés.
+        dropLootItems(victim);
 
         // Kills / streaks / points du tueur (spec §18 : surveillance combat).
         plugin.getCombatService().registerKill(killer, victim);
@@ -102,6 +110,42 @@ public class DeathService {
                 + " §7est mort" + killerInfo
                 + (finalKill ? " §b§lKILL FINAL" : "") + ".");
         plugin.getGameManager().checkVictoryConditions();
+    }
+
+    /**
+     * DROP les items "précieux" à la mort du joueur :
+     * - produits de minerai (bruts ou fondus) - cf. MiningService ;
+     * - objets RARES / LÉGENDAIRES (tag PDC).
+     *
+     * Les items spéciaux du plugin (barrières Mineur, boussole...) et
+     * tout le RESTE de l'inventaire restent sur le joueur
+     * (keepInventory actif).
+     */
+    private void dropLootItems(Player victim) {
+        var inventory = victim.getInventory();
+        var location = victim.getLocation();
+
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null || item.getType().isAir()) {
+                continue;
+            }
+            // Jamais les items spéciaux du plugin.
+            if (com.mceteams.xii.util.ItemUtil.isSpecialItem(item)) {
+                continue;
+            }
+
+            boolean isOre = com.mceteams.xii.service.MiningService
+                    .isOreDrop(item.getType());
+            boolean isRare = com.mceteams.xii.util.ItemUtil
+                    .isRareOrLegendary(item);
+
+            if (isOre || isRare) {
+                inventory.setItem(slot, null);
+                victim.getWorld().dropItemNaturally(location, item);
+            }
+        }
+        victim.updateInventory();
     }
 
     /**

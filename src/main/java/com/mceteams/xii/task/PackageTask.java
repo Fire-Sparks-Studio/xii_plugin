@@ -29,9 +29,16 @@ public class PackageTask extends BukkitRunnable {
 
     @Override
     public void run() {
-        // Auto-arrêt : le système colis doit être actif (sous-phases prep).
+        // Auto-arrêt : le système colis doit être actif (toute la préparation,
+        // pour l'OUVERTURE des colis déjà posés).
         if (!plugin.getGameSystems().isPackageListenerEnabled()) {
             this.cancel();
+            return;
+        }
+
+        // FIX : le SPAWN automatique n'a lieu que pendant les sous-phases
+        // dédiées (jour 2,4,5,6) - plus aucun colis au jour 1 (START) ni 3.
+        if (!plugin.getPackageService().canSpawnNow()) {
             return;
         }
 

@@ -26,7 +26,39 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 3;
+    private static final int CONFIG_VERSION = 4;
+
+    // -----------------------------------------------------------------
+    // UPGRADES (items consommables)
+    // -----------------------------------------------------------------
+
+    public double getSaignementChance() {
+        return config.getDouble("upgrades.saignement-chance", 0.30);
+    }
+
+    public int getSaignementTicks() {
+        return config.getInt("upgrades.saignement-duree-ticks", 80);
+    }
+
+    public int getSaignementCooldownSeconds() {
+        return config.getInt("upgrades.saignement-cooldown-secondes", 8);
+    }
+
+    public int getGardeCooldownSeconds() {
+        return config.getInt("upgrades.garde-cooldown-secondes", 10);
+    }
+
+    public double getProspecteurChancePerLevel() {
+        return config.getDouble("upgrades.prospecteur-chance-par-niveau", 0.10);
+    }
+
+    /**
+     * Texture base64 d'une custom head d'upgrade (null si non configurée :
+     * icône vanilla de repli).
+     */
+    public String getHeadTexture(String upgradeKey) {
+        return config.getString("upgrades.texture." + upgradeKey.toLowerCase());
+    }
 
     private final XiiPlugin plugin;
     private FileConfiguration config;

@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class MiningService {
 
+    /** Tirages aléatoires (Prospecteur, tests...). */
+    private final java.util.Random random = new java.util.Random();
+
     private final XiiPlugin plugin;
 
     /**
@@ -42,6 +45,58 @@ public class MiningService {
     public MiningService(XiiPlugin plugin) {
         this.plugin = plugin;
     }
+
+    /**
+     * Produits de MINERAI (bruts OU fondus) : ces items sont DROPpés à la
+     * mort du porteur, contrairement au reste de l'inventaire qui est
+     * conservé (keepInventory).
+     */
+    private static final java.util.Set<Material> ORE_DROP_MATERIALS = java.util.Set.of(
+            Material.COAL,
+            Material.RAW_COPPER, Material.COPPER_INGOT,
+            Material.RAW_IRON, Material.IRON_INGOT,
+            Material.RAW_GOLD, Material.GOLD_INGOT,
+            Material.REDSTONE,
+            Material.LAPIS_LAZULI,
+            Material.DIAMOND,
+            Material.EMERALD,
+            Material.AMETHYST_SHARD,
+            Material.ANCIENT_DEBRIS,
+            Material.NETHERITE_SCRAP
+    );
+
+    /** Cet item est-il un produit de minerai (drop à la mort) ? */
+    public static boolean isOreDrop(Material material) {
+        return material != null && ORE_DROP_MATERIALS.contains(material);
+    }
+
+    /**
+     * UPGRADE Prospecteur : drop bonus possible par minerai cassé.
+     * Map minerai -> ressource bonus (les gemmes se droppent elles-mêmes,
+     * les minerais métalliques en version brute). N'AFFECTE PAS les
+     * objets légendaires (colis/totem).
+     */
+    private static final Map<Material, Material> PROSPECTEUR_BONUS = java.util.Map.ofEntries(
+            Map.entry(Material.COAL_ORE, Material.COAL),
+            Map.entry(Material.DEEPSLATE_COAL_ORE, Material.COAL),
+            Map.entry(Material.COPPER_ORE, Material.RAW_COPPER),
+            Map.entry(Material.DEEPSLATE_COPPER_ORE, Material.RAW_COPPER),
+            Map.entry(Material.IRON_ORE, Material.RAW_IRON),
+            Map.entry(Material.DEEPSLATE_IRON_ORE, Material.RAW_IRON),
+            Map.entry(Material.GOLD_ORE, Material.RAW_GOLD),
+            Map.entry(Material.DEEPSLATE_GOLD_ORE, Material.RAW_GOLD),
+            Map.entry(Material.NETHER_GOLD_ORE, Material.GOLD_NUGGET),
+            Map.entry(Material.REDSTONE_ORE, Material.REDSTONE),
+            Map.entry(Material.DEEPSLATE_REDSTONE_ORE, Material.REDSTONE),
+            Map.entry(Material.LAPIS_ORE, Material.LAPIS_LAZULI),
+            Map.entry(Material.DEEPSLATE_LAPIS_ORE, Material.LAPIS_LAZULI),
+            Map.entry(Material.DIAMOND_ORE, Material.DIAMOND),
+            Map.entry(Material.DEEPSLATE_DIAMOND_ORE, Material.DIAMOND),
+            Map.entry(Material.EMERALD_ORE, Material.EMERALD),
+            Map.entry(Material.DEEPSLATE_EMERALD_ORE, Material.EMERALD),
+            Map.entry(Material.ANCIENT_DEBRIS, Material.NETHERITE_SCRAP),
+            Map.entry(Material.AMETHYST_CLUSTER, Material.AMETHYST_SHARD)
+    );
 
     // -----------------------------------------------------------------
     // Fondre automatiquement (bonus Mineur)
@@ -122,6 +177,24 @@ public class MiningService {
         String oreName = ORE_NAMES_FR.getOrDefault(type, type.name().toLowerCase());
         plugin.getPointService().award(player, PointCategory.MINING,
                 basePoints, "minerai de " + oreName);
+
+        // UPGRADE Prospecteur : chance d'un drop bonus de ressource rare
+        // (10% par niveau). N'affecte PAS les objets légendaires.
+        int prospecteur = plugin.getPlayerManager().getData(player)
+                .getUpgradeLevel(com.mceteams.xii.enums.PlayerUpgrade.PROSPECTEUR);
+        if (prospecteur > 0) {
+            double chance = plugin.getConfigManager()
+                    .getProspecteurChancePerLevel() * prospecteur;
+            Material bonus = PROSPECTEUR_BONUS.get(type);
+            if (bonus != null && random.nextDouble() < chance) {
+                Location bonusLocation = block.getLocation().add(0.5, 0.5, 0.5);
+                block.getWorld().dropItemNaturally(bonusLocation,
+                        new ItemStack(bonus, 1));
+                com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                        "§9◆ Prospecteur : §f+1 "
+                                + ORE_NAMES_FR.getOrDefault(type, bonus.name()));
+            }
+        }
 
         // Bonus Mineur : fonte automatique du drop (§31).
         PlayerDataHolder holder = classOf(player);

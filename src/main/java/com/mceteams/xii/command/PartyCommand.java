@@ -42,8 +42,9 @@ public class PartyCommand implements TabExecutor {
             case "stop" -> handleStop(sender);
             case "set" -> handleSetDay(sender, args);
             case "package" -> handlePackage(sender);
+            case "item" -> handleItem(sender, args);
             default -> MessageUtil.send(sender,
-                    "§cSous-commandes : start, stop, set, package");
+                    "§cSous-commandes : start, stop, set, package, item");
         }
         return true;
     }
@@ -119,12 +120,64 @@ public class PartyCommand implements TabExecutor {
         MessageUtil.send(sender, "§e✦ Colis en cours d'apparition...");
     }
 
+    /**
+     * /party item <clé> [joueur] : donne un item d'UPGRADE pour tester
+     * (ex : /party item aimant, /party item totem_resurrection).
+     * Clés = celles de l'enum PlayerUpgrade.
+     */
+    private void handleItem(CommandSender sender, String[] args) {
+        if (!(sender instanceof org.bukkit.entity.Player player)) {
+            MessageUtil.send(sender, "§cCommande réservée aux joueurs.");
+            return;
+        }
+        if (args.length < 2) {
+            StringBuilder keys = new StringBuilder();
+            for (com.mceteams.xii.enums.PlayerUpgrade upgrade :
+                    com.mceteams.xii.enums.PlayerUpgrade.values()) {
+                keys.append(upgrade.getKey()).append("§7, §f");
+            }
+            MessageUtil.send(sender,
+                    "§cUsage : /party item <clé> [joueur]");
+            MessageUtil.send(sender, "§7Clés : §f"
+                    + keys.substring(0, Math.max(0, keys.length() - 4)));
+            return;
+        }
+
+        var type = com.mceteams.xii.enums.PlayerUpgrade.fromKey(args[1]);
+        if (type == null) {
+            MessageUtil.send(sender, "§cUpgrade inconnue : " + args[1]);
+            return;
+        }
+
+        org.bukkit.entity.Player target = player;
+        if (args.length >= 3) {
+            target = org.bukkit.Bukkit.getPlayerExact(args[2]);
+            if (target == null) {
+                MessageUtil.send(sender, "§cJoueur introuvable.");
+                return;
+            }
+        }
+        plugin.getUpgradeService().give(target, type);
+        MessageUtil.send(target, "§a✔ Reçu : "
+                + type.getRarity().getColoredName() + " "
+                + type.getDisplayName());
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command,
                                       String alias, String[] args) {
         List<String> suggestions = new ArrayList<>();
         if (args.length == 1) {
-            suggestions.addAll(List.of("start", "stop", "set", "package"));
+            suggestions.addAll(List.of("start", "stop", "set", "package", "item"));
+        } else if (args[0].equalsIgnoreCase("item")) {
+            if (args.length == 2) {
+                for (var upgrade : com.mceteams.xii.enums.PlayerUpgrade.values()) {
+                    suggestions.add(upgrade.getKey());
+                }
+            } else if (args.length == 3) {
+                org.bukkit.Bukkit.getOnlinePlayers()
+                        .forEach(p -> suggestions.add(p.getName()));
+            }
         } else if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
             for (int day = 1; day <= 12; day++) {
                 suggestions.add(String.valueOf(day));

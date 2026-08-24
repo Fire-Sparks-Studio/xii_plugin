@@ -36,6 +36,18 @@ public class InteractionListener implements Listener {
         if (item != null && (action == Action.RIGHT_CLICK_AIR
                 || action == Action.RIGHT_CLICK_BLOCK)) {
 
+            // UPGRADE consommable : délégation au service (consomme
+            // l'item et applique l'effet / ouvre le totem).
+            String itemData = com.mceteams.xii.util.ItemUtil.getItemData(item);
+            if (itemData != null && itemData.startsWith("upgrade:")
+                    && com.mceteams.xii.util.ItemUtil.isType(item,
+                            com.mceteams.xii.util.ItemUtil.TYPE_UPGRADE)) {
+                event.setCancelled(true);
+                plugin.getUpgradeService().handleUse(player, item,
+                        itemData.substring("upgrade:".length()));
+                return;
+            }
+
             // Sélecteur d'équipe.
             if (com.mceteams.xii.util.ItemUtil
                     .isType(item, TeamSelectorItem.INTERNAL_TYPE)) {

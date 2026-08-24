@@ -1,7 +1,6 @@
 package com.mceteams.xii.service;
 
 import com.mceteams.xii.XiiPlugin;
-import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.enums.PlayerClass;
 import com.mceteams.xii.model.PlayerData;
 import org.bukkit.attribute.Attribute;
@@ -15,21 +14,30 @@ import org.bukkit.inventory.ItemStack;
  * Les passifs sont appliqués :
  * - au moment du choix (sélection) ;
  * - à l'entrée en préparation ;
- * - après chaque respawn (les attributs ont été réinitialisés).
+ * - après chaque respawn.
  *
  * Détail par classe :
- * - MINEUR    : fonte auto (gérée par MiningService) + ligne verrouillée
- * - TRAVAILLEUR : +25% points équipe (géré par PointService) + 10 PV
+ * - MINEUR    : fonte auto (MiningService) + RANGÉE DU HAUT verrouillée
+ *               par des BARRIères non déplaçables (slots 9..17), qui se
+ *               remettent même après un /clear (sweep chaque seconde).
+ * - TRAVAILLEUR : +25% points équipe (PointService) + 10 PV
  * - ROBUSTE   : 15 PV, dégâts x0.85 et vitesse x0.85
- *               (dégâts gérés par CombatService)
- * - AGILE     : vitesse x1.2, aucun fall damage (annulé dans les listeners)
- * - GUERRIER  : dégâts x1.25 (CombatService) + 14 PV
+ * - AGILE     : vitesse x1.2, aucun fall damage
+ * - GUERRIER  : dégâts x1.25 + 14 PV
  */
 public class ClassService {
 
-    /** Slot bas de la rangée verrouillée du Mineur : slots 27..35. */
-    public static final int MINER_LOCKED_ROW_START = 27;
-    public static final int MINER_LOCKED_ROW_END = 35;
+    /**
+     * MALUS MINEUR : la rangée du HAUT de l'inventaire (première ligne
+     * visible du panneau, slots 9 à 17) est occupée par des items
+     * BARRIERE insortables (tag PDC => protégés par InventoryListener)
+     * et restaurés après /clear grâce au sweep + réapplications.
+     */
+    public static final int MINER_LOCKED_ROW_START = 9;
+    public static final int MINER_LOCKED_ROW_END = 17;
+
+    /** Type interne PDC des barrières du Mineur. */
+    public static final String MINER_BARRIER_TYPE = "miner_barrier";
 
     /**
      * Constantes vanilla EXACTES (au lieu de getDefaultValue() dont le
@@ -46,27 +54,33 @@ public class ClassService {
     }
 
     /**
-     * Applique les passifs d'ATTRIBUTS de la classe du joueur.
-     * Appelable plusieurs fois : on repart TOUJOURS des constantes
-     * vanilla (idempotent, aucun cumul possible).
+     * Applique les passifs d'ATTRIBUTS + effets d'INVENTAIRE de la
+     * classe courante. Idempotent : repart toujours des constantes
+     * vanilla et pose/retire les barrières du Mineur.
+     *
+     * NB : fonctionne même SANS classe choisie (remet tout à zéro),
+     * ce qui permet le nettoyage lors des resets.
      */
     public void applyPassives(Player player, PlayerData data) {
-        if (player == null || !player.isOnline() || !data.hasClass()) {
+        if (player == null || !player.isOnline()) {
             return;
         }
-        PlayerClass playerClass = data.getPlayerClass();
+        PlayerClass playerClass = data.getPlayerClass(); // peut être null
 
         // --- Vie maximale ------------------------------------------
-        double maxHealth = switch (playerClass) {
-            case WORKER -> 10.0;   // Travailleur : 5 coeurs / 10 PV
-            case TANK -> 15.0;     // Robuste : 15 PV
-            case WARRIOR -> 14.0;  // Guerrier : 7 coeurs / 14 PV
-            default -> VANILLA_MAX_HEALTH;
-        };
+        // + UPGRADE Vitalité : +2 PV par niveau.
+        int vitality = data.getUpgradeLevel(com.mceteams.xii.enums.PlayerUpgrade.VITALITE);
+        double maxHealth = playerClass == null ? VANILLA_MAX_HEALTH
+                : switch (playerClass) {
+                    case WORKER -> 10.0;   // Travailleur : 10 PV
+                    case TANK -> 15.0;     // Robuste : 15 PV
+                    case WARRIOR -> 14.0;  // Guerrier : 14 PV
+                    default -> VANILLA_MAX_HEALTH;
+                };
+        maxHealth += 2.0 * vitality;
         AttributeInstance maxHealthAttribute =
                 player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealthAttribute != null) {
-            // On repart de la constante vanilla, jamais de la valeur actuelle.
             maxHealthAttribute.setBaseValue(maxHealth);
             if (player.getHealth() > maxHealth) {
                 player.setHealth(maxHealth);
@@ -74,18 +88,62 @@ public class ClassService {
         }
 
         // --- Vitesse -------------------------------------------------
-        double speedMultiplier = switch (playerClass) {
-            case AGILE -> 1.20;    // Agile : +20% vitesse
-            case TANK -> 0.85;     // Robuste : -15% vitesse
-            default -> 1.0;        // Guerrier/Mineur/Travailleur : NEUTRE
-        };
+        // + UPGRADES Agilité (+5%/niv) et Endurance (+3%/niv, adaptation :
+        // la faim étant gelée en compétition, son effet vanilla est nul).
+        double speedMultiplier = playerClass == null ? 1.0
+                : switch (playerClass) {
+                    case AGILE -> 1.20;    // Agile : +20%
+                    case TANK -> 0.85;     // Robuste : -15%
+                    default -> 1.0;
+                };
+        speedMultiplier *= 1.0 + 0.05 * data.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.AGILITE);
+        speedMultiplier *= 1.0 + 0.03 * data.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.ENDURANCE);
         AttributeInstance speedAttribute =
                 player.getAttribute(Attribute.MOVEMENT_SPEED);
         if (speedAttribute != null) {
-            // Constante vanilla x multiplicateur => Guerrier strictement
-            // identique à un joueur sans classe.
             speedAttribute.setBaseValue(VANILLA_MOVEMENT_SPEED * speedMultiplier);
         }
+
+        // --- Barrières Mineur (pose si mineur / retire sinon) ----------
+        refreshMinerBarriers(player, playerClass == PlayerClass.MINER);
+    }
+
+    /**
+     * Pose les barrières si Mineur, les RETIRE sinon (un changement de
+     * classe ne doit pas laisser de barrières fantômes).
+     */
+    public void refreshMinerBarriers(Player player, boolean isMiner) {
+        var inventory = player.getInventory();
+        boolean changed = false;
+
+        for (int slot = MINER_LOCKED_ROW_START; slot <= MINER_LOCKED_ROW_END; slot++) {
+            ItemStack current = inventory.getItem(slot);
+            boolean currentIsBarrier = com.mceteams.xii.util.ItemUtil
+                    .isType(current, MINER_BARRIER_TYPE);
+
+            if (isMiner && !currentIsBarrier) {
+                inventory.setItem(slot, buildBarrier());
+                changed = true;
+            } else if (!isMiner && currentIsBarrier) {
+                inventory.setItem(slot, null);
+                changed = true;
+            }
+        }
+        if (changed) {
+            player.updateInventory();
+        }
+    }
+
+    /** L'item barrière standard du Mineur (tag PDC => insortable). */
+    private ItemStack buildBarrier() {
+        return com.mceteams.xii.util.ItemUtil.tag(
+                com.mceteams.xii.util.ItemUtil.buildNamedItem(
+                        org.bukkit.Material.BARRIER,
+                        "§c§lEmplacement verrouillé",
+                        java.util.List.of("§7Malus de la classe §6Mineur")),
+                MINER_BARRIER_TYPE);
     }
 
     /**
@@ -98,27 +156,36 @@ public class ClassService {
 
     /**
      * Ce slot fait-il partie de la rangée verrouillée du Mineur ?
-     * (inventaire principal : slots 27 à 35 = dernière ligne).
+     * (slots 9 à 17 = rangée du HAUT de l'inventaire principal).
      */
     public boolean isMinerLockedSlot(int slot) {
         return slot >= MINER_LOCKED_ROW_START && slot <= MINER_LOCKED_ROW_END;
     }
 
     /**
-     * Passe de nettoyage : retire tout objet qui traînerait dans la
-     * rangée verrouillée d'un Mineur (appelé chaque seconde par PhaseTask).
+     * Passe de nettoyage chaque seconde (PhaseTask) :
+     * - Mineur     : barrières présentes, AUCUN objet étranger dans la
+     *                ligne => couvre le cas du /clear qui viderait tout ;
+     * - non-Mineur : barrières éventuelles retirées.
      */
     public void sweepMinerLockedRow() {
         for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
             PlayerData data = plugin.getPlayerManager().getData(player);
-            if (data.getPlayerClass() != PlayerClass.MINER) {
-                continue;
-            }
+            boolean isMiner = data.getPlayerClass() == PlayerClass.MINER;
             var inventory = player.getInventory();
             boolean changed = false;
+
             for (int slot = MINER_LOCKED_ROW_START; slot <= MINER_LOCKED_ROW_END; slot++) {
                 ItemStack item = inventory.getItem(slot);
-                if (item != null && !item.getType().isAir()) {
+                boolean isBarrier = com.mceteams.xii.util.ItemUtil
+                        .isType(item, MINER_BARRIER_TYPE);
+
+                if (isMiner && !isBarrier) {
+                    // Objet étranger OU barrière manquante (/clear) :
+                    // restauration de la barrière.
+                    inventory.setItem(slot, buildBarrier());
+                    changed = true;
+                } else if (!isMiner && isBarrier) {
                     inventory.setItem(slot, null);
                     changed = true;
                 }
@@ -127,12 +194,5 @@ public class ClassService {
                 player.updateInventory();
             }
         }
-    }
-
-    /**
-     * La sélection de classe est-elle actuellement ouverte ? (état du jeu)
-     */
-    public boolean isSelectionActive() {
-        return plugin.getGameManager().getState() == GameState.CLASS_SELECTION;
     }
 }

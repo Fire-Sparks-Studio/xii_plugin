@@ -24,16 +24,55 @@ public final class ItemUtil {
      */
     private static NamespacedKey itemTypeKey;
 
+    /**
+     * Clé PDC secondaire : "xii:item_data". Stocke des métadonnées
+     * additionnelles, ex : "upgrade:vitalite" pour les items upgrade.
+     */
+    private static NamespacedKey itemDataKey;
+
+    /** Type interne pour les items UPGRADE consommables. */
+    public static final String TYPE_UPGRADE = "upgrade_item";
+
     private ItemUtil() {
         // Classe utilitaire : pas d'instance.
     }
 
     /**
-     * Initialise la clé PDC (nécessite l'instance du plugin).
+     * Initialise les clés PDC (nécessite l'instance du plugin).
      * Appelé une seule fois par XiiPlugin au démarrage.
      */
     public static void init(XiiPlugin plugin) {
         itemTypeKey = new NamespacedKey(plugin, "item_type");
+        itemDataKey = new NamespacedKey(plugin, "item_data");
+    }
+
+    /**
+     * Attache des métadonnées arbitraires à un item (ex : la clé
+     * d'upgrade). Retourne l'item pour le chaînage.
+     */
+    public static ItemStack setItemData(ItemStack item, String data) {
+        if (item == null || itemDataKey == null || data == null) {
+            return item;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer()
+                    .set(itemDataKey, PersistentDataType.STRING, data);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /**
+     * @return les métadonnées attachées à cet item, ou null.
+     */
+    public static String getItemData(ItemStack item) {
+        if (item == null || !item.hasItemMeta() || itemDataKey == null) {
+            return null;
+        }
+        return item.getItemMeta()
+                .getPersistentDataContainer()
+                .get(itemDataKey, PersistentDataType.STRING);
     }
 
     /** Clé interne ou null si non initialisée. */
@@ -104,5 +143,36 @@ public final class ItemUtil {
      */
     public static boolean isSpecialItem(ItemStack item) {
         return getInternalType(item) != null;
+    }
+
+    // -----------------------------------------------------------------
+    // Objets RARES / LÉGENDAIRES (loot de colis)
+    // -----------------------------------------------------------------
+
+    public static final String TYPE_RARE = "rare_item";
+    public static final String TYPE_LEGENDARY = "legendary_item";
+
+    /**
+     * L'item est-il un objet RARE ou LÉGENDAIRE ? Ces objets sont DROPpés
+     * à la mort du porteur (le reste de l'inventaire est conservé).
+     *
+     * Deux sources :
+     * - tag direct TYPE_RARE / TYPE_LEGENDARY ;
+     * - items UPGRADE dont la rareté (via la clé) est Rare/Épique/Légendaire
+     *   (les upgrades COMMUNES restent sur le joueur à sa mort).
+     */
+    public static boolean isRareOrLegendary(ItemStack item) {
+        String type = getInternalType(item);
+        if (TYPE_RARE.equals(type) || TYPE_LEGENDARY.equals(type)) {
+            return true;
+        }
+        String data = getItemData(item);
+        if (data != null && data.startsWith("upgrade:")) {
+            var upgrade = com.mceteams.xii.enums.PlayerUpgrade
+                    .fromKey(data.substring("upgrade:".length()));
+            return upgrade != null
+                    && upgrade.getRarity() != com.mceteams.xii.enums.ItemRarity.COMMON;
+        }
+        return false;
     }
 }

@@ -44,6 +44,7 @@ import com.mceteams.xii.service.PackageService;
 import com.mceteams.xii.service.PointService;
 import com.mceteams.xii.service.ProtectionService;
 import com.mceteams.xii.service.SpectatorService;
+import com.mceteams.xii.service.UpgradeService;
 import com.mceteams.xii.system.GameSystems;
 import com.mceteams.xii.system.SystemController;
 import com.mceteams.xii.util.ItemUtil;
@@ -98,6 +99,7 @@ public class XiiPlugin extends JavaPlugin {
     private PackageService packageService;
     private MeteoriteService meteoriteService;
     private ProtectionService protectionService;
+    private UpgradeService upgradeService;
 
     // --- Affichage / items ----------------------------------------------------
     private ScoreboardManager scoreboardManager;
@@ -149,6 +151,8 @@ public class XiiPlugin extends JavaPlugin {
         this.packageService = new PackageService(this);
         this.meteoriteService = new MeteoriteService(this);
         this.protectionService = new ProtectionService(this);
+        // Nouvelle mécanique : items d'upgrade + totem de résurrection.
+        this.upgradeService = new UpgradeService(this);
 
         // 7) Managers qui s'appuient sur les services.
         this.respawnManager = new RespawnManager(this);
@@ -284,6 +288,7 @@ public class XiiPlugin extends JavaPlugin {
     public PackageService getPackageService() { return packageService; }
     public MeteoriteService getMeteoriteService() { return meteoriteService; }
     public ProtectionService getProtectionService() { return protectionService; }
+    public UpgradeService getUpgradeService() { return upgradeService; }
 
     public ScoreboardManager getScoreboardManager() { return scoreboardManager; }
     public TabManager getTabManager() { return tabManager; }

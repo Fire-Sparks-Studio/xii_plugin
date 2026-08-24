@@ -101,15 +101,25 @@ public class RespawnManager {
     }
 
     /**
+     * Joueurs morts dont le coeur a été détruit APRÈS leur mort : ils ne
+     * peuvent PAS réapparaître normalement - uniquement via un futur
+     * TOTEM DE REVIVE utilisé par leur équipe. En attente ici.
+     */
+    private final java.util.Set<UUID> revivePending =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
      * COMBAT : appelé À CHAQUE DÉBUT DE SOUS-PHASE. Tous les joueurs
      * morts en attente reviennent dans leur base - SAUF si leur équipe
-     * n'a plus de coeur (élimination définitive).
+     * n'a plus de coeur (=> pool "totem de revive").
      */
     public void processSubPhaseStart() {
-        if (combatPending.isEmpty()) {
-            return;
-        }
+        // Les joueurs du pool totem n'y touchent pas (revive manuel seul).
         for (UUID uuid : List.copyOf(combatPending.keySet())) {
+            if (revivePending.contains(uuid)) {
+                combatPending.remove(uuid); // déjà géré, pas de timer
+                continue;
+            }
             combatPending.remove(uuid);
             handleRespawn(uuid);
         }
@@ -154,18 +164,21 @@ public class RespawnManager {
         }
 
         var team = plugin.getTeamManager().getTeamOf(uuid);
-        // Équipe sans coeur en COMBAT : plus aucun respawn possible (§29).
+        // Équipe sans coeur en COMBAT : PAS de respawn automatique.
+        // Le joueur rejoint le pool "totem de revive" (mécanique à venir) :
+        // seul un totem utilisé par son équipe pourra le ramener.
         boolean combatActive =
                 plugin.getGameManager().getState()
                         == com.mceteams.xii.enums.GameState.COMBAT;
         if (combatActive && team != null && !team.isHeartAlive()) {
-            data.setEliminated(true);
             data.setAlive(false);
+            revivePending.add(uuid);
             plugin.getSpectatorService().enterPermanent(player);
-            MessageUtil.broadcast("§c✘ §e" + player.getName()
-                    + " §7est définitivement §céliminé§7 !");
-            // Met l'ÉQUIPE éliminée si c'était le dernier debout
-            // (annonce EQUIPE ELIMINEE incluse dans la méthode).
+            MessageUtil.send(player,
+                    "§5☾ §7Ton coeur d'équipe est détruit : tu reviendras "
+                            + "uniquement via un §dtotem de revive§5.");
+            // L'ÉQUIPE peut être marquée éliminée (dernier debout) même si
+            // un totem pourra plus tard ramener ses membres.
             plugin.getTeamManager().updateElimination(team);
             plugin.getGameManager().checkVictoryConditions();
             return;
@@ -195,19 +208,67 @@ public class RespawnManager {
         return readyAt.containsKey(uuid) || combatPending.containsKey(uuid);
     }
 
+    /**
+     * Ce joueur est-il dans le pool "totem de revive" ? (mort avec coeur
+     * d'équipe détruit après coup - retour possible uniquement via totem)
+     */
+    public boolean isAwaitingRevive(UUID uuid) {
+        return revivePending.contains(uuid);
+    }
+
+    /**
+     * TOTEM DE REVIVE (mécanique à venir) : ramène un joueur du pool.
+     * Réinitialise son état complet : vivant, non éliminé, sortie du
+     * spectateur, retour à la base, passifs réappliqués.
+     *
+     * NB : si l'ÉQUIPE avait été marquée éliminée pendant son absence,
+     * c'est à l'appelant (futur item) de décider de la réhabiliter aussi
+     * selon les règles choisies pour le totem.
+     *
+     * @return false si le joueur n'était pas dans le pool.
+     */
+    public boolean reviveByTotem(UUID playerUuid) {
+        if (!revivePending.remove(playerUuid)) {
+            return false;
+        }
+        Player player = Bukkit.getPlayer(playerUuid);
+        var data = plugin.getPlayerManager().getData(playerUuid);
+        data.setAlive(true);
+        data.setEliminated(false);
+        data.setDeathCause(null);
+
+        if (player != null && player.isOnline()) {
+            plugin.getSpectatorService().exit(player);
+            com.mceteams.xii.util.PlayerUtil.heal(player);
+            var team = plugin.getTeamManager().getTeamOf(playerUuid);
+            Location spawnPoint = team != null && team.getSpawn() != null
+                    ? team.getSpawn()
+                    : plugin.getZoneManager().getZone().getCenterLocation();
+            if (spawnPoint != null) {
+                player.teleport(spawnPoint);
+            }
+            plugin.getClassService().applyPassives(player, data);
+            com.mceteams.xii.util.MessageUtil.send(player,
+                    "§d✦ §fUn §dtotem de revive§f t'a ramené dans la partie !");
+        }
+        return true;
+    }
+
     /** Remise à zéro complète (nouvelle partie / arrêt). */
     public void clearAll() {
         deathCounts.clear();
         readyAt.clear();
         combatPending.clear();
+        revivePending.clear();
     }
 
     /**
-     * Purge uniquement les FILES D'ATTENTE (timers + combat), en
+     * Purge uniquement les FILES D'ATTENTE (timers + combat + totem), en
      * conservant les compteurs de morts. Utilisé par /party set.
      */
     public void clearPending() {
         readyAt.clear();
         combatPending.clear();
+        revivePending.clear();
     }
 }

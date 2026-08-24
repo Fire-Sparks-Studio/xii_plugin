@@ -56,6 +56,9 @@ public class CombatService {
         victimData.setLastDamager(attacker.getUniqueId());
         victimData.setLastDamageTime(System.currentTimeMillis());
 
+        // UPGRADE Saignement : proc possible sur chaque coup (cooldown).
+        tryApplyBleed(attacker, victim);
+
         // On renvoie les dégâts calculés via le return pour que le
         // listener applique event.setDamage(damage).
         setPendingDamage(victim, damage);
@@ -63,7 +66,8 @@ public class CombatService {
     }
 
     /**
-     * Calcul PUR des dégâts finaux : classe de l'attaquant + MORE_DAMAGE.
+     * Calcul PUR des dégâts finaux : classe de l'attaquant + upgrade
+     * PUISSANCE (+5%/niveau) + MORE_DAMAGE.
      */
     public double computeDamage(PlayerData attackerData, double baseDamage) {
         double multiplier = 1.0;
@@ -73,11 +77,55 @@ public class CombatService {
         } else if (attackerData.getPlayerClass() == PlayerClass.WARRIOR) {
             multiplier *= 1.25;   // Guerrier : +25% dégâts infligés (§31)
         }
+
+        // UPGRADE Puissance : +5% par niveau.
+        int puissance = attackerData.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.PUISSANCE);
+        multiplier *= 1.0 + 0.05 * puissance;
+
         if (plugin.getPhaseManager().getCombatSubPhase()
                 == CombatSubPhase.MORE_DAMAGE) {
             multiplier *= 2.0;    // MORE_DAMAGE : x2 (§23)
         }
         return baseDamage * multiplier;
+    }
+
+    // -----------------------------------------------------------------
+    // SAIGNEMENT (upgrade, niveau unique)
+    // -----------------------------------------------------------------
+
+    /** Dernier saignement appliqué par victime (anti-spam). */
+    private final java.util.Map<java.util.UUID, Long> bleedUntil =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Tente d'appliquer un SAIGNEMENT à la victime après un coup
+     * (si l'attaquant possède l'upgrade). Cooldown par victime.
+     */
+    private void tryApplyBleed(Player attacker, Player victim) {
+        var attackerData = plugin.getPlayerManager().getData(attacker);
+        if (attackerData.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.SAIGNEMENT) < 1) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long cooldownMs = plugin.getConfigManager()
+                .getSaignementCooldownSeconds() * 1000L;
+        Long until = bleedUntil.get(victim.getUniqueId());
+        if (until != null && until > now) {
+            return; // déjà en saignement récent
+        }
+        double chance = plugin.getConfigManager().getSaignementChance();
+        if (java.util.concurrent.ThreadLocalRandom.current().nextDouble() >= chance) {
+            return;
+        }
+        bleedUntil.put(victim.getUniqueId(), now + cooldownMs);
+        victim.addPotionEffect(new org.bukkit.potion.PotionEffect(
+                org.bukkit.potion.PotionEffectType.WITHER,
+                plugin.getConfigManager().getSaignementTicks(),
+                0, false, true));
+        com.mceteams.xii.util.MessageUtil.sendActionBar(victim,
+                "§c§lVous saignez !");
     }
 
     /** Champ transitoire : dernier dégât calculé par joueur. */

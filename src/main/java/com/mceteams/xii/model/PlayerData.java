@@ -15,6 +15,12 @@ public class PlayerData {
     private final UUID uuid;
     /** Score personnel (points par catégorie). */
     private final PlayerScore score;
+    /**
+     * Niveaux d'UPGRADES acquis (Vitalité II, Aimant III...) :
+     * un item consommé = +1 niveau, plafonné au max de l'upgrade.
+     */
+    private final java.util.Map<com.mceteams.xii.enums.PlayerUpgrade, Integer> upgrades =
+            new java.util.EnumMap<>(com.mceteams.xii.enums.PlayerUpgrade.class);
 
     /** Équipe du joueur (null = sans équipe => spectateur au lancement). */
     private UUID teamId;
@@ -151,6 +157,30 @@ public class PlayerData {
     public boolean wasRecentlyDamagedByPlayer(long currentTime, long durationMillis) {
         return lastDamager != null
                 && currentTime - lastDamageTime <= durationMillis;
+    }
+
+    // -----------------------------------------------------------------
+    // UPGRADES (Vitalité, Aimant, Totem...)
+    // -----------------------------------------------------------------
+
+    /** Niveau d'une upgrade possédée (0 si aucune). */
+    public int getUpgradeLevel(com.mceteams.xii.enums.PlayerUpgrade upgrade) {
+        return upgrades.getOrDefault(upgrade, 0);
+    }
+
+    /**
+     * Monte une upgrade d'un niveau, plafonnée à son maximum.
+     *
+     * @return le NOUVEAU niveau.
+     */
+    public int setUpgradeLevel(com.mceteams.xii.enums.PlayerUpgrade upgrade, int level) {
+        int clamped = Math.max(0, Math.min(level, upgrade.getMaxLevel()));
+        upgrades.put(upgrade, clamped);
+        return clamped;
+    }
+
+    public java.util.Map<com.mceteams.xii.enums.PlayerUpgrade, Integer> getUpgrades() {
+        return upgrades;
     }
 
     /** Remet à zéro la fenêtre de combat (appelé après respawn, etc.). */

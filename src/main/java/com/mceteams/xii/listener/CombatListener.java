@@ -66,6 +66,9 @@ public class CombatListener implements Listener {
         if (computed > 0) {
             event.setDamage(computed);
         }
+
+        // UPGRADE Garde : résistance temporaire après avoir encaissé.
+        tryApplyGarde(victim);
     }
 
     /**
@@ -85,5 +88,77 @@ public class CombatListener implements Listener {
         if (plugin.getClassService().shouldCancelFallDamage(player)) {
             event.setCancelled(true); // Agile : aucun fall damage
         }
+    }
+
+    // -----------------------------------------------------------------
+    // UPGRADES défensives : Résistance / Pas léger / Garde
+    // -----------------------------------------------------------------
+
+    /** Dernière proc Garde par joueur (anti-up-time permanent). */
+    private final java.util.Map<java.util.UUID, Long> gardeLast =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Réductions de dégâts par upgrade, sur TOUTES les sources :
+     * - RÉSISTANCE : -5% par niveau ;
+     * - PAS LÉGER  : -25% par niveau sur le fall damage (III = immunisé).
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onDamageUpgrades(EntityDamageEvent event) {
+        if (!systemEnabled() || event.isCancelled()) {
+            return;
+        }
+        if (!(event.getEntity() instanceof Player victim)) {
+            return;
+        }
+        var data = plugin.getPlayerManager().getData(victim);
+
+        // Résistance : réduction globale.
+        int resistance = data.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.RESISTANCE);
+        if (resistance > 0) {
+            event.setDamage(event.getDamage() * (1.0 - 0.05 * resistance));
+        }
+
+        // Pas léger : réduction du fall uniquement.
+        if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+            int pasLeger = data.getUpgradeLevel(
+                    com.mceteams.xii.enums.PlayerUpgrade.PAS_LEGER);
+            if (pasLeger >= 3) {
+                event.setCancelled(true);   // III : immunisé totalement
+            } else if (pasLeger > 0) {
+                event.setDamage(event.getDamage() * (1.0 - 0.25 * pasLeger));
+            }
+        }
+    }
+
+    /**
+     * GARDE : après avoir REÇU un coup joueur->joueur, résistance
+     * temporaire dont la durée dépend du niveau. Cooldown configuré.
+     */
+    private void tryApplyGarde(Player victim) {
+        var data = plugin.getPlayerManager().getData(victim);
+        int garde = data.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.GARDE);
+        if (garde < 1) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long cooldownMs = plugin.getConfigManager()
+                .getGardeCooldownSeconds() * 1000L;
+        Long last = gardeLast.get(victim.getUniqueId());
+        if (last != null && now - last < cooldownMs) {
+            return;
+        }
+        gardeLast.put(victim.getUniqueId(), now);
+
+        // Niveau I : Resist I 3s · II : Resist I 5s · III : Resist II 5s.
+        int durationTicks = garde >= 2 ? 100 : 60;
+        int amplifier = garde >= 3 ? 1 : 0;
+        victim.addPotionEffect(new org.bukkit.potion.PotionEffect(
+                org.bukkit.potion.PotionEffectType.RESISTANCE,
+                durationTicks, amplifier, true, false));
+        com.mceteams.xii.util.MessageUtil.sendActionBar(victim,
+                "§b🛡 Garde activée !");
     }
 }
