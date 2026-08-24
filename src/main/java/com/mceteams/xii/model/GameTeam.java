@@ -7,19 +7,35 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Données d'une équipe du jeu (spec §38).
+ *
+ * IMPORTANT : cette classe est la SOURCE DE VÉRITÉ du gameplay
+ * (points, coeur, élimination, spawn...). L'équipe Bukkit créée en
+ * parallèle par TeamManager ne sert qu'au friendly fire, au préfixe,
+ * aux collisions et aux mécaniques vanilla (spec §6).
+ */
 public class GameTeam {
 
+    /** Couleur unique de l'équipe (identité fonctionnelle). */
     private final TeamColor color;
+    /** Joueurs membres (UUID uniquement, jamais de Player Bukkit). */
     private final Set<UUID> players;
+    /** Score collectif de l'équipe. */
     private final TeamScore score;
 
+    /** Taille maximale de l'équipe. */
     private int maxPlayers;
 
+    /** Le coeur de l'équipe est-il encore vivant ? */
     private boolean heartAlive;
+    /** L'équipe est-elle éliminée ? */
     private boolean eliminated;
 
+    /** Série de kills en cours de l'équipe (reset quand un membre meurt). */
     private int killStreak;
 
+    /** Point de spawn de l'équipe (base). Clone à la lecture pour éviter les mutations. */
     private Location spawn;
 
     public GameTeam(TeamColor color, int maxPlayers) {
@@ -38,6 +54,9 @@ public class GameTeam {
         return color;
     }
 
+    /**
+     * Copie défensive : l'appelant ne peut pas modifier la liste interne.
+     */
     public Set<UUID> getPlayers() {
         return Set.copyOf(players);
     }

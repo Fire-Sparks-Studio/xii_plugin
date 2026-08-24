@@ -4,6 +4,11 @@ plugins {
 
 group = 'com.mceteams.xii'
 
+// ------------------------------------------------------------------
+// Versionnement automatique :
+// le numéro de build est stocké dans version.properties et incrémenté
+// à chaque construction (jar) => version "2.0.0-bA<n>".
+// ------------------------------------------------------------------
 def versionFile = file('version.properties')
 def buildNumber = 0
 
@@ -33,7 +38,11 @@ repositories {
 }
 
 dependencies {
+    // API Paper fournie par le serveur : jamais embarquée dans le jar.
     compileOnly 'io.papermc.paper:paper-api:26.2.build.+'
+
+    // JUnit uniquement pour les tests unitaires (voir src/test).
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
 }
 
 java {
@@ -50,6 +59,10 @@ processResources {
                 version: project.version
         )
     }
+}
+
+test {
+    useJUnitPlatform()
 }
 
 jar {

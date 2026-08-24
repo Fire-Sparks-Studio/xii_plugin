@@ -1,0 +1,13 @@
+# =================================================================
+# XII-Days - Données persistantes (gérées par DataManager).
+# Ce fichier conserve la zone définie avec /zone set afin que, après
+# un redémarrage du serveur, le plugin retrouve son état WAITING.
+# Une partie en cours n'est JAMAIS reprise (spec §9).
+# =================================================================
+zone:
+  defined: false
+  world: ""
+  x: 0
+  y: 0
+  z: 0
+  size: 2000
