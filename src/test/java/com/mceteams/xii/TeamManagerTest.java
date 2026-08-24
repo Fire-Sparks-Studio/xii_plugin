@@ -62,7 +62,9 @@ class TeamManagerTest {
         teamManager.addPlayer(alice, TeamColor.BLUE);
         assertEquals(TeamManager.AddResult.OK,
                 teamManager.addPlayer(alice, TeamColor.YELLOW));
-        assertNull(teamManager.getTeam(TeamColor.BLUE), "ancienne équipe vidée");
+        // L'ancienne équipe existe toujours mais est vidée de ses membres.
+        assertTrue(teamManager.getTeam(TeamColor.BLUE).getPlayers().isEmpty(),
+                "ancienne équipe vidée");
         assertEquals(alice, onlyMember(teamManager.getTeam(TeamColor.YELLOW)));
     }
 

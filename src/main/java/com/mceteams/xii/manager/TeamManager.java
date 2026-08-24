@@ -115,22 +115,22 @@ public class TeamManager {
         if (team == null) {
             return AddResult.TEAM_NOT_FOUND;
         }
-        PlayerDataHolder holder = currentTeamOf(playerUuid);
-        if (holder.team() == team) {
+        // La source de vérité de l'appartenance est le Set de GameTeam :
+        // on cherche l'équipe actuelle en scannant les équipes (fonctionne
+        // aussi sans plugin, cf. tests unitaires).
+        GameTeam currentTeam = findTeamContaining(playerUuid);
+        if (currentTeam == team) {
             return AddResult.ALREADY_IN_TEAM;
         }
-        if (holder.team() != null) {
+        if (currentTeam != null) {
             // Quitte proprement l'ancienne équipe avant de rejoindre.
-            removePlayer(playerUuid);
+            leaveTeam(playerUuid, currentTeam);
         }
         if (team.isFull()) {
             return AddResult.FULL;
         }
         team.addPlayer(playerUuid);
-        var players = playersOrNull();
-        if (players != null) {
-            players.getData(playerUuid).setTeamId(teamUniqueIdOf(team));
-        }
+        mirrorTeamIdToPlayerData(playerUuid, team);
         addToBukkitTeam(playerUuid, team);
         return AddResult.OK;
     }
@@ -145,11 +145,7 @@ public class TeamManager {
         if (team == null) {
             return false;
         }
-        team.removePlayer(playerUuid);
-        var players = playersOrNull();
-        if (players != null) {
-            players.getData(playerUuid).setTeamId(null);
-        }
+        leaveTeam(playerUuid, team);
         removeFromBukkitTeam(playerUuid);
         return true;
     }
@@ -184,7 +180,7 @@ public class TeamManager {
 
     /** @return l'équipe du joueur, ou null s'il n'en a pas. */
     public GameTeam getTeamOf(UUID playerUuid) {
-        return currentTeamOf(playerUuid).team();
+        return findTeamContaining(playerUuid);
     }
 
     /**
@@ -355,23 +351,35 @@ public class TeamManager {
                 TeamUtil.bukkitTeamName(team.getColor()).getBytes());
     }
 
-    /** Petit record interne pour éviter deux lookups. */
-    private record PlayerDataHolder(GameTeam team) {
-    }
-
-    private PlayerDataHolder currentTeamOf(UUID playerUuid) {
-        var players = playersOrNull();
-        UUID storedId = players != null
-                ? players.getData(playerUuid).getTeamId() : null;
-        if (storedId == null) {
-            return new PlayerDataHolder(null);
-        }
+    /**
+     * Recherche l'équipe contenant ce joueur en scannant les sets
+     * membres (source de vérité, indépendante du plugin).
+     */
+    private GameTeam findTeamContaining(UUID playerUuid) {
         for (GameTeam team : teams.values()) {
-            if (teamUniqueIdOf(team).equals(storedId)) {
-                return new PlayerDataHolder(team);
+            if (team.hasPlayer(playerUuid)) {
+                return team;
             }
         }
-        return new PlayerDataHolder(null);
+        return null;
+    }
+
+    /** Sort le joueur de son équipe + miroir PlayerData. */
+    private void leaveTeam(UUID playerUuid, GameTeam team) {
+        team.removePlayer(playerUuid);
+        var players = playersOrNull();
+        if (players != null) {
+            players.getData(playerUuid).setTeamId(null);
+        }
+    }
+
+    /** Recopie l'appartenance dans PlayerData (confort des autres systèmes). */
+    private void mirrorTeamIdToPlayerData(UUID playerUuid, GameTeam team) {
+        var players = playersOrNull();
+        if (players != null) {
+            players.getData(playerUuid).setTeamId(
+                    team == null ? null : teamUniqueIdOf(team));
+        }
     }
 
     /** Résultats possibles de l'ajout d'un joueur à une équipe. */

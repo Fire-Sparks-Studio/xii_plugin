@@ -601,16 +601,20 @@ public class GameManager {
     // Helpers
     // -----------------------------------------------------------------
 
-    /** Applique les gamerules "compétition" à l'activation de la zone. */
+    /** Applique les gamerules "compétition" à l'activation de la zone.
+     * NB : on utilise org.bukkit.GameRules (API moderne Paper 26.2),
+     * les anciennes constantes GameRule.* étant dépréciées. */
     private void applyGameRules() {
         World world = plugin.getZoneManager().getZone().getWorld();
         if (world == null) {
             return;
         }
-        world.setGameRule(org.bukkit.GameRule.DO_DAYLIGHT_CYCLE, false);
-        world.setGameRule(org.bukkit.GameRule.DO_FIRE_TICK, false);   // pas d'incendie infini
-        world.setGameRule(org.bukkit.GameRule.DO_MOB_SPAWNING, false); // mobs contrôlés
-        world.setGameRule(org.bukkit.GameRule.KEEP_INVENTORY, true);   // pas de drop à la mort
+        world.setGameRule(org.bukkit.GameRules.ADVANCE_TIME, false);      // temps figé
+        world.setGameRule(org.bukkit.GameRules.ADVANCE_WEATHER, false);   // météo figée
+        // Pas de propagation de feu (les explosions météorites ne brûlent pas la map).
+        world.setGameRule(org.bukkit.GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, 0);
+        world.setGameRule(org.bukkit.GameRules.SPAWN_MOBS, false);         // mobs contrôlés
+        world.setGameRule(org.bukkit.GameRules.KEEP_INVENTORY, true);      // pas de drop à la mort
         world.setTime(1000L); // jour permanent
         world.setStorm(false);
     }

@@ -43,6 +43,16 @@ dependencies {
 
     // JUnit uniquement pour les tests unitaires (voir src/test).
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    // Launcher requis par Gradle 9 pour exécuter la plateforme JUnit.
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // Adventure n'est pas fourni au runtime des tests (il l'est en jeu) :
+    // TeamManager l'utilise pour les préfixes d'équipes Bukkit.
+    // Le sérialiseur legacy tire adventure-api/key/examination en transitif.
+    testRuntimeOnly 'net.kyori:adventure-text-serializer-legacy:5.2.0'
+    // Les classes Bukkit doivent exister au runtime des tests (jamais
+    // appelées : le code est gardé par des null-checks / try-catch),
+    // mais leur ABSENCE ferait échouer le chargement des classes.
+    testRuntimeOnly 'io.papermc.paper:paper-api:26.2.build.+'
 }
 
 java {

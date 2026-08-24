@@ -8,6 +8,7 @@ import com.mceteams.xii.manager.PackageManager;
 import com.mceteams.xii.model.Package;
 import com.mceteams.xii.util.LocationUtil;
 import com.mceteams.xii.util.MessageUtil;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;

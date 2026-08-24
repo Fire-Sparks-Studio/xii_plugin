@@ -1,4 +1,4 @@
-package com.mceteams.xii.XiiPlugin.command;
+package com.mceteams.xii.command;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.util.MessageUtil;

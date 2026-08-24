@@ -72,15 +72,16 @@ public class PhaseManager {
      * Horloge : à appeler UNE FOIS PAR SECONDE par la PhaseTask.
      *
      * @param subPhaseDurationSeconds durée d'une sous-phase (600 par défaut)
-     * @return le résultat du tick.
+     * @return le résultat du tick : CONTINUING si la sous-phase continue,
+     * sinon le résultat d'une avance (nouvelle sous-phase, combat, fin).
      */
-    public TickResult tickSecond(int subPhaseDurationSeconds) {
+    public AdvanceResult tickSecond(int subPhaseDurationSeconds) {
         if (phase != GamePhase.PREPARATION && phase != GamePhase.COMBAT) {
-            return TickResult.INACTIVE;
+            return AdvanceResult.INACTIVE;
         }
         elapsedInSubPhase++;
         if (elapsedInSubPhase < subPhaseDurationSeconds) {
-            return TickResult.CONTINUING;
+            return AdvanceResult.CONTINUING;
         }
         return advance();
     }
@@ -212,17 +213,17 @@ public class PhaseManager {
     // Types de résultat
     // -----------------------------------------------------------------
 
-    /** Résultat d'un tick de l'horloge. */
-    public enum TickResult {
-        INACTIVE,
-        CONTINUING
-    }
-
-    /** Résultat d'une avance de sous-phase. */
+    /** Résultat d'une avance de sous-phase (retourné par tickSecond). */
     public enum AdvanceResult {
+        /** La sous-phase courante continue (pas encore de transition). */
+        CONTINUING,
+        /** Nouvelle sous-phase dans la même grande phase. */
         ADVANCED_SUB_PHASE,
+        /** Les 6 sous-phases de préparation sont finies => COMBAT. */
         ENTERED_COMBAT,
+        /** Fin de SUDDEN_DEATH => fin automatique de partie. */
         GAME_OVER,
+        /** Hors gameplay (aucune phase active). */
         INACTIVE
     }
 }

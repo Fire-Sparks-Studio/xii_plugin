@@ -44,9 +44,16 @@ public class StructurePlacer {
         };
 
         try {
+            // Signature réelle Paper 26.2 :
+            // place(RegionAccessor, BlockVector, includeEntities,
+            //       StructureRotation, Mirror, palette, integrity, Random)
+            // includeEntities = false : les structures ne sont que de
+            // l'architecture ; on ne duplique aucune entité éventuelle
+            // enregistrée dans le .nbt.
             structure.place(
                     world,               // RegionAccessor : le monde
                     origin,
+                    false,
                     bukkitRotation,
                     Mirror.NONE,
                     0,                   // palette index 0 = palette principale

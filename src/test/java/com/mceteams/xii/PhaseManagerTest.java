@@ -24,7 +24,8 @@ class PhaseManagerTest {
         PhaseManager manager = new PhaseManager();
         assertEquals(GamePhase.NONE, manager.getPhase());
         assertEquals(0, manager.currentDay());
-        assertEquals(PhaseManager.TickResult.INACTIVE, manager.tickSecond(SUB_PHASE_DURATION));
+        assertEquals(PhaseManager.AdvanceResult.INACTIVE,
+                manager.tickSecond(SUB_PHASE_DURATION));
     }
 
     @Test
@@ -85,12 +86,12 @@ class PhaseManagerTest {
 
         // Durée - 1 ticks : on reste dans la sous-phase.
         for (int i = 0; i < SUB_PHASE_DURATION - 1; i++) {
-            assertEquals(PhaseManager.TickResult.CONTINUING,
+            assertEquals(PhaseManager.AdvanceResult.CONTINUING,
                     manager.tickSecond(SUB_PHASE_DURATION));
             assertTrue(manager.getRemainingSeconds(SUB_PHASE_DURATION) > 0);
         }
         // Le dernier tick fait basculer sur la sous-phase suivante.
-        assertEquals(PhaseManager.TickResult.CONTINUING,
+        assertEquals(PhaseManager.AdvanceResult.ADVANCED_SUB_PHASE,
                 manager.tickSecond(SUB_PHASE_DURATION));
         assertEquals(CombatSubPhase.METEORITES, manager.getCombatSubPhase());
         assertEquals(0, manager.getElapsedInSubPhase(), "compteur remis à zéro");
@@ -104,11 +105,18 @@ class PhaseManagerTest {
         assertFalse(manager.skipToDay(0), "jour invalide refusé");
         assertFalse(manager.skipToDay(13), "jour invalide refusé");
 
+        // Mapping jour -> sous-phase : jour 1 = START, 2 = PACKAGES,
+        // 3 = DUNGEONS, 4 = POINT_UPGRADES...
         assertTrue(manager.skipToDay(3));
         assertEquals(GamePhase.PREPARATION, manager.getPhase());
+        assertEquals(PreparationSubPhase.DUNGEONS,
+                manager.getPreparationSubPhase());
+
+        assertTrue(manager.skipToDay(4));
         assertEquals(PreparationSubPhase.POINT_UPGRADES,
                 manager.getPreparationSubPhase());
 
+        // Jour 12 = SUDDEN_DEATH en combat.
         assertTrue(manager.skipToDay(12));
         assertEquals(GamePhase.COMBAT, manager.getPhase());
         assertEquals(CombatSubPhase.SUDDEN_DEATH, manager.getCombatSubPhase());

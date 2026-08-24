@@ -93,14 +93,14 @@ public class SuddenDeathTask extends BukkitRunnable {
 
     /** Choisit un joueur vivant et non spectateur au hasard. */
     private Player pickRandomAlivePlayer() {
-        var candidates = plugin.getGameManager().getState() != null
-                ? org.bukkit.Bukkit.getOnlinePlayers().stream()
-                .filter(player -> {
-                    var data = plugin.getPlayerManager().getData(player);
-                    return data.isAlive() && !data.isEliminated() && !data.isSpectator();
-                })
-                .toList()
-                : java.util.List.of();
+        // Liste explicite (évite les problèmes d'inférence de type).
+        java.util.List<Player> candidates = new java.util.ArrayList<>();
+        for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+            var data = plugin.getPlayerManager().getData(player);
+            if (data.isAlive() && !data.isEliminated() && !data.isSpectator()) {
+                candidates.add(player);
+            }
+        }
         if (candidates.isEmpty()) {
             return null;
         }
