@@ -130,10 +130,25 @@ public class PackageService {
         }
 
         // Sélection de table selon la progression (décision du manager).
+        // TOUT est protégé : si la génération échoue pour une raison X,
+        // on LOG l'erreur (visible en console) et on pose un contenu de
+        // secours - un coffre vide ne doit jamais arriver.
+        List<ItemStack> loot;
         var table = plugin.getLootManager().getPackageTable(
                 plugin.getPhaseManager().getPreparationSubPhase());
-        // Génération pondérée (service).
-        List<ItemStack> loot = plugin.getLootService().generate(table);
+        try {
+            loot = plugin.getLootService().generate(table);
+            plugin.getLogger().info("[Loot] " + table + " -> "
+                    + loot.size() + " stack(s)");
+        } catch (Throwable throwable) {
+            plugin.getLogger().severe("[Loot] Génération échouée ("
+                    + table + ") : " + throwable);
+            throwable.printStackTrace();
+            loot = new ArrayList<>();
+            loot.add(new ItemStack(Material.IRON_INGOT, 6));
+            loot.add(new ItemStack(Material.COAL, 10));
+            loot.add(new ItemStack(Material.BREAD, 3));
+        }
 
         // Placement aléatoire dans des slots distincts.
         List<Integer> slots = new ArrayList<>();
@@ -376,18 +391,15 @@ public class PackageService {
     }
 
     /**
-     * Son d'INTERRUPTION imprévue : deux plings SUCCESSIFS à des tons
-     * différents (descendants, façon "musical") - pas un accord.
-     * Joué quand un chargement de colis est interrompu (fermeture,
-     * coup reçu...).
+     * Son d'INTERRUPTION imprévue : DEUX plings joués EN MÊME TEMPS,
+     * volontairement sur des gammes différentes (demi-ton de décalage)
+     * => dissonance courte qui signe l'interruption.
      */
     private void playInterruption(Player player) {
         com.mceteams.xii.util.SoundUtil.play(player,
-                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.4f);
-        Bukkit.getScheduler().runTaskLater(plugin, () ->
-                        com.mceteams.xii.util.SoundUtil.play(player,
-                                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 0.55f),
-                3L);
+                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 0.944f);
+        com.mceteams.xii.util.SoundUtil.play(player,
+                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
     }
 
     /**
