@@ -36,10 +36,11 @@ public class ClassSelectionGUI implements InventoryHolder {
         player.openInventory(inventory);
     }
 
-    /** Une case par classe : matériau symbolique + lore avantage/malus. */
+    /** Une case par classe : matériau symbolique + lore avantage/malus.
+     * Rangée du milieu (9-17) : 5 items CENTRÉS => slots 11 à 15. */
     private void fillClasses() {
         for (PlayerClass playerClass : PlayerClass.values()) {
-            int slot = 9 + playerClass.ordinal(); // rangée du milieu
+            int slot = 11 + playerClass.ordinal(); // centrage horizontal
             ItemStack item = ItemUtil.buildNamedItem(
                     materialOf(playerClass),
                     playerClass.getColoredName(),
@@ -69,8 +70,8 @@ public class ClassSelectionGUI implements InventoryHolder {
                 || !clicker.equals(player)) {
             return;
         }
-        // Les classes sont posées sur les slots 9..13.
-        int index = event.getSlot() - 9;
+        // Les classes sont posées sur les slots 11..15.
+        int index = event.getSlot() - 11;
         PlayerClass[] classes = PlayerClass.values();
         if (index < 0 || index >= classes.length) {
             return; // clic hors zone : annulé, rien de plus

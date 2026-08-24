@@ -66,11 +66,12 @@ public class DeathService {
                 10, 60, 10);
         SoundUtil.playDeath(victim);
 
-        // Annonce à tous + vérification victoire anticipée.
+        // Annonce à tous + vérification victoire anticipée (style Hypixel).
         String killerInfo = killer != null
                 ? " §7par §c" + killer.getName()
                 : "";
-        MessageUtil.broadcast("§f" + victim.getName() + " §7est mort" + killerInfo + ".");
+        MessageUtil.broadcast("§c☠ §f" + victim.getName()
+                + " §7est mort" + killerInfo + ".");
         plugin.getGameManager().checkVictoryConditions();
     }
 

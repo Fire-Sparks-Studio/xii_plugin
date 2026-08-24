@@ -2,6 +2,7 @@ package com.mceteams.xii.command;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.util.MessageUtil;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -53,7 +54,12 @@ public class ZoneCommand implements TabExecutor {
     }
 
     /**
-     * /zone set : séquence officielle (spec §10).
+     * /zone set : séquence officielle (spec §10), AJUSTEMENT demandé :
+     * le centre de la zone est FORCÉ à X=0 / Z=0 du monde courant
+     * (la position de l'opérateur sert uniquement à choisir le monde
+     * et la hauteur Y). Toute la génération (lobby, bases, donjons)
+     * est donc calculée autour de l'origine du monde.
+     *
      * Si une partie est en cours, on l'arrête proprement avant.
      */
     private void handleSet(Player operator) {
@@ -64,18 +70,27 @@ public class ZoneCommand implements TabExecutor {
                 || state == com.mceteams.xii.enums.GameState.COMBAT
                 || state == com.mceteams.xii.enums.GameState.COUNTDOWN
                 || state == com.mceteams.xii.enums.GameState.CLASS_SELECTION) {
-            MessageUtil.broadcast("§cLa zone est reconfigurée : arrêt de la partie.");
+            MessageUtil.broadcast("§c✘ La zone est reconfigurée : arrêt de la partie.");
             plugin.getGameManager().stopParty();
         }
 
-        // 1/2/3/4 : position opérateur -> GameZone -> sauvegarde.
-        plugin.getZoneManager().defineZone(operator.getLocation());
+        // Centre : monde + hauteur de l'opérateur, X/Z forcés à 0.
+        Location center = new Location(
+                operator.getWorld(),
+                0.0,
+                operator.getLocation().getY(),
+                0.0);
+
+        // 1/2/3/4 : GameZone -> sauvegarde.
+        plugin.getZoneManager().defineZone(center);
 
         // 5..11 : génération, WAITING, restrictions, téléportations.
         plugin.getGameManager().setupZone();
 
-        MessageUtil.send(operator, "§aZone définie à votre position. "
-                + "Taille : " + plugin.getConfigManager().getZoneSize() + " blocs.");
+        MessageUtil.send(operator, "§a✔ Zone définie au centre §fX:0 Z:0 "
+                + "(Y=" + center.getBlockY() + ")§a dans §f"
+                + operator.getWorld().getName()
+                + "§a. Taille : " + plugin.getConfigManager().getZoneSize() + " blocs.");
     }
 
     /** /zone delete : retour au serveur normal (spec §11). */

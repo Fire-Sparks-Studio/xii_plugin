@@ -105,8 +105,8 @@ public class RespawnManager {
             data.setEliminated(true);
             data.setAlive(false);
             plugin.getSpectatorService().enterPermanent(player);
-            MessageUtil.broadcast("§e" + player.getName()
-                    + " §7est définitivement éliminé§7 !");
+            MessageUtil.broadcast("§c✘ §e" + player.getName()
+                    + " §7est définitivement §céliminé§7 !");
             plugin.getGameManager().checkVictoryConditions();
             return;
         }

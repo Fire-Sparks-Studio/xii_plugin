@@ -213,7 +213,7 @@ public class DungeonManager {
     /** Débloque l'accès aux loots (début de la sous-phase DUNGEONS). */
     public void unlockLoot() {
         this.lootAccessible = true;
-        MessageUtil.broadcast("§7Les loots des donjons sont §aaccessibles§7 !");
+        MessageUtil.broadcast("§a✔ §fLes coffres des donjons §7sont désormais §aaccessibles§7 !");
     }
 
     /** Restocke TOUS les donjons (sous-phase DUNGEON_RESTOCK). */
@@ -222,7 +222,7 @@ public class DungeonManager {
             // Re-scan léger : des coffres peuvent avoir été détruits.
             fillChests(dungeon);
         }
-        MessageUtil.broadcast("§7Les donjons ont été §brestockés§7 !");
+        MessageUtil.broadcast("§b↻ §fLes donjons §7ont été §brestockés§7 !");
     }
 
     public boolean isLootAccessible() {

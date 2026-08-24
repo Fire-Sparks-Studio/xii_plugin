@@ -3,6 +3,7 @@ package com.mceteams.xii.manager;
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.model.GameBase;
+import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.GameZone;
 import org.bukkit.Location;
 
@@ -91,6 +92,14 @@ public class BaseManager {
 
         bases.put(color, new GameBase(
                 color, anchor, anchor.clone(), protectionRadius, spawn, core));
+
+        // IMPORTANT : câble le spawn dans le GameTeam (source de vérité).
+        // Sans ça, GameManager/RespawnManager ne trouvaient aucun spawn
+        // et envoyaient les joueurs en spectateur par erreur !
+        GameTeam team = plugin.getTeamManager().getTeam(color);
+        if (team != null) {
+            team.setSpawn(spawn);
+        }
 
         // Enregistrement du coeur auprès du CoreService.
         plugin.getCoreService().registerCore(color, core);

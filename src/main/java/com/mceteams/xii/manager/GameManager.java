@@ -96,7 +96,7 @@ public class GameManager {
         }
         applyGameRules();
 
-        MessageUtil.broadcast("§aGénération de la zone de jeu...");
+        MessageUtil.broadcast("§a✔ Génération de la zone de jeu...");
         // 6/7/8 : zone d'attente, bases, quatre donjons.
         plugin.getStructureManager().placeWaitingLobby(zone);
         plugin.getBaseManager().buildBases(zone);
@@ -104,7 +104,10 @@ public class GameManager {
 
         // 9/11 : passage en WAITING + restrictions + téléportations.
         enterWaiting(false);
-        MessageUtil.broadcast("§aZone prête ! La partie attend son lancement.");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
+        MessageUtil.broadcast(" §a§lZONE PRÊTE !");
+        MessageUtil.broadcast(" §7En attente du lancement... §8(/party start)");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
     }
 
     // -----------------------------------------------------------------
@@ -130,7 +133,7 @@ public class GameManager {
 
         state = GameState.NONE;
         plugin.getSystemController().refresh();
-        MessageUtil.broadcast("§7Zone supprimée : serveur Minecraft normal.");
+        MessageUtil.broadcast("§c✘ Zone supprimée. §7Serveur Minecraft normal.");
     }
 
     // -----------------------------------------------------------------
@@ -146,13 +149,17 @@ public class GameManager {
     private void enterWaiting(boolean silent) {
         state = GameState.WAITING;
         plugin.getSystemController().refresh();
+        // FIX : rafraîchit scoreboards + tab => efface la sidebar de fin
+        // de partie qui restait sinon affichée indéfiniment.
+        plugin.getScoreboardManager().updateAll();
+        plugin.getTabManager().updateAll();
 
         Location lobbySpawn = getLobbySpawn();
         for (Player player : Bukkit.getOnlinePlayers()) {
             sendToLobby(player, lobbySpawn);
         }
         if (!silent) {
-            MessageUtil.broadcast("§bLes joueurs ont rejoint la zone d'attente.");
+            MessageUtil.broadcast("§7Les joueurs ont rejoint la §bzone d'attente§7.");
         }
     }
 
@@ -215,8 +222,9 @@ public class GameManager {
 
         state = GameState.COUNTDOWN;
         plugin.getSystemController().refresh(); // retire sélecteur + item admin
-        MessageUtil.broadcast("§eLancement de la partie dans §f"
-                + plugin.getConfigManager().getCountdownSeconds() + " secondes§e !");
+        MessageUtil.broadcast(" ");
+        MessageUtil.broadcast("§e§lLa partie démarre dans §f§l"
+                + plugin.getConfigManager().getCountdownSeconds() + " secondes§e§l !");
 
         int seconds = plugin.getConfigManager().getCountdownSeconds();
         // Countdown de lancement : TITLES + pling grave chaque seconde,
@@ -242,7 +250,7 @@ public class GameManager {
             activeCountdownTask = null;
             state = GameState.WAITING;
             plugin.getSystemController().refresh();
-            MessageUtil.broadcast("§cLancement annulé. Retour à l'attente.");
+            MessageUtil.broadcast("§c✖ Lancement annulé. Retour à l'attente.");
         }
     }
 
@@ -296,16 +304,30 @@ public class GameManager {
             var data = plugin.getPlayerManager().getData(player);
             var team = plugin.getTeamManager().getTeamOf(player.getUniqueId());
 
-            if (team != null && team.getSpawn() != null) {
-                data.setAlive(true);
-                data.setEliminated(false);
-                player.teleport(team.getSpawn());
-                plugin.getClassService().applyPassives(player, data);
-            } else {
-                // 2 : sans équipe => spectateur permanent (spec §16).
+            if (team == null) {
+                // 2 : SANS équipe => spectateur permanent (spec §16).
                 data.setEliminated(true);
                 plugin.getSpectatorService().enterPermanent(player);
+                continue;
             }
+
+            // Spawn de l'équipe, avec repli sur la base si besoin.
+            Location spawnPoint = team.getSpawn();
+            if (spawnPoint == null) {
+                var base = plugin.getBaseManager().getBase(team.getColor());
+                spawnPoint = base != null ? base.getSpawn() : null;
+            }
+            if (spawnPoint == null) {
+                // Dernier repli : centre de la zone (jamais en spectateur
+                // pour un joueur équipé !).
+                spawnPoint = getLobbySpawn();
+            }
+
+            data.setAlive(true);
+            data.setEliminated(false);
+            data.setSpectator(false);
+            player.teleport(spawnPoint);
+            plugin.getClassService().applyPassives(player, data);
         }
 
         // 7 : passage officiel en PREPARATION (phase + sous-phase START).
@@ -314,7 +336,11 @@ public class GameManager {
         setState(state); // déclenche refresh + scoreboards
 
         startGameplayTasks();
-        MessageUtil.broadcast("§6=== PRÉPARATION === §760 minutes avant le combat !");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
+        MessageUtil.broadcast(" §6§lPHASE DE PRÉPARATION");
+        MessageUtil.broadcast(" §7Collectez des ressources et équipez-vous.");
+        MessageUtil.broadcast(" §7Le combat commence dans §f60 minutes§7.");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
     }
 
     // -----------------------------------------------------------------
@@ -348,7 +374,10 @@ public class GameManager {
     /** Transition PREPARATION -> COMBAT (les hooks ont déjà annoncé). */
     private void onCombatEntered() {
         plugin.getSystemController().refresh();
-        MessageUtil.broadcast("§4=== COMBAT === §7Le PvP fait désormais rage !");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
+        MessageUtil.broadcast(" §4§lPHASE DE COMBAT");
+        MessageUtil.broadcast(" §cLe PvP est désormais autorisé §4partout§c. Bonne chance.");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
     }
 
     /**
@@ -359,36 +388,39 @@ public class GameManager {
         if (subPhase instanceof com.mceteams.xii.enums.PreparationSubPhase prep) {
             switch (prep) {
                 case START -> MessageUtil.broadcast(
-                        "§7Préparation : §fcollectez des ressources§7 !");
+                        "§7Bonne collecte à tous !");
                 case PACKAGES -> {
                     startPackageTask();
-                    MessageUtil.broadcast("§eDes colis commencent à apparaître§7 !");
+                    MessageUtil.broadcast("§e✦ §fLes premiers colis tombent du ciel§7 !");
                 }
                 case DUNGEONS -> plugin.getDungeonManager().unlockLoot();
                 case POINT_UPGRADES -> MessageUtil.broadcast(
-                        "§bPOINTS x2 §7pendant toute la sous-phase !");
+                        "§b✦ §fPOINTS x2 §7jusqu'à la fin de la sous-phase !");
                 case PACKAGE_UPGRADE -> MessageUtil.broadcast(
-                        "§eDavantage de colis apparaissent§7 !");
+                        "§e✦ Davantage de colis §7apparaissent désormais !");
                 case DUNGEON_RESTOCK -> plugin.getDungeonManager().restockAll();
             }
             return;
         }
         if (subPhase instanceof com.mceteams.xii.enums.CombatSubPhase combat) {
             switch (combat) {
-                case START -> MessageUtil.broadcast(
-                        "§cLe PvP est désormais §4global§c !");
+                // Le PvP global est déjà annoncé par le bandeau de phase.
+                case START -> { }
                 case METEORITES -> {
                     startMeteoriteTask();
-                    MessageUtil.broadcast("§6Des météorites s'écrasent sur la map§7 !");
+                    MessageUtil.broadcast("§6☄ §fDes météorites s'écrasent sur la map§7 !");
                 }
                 case MORE_DAMAGE -> MessageUtil.broadcast(
-                        "§4DÉGÂTS x2 §7pendant toute la sous-phase !");
+                        "§4⚔ §fDÉGÂTS x2 §7pendant toute la sous-phase !");
                 case ALL_CORE_DESTRUCTION -> plugin.getCoreService().destroyAllCores();
                 case MORE_METEORITES -> MessageUtil.broadcast(
-                        "§6Météorites x2 §7et points terrain doublés !");
+                        "§6☄ Météorites x2 §7- points terrain doublés !");
                 case SUDDEN_DEATH -> {
                     startSuddenDeathTask();
-                    MessageUtil.broadcast("§4MORT SUBITE §7- les dragons arrivent !");
+                    MessageUtil.broadcast(" ");
+                    MessageUtil.broadcast(" §4§lMORT SUBITE");
+                    MessageUtil.broadcast(" §7Des dragons §cdévastent la map§7...");
+                    MessageUtil.broadcast(" ");
                 }
             }
         }
@@ -432,21 +464,27 @@ public class GameManager {
                         .thenComparingInt(t -> t.getScore().getTotal()).reversed())
                 .toList();
 
-        MessageUtil.broadcast("§8========================================");
-        MessageUtil.broadcast("§bFIN DE PARTIE §7(" + reason + ")");
+        MessageUtil.broadcast(" ");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
+        MessageUtil.broadcast("  §6§l✶ FIN DE PARTIE §7" + reason);
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
         int place = 1;
         for (GameTeam team : ranking) {
             String line = "§7#" + place + " " + team.getColor().getColoredName()
-                    + " §7- §f" + plugin.getTeamManager().aliveCount(team)
-                    + " vivant(s) §7- §e" + team.getScore().getTotal() + " pts";
-            MessageUtil.broadcast(place == 1 ? "§6★ " + line : line);
+                    + " §8- §f" + plugin.getTeamManager().aliveCount(team)
+                    + " vivant(s) §8- §e" + team.getScore().getTotal() + " pts";
+            MessageUtil.broadcast(place == 1
+                    ? " §6★ " + line
+                    : "   " + line);
             place++;
         }
         if (!ranking.isEmpty()) {
-            MessageUtil.broadcast("§6Vainqueur : "
-                    + ranking.get(0).getColor().getColoredName());
+            MessageUtil.broadcast(" ");
+            MessageUtil.broadcast("  §6§l★ VAINQUEUR : "
+                    + ranking.get(0).getColor().getColoredName() + " §6§l★");
         }
-        MessageUtil.broadcast("§8========================================");
+        MessageUtil.broadcast(MessageUtil.SEPARATOR);
+        MessageUtil.broadcast(" ");
 
         state = GameState.ENDING;
         plugin.getSystemController().refresh();
@@ -485,7 +523,7 @@ public class GameManager {
         resetAllPlayerData();
 
         enterWaiting(false);
-        MessageUtil.broadcast("§cPartie arrêtée. Retour à l'attente.");
+        MessageUtil.broadcast("§c✖ Partie arrêtée. §7Retour à l'attente.");
     }
 
     /**

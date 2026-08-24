@@ -89,7 +89,7 @@ public class PackageService {
                 containsRareItem);
         plugin.getPackageManager().register(pack);
 
-        MessageUtil.broadcast("§eUn colis est apparu§7 ! §8(x" + block.getX()
+        MessageUtil.broadcast("§e✦ §fUn colis est apparu§7 ! §8(x" + block.getX()
                 + " y" + block.getY() + " z" + block.getZ() + ")");
     }
 

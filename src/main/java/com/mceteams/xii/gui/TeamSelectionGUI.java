@@ -159,8 +159,8 @@ public class TeamSelectionGUI implements InventoryHolder {
             // Partie en cours : spectateur permanent (invulnérable,
             // invisible, vol, boussole de ciblage).
             plugin.getSpectatorService().enterPermanent(player);
-            MessageUtil.broadcast("§e" + player.getName()
-                    + " §7passe §5SPECTATEUR§7.");
+            MessageUtil.broadcast("§5☾ §e" + player.getName()
+                    + " §7observe désormais la partie.");
             // Un joueur actif en moins : la partie peut être terminée.
             plugin.getGameManager().checkVictoryConditions();
         } else {

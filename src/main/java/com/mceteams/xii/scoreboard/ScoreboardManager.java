@@ -5,8 +5,10 @@ import com.mceteams.xii.enums.CombatSubPhase;
 import com.mceteams.xii.enums.GamePhase;
 import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.enums.PreparationSubPhase;
+import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.model.GameTeam;
-import com.mceteams.xii.util.MessageUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Criteria;
@@ -14,19 +16,31 @@ import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
- * Affichage SIDEBAR (spec §38 : "Affichage").
+ * Affichage SIDEBAR - format demandé :
  *
- * Contenu selon l'état : état du jeu, jour courant, sous-phase,
- * temps restant, équipe du joueur, classement des équipes par points.
+ *   §6§lXII DAYS                      (titre)
+ *   Jour 4/12
+ *   Prochaine : Colis dans 7:32
+ *   (vide)
+ *   §9Bleu ♥ 5                        <- coeur vivant + joueurs vivants
+ *   §eJaune ♡ 2                       <- coeur détruit + joueurs vivants
+ *   §cRouge ✘                         <- éliminée
+ *   §aVert ♥ 8 §8Vous                 <- votre équipe : marqueur gris
+ *   (vide)
+ *   §7Votre équipe : §aVert
  *
- * Implémentation simple : reconstruction des lignes à chaque mise à
- * jour (1x/seconde via PhaseTask). Une version "diff" éviterait le
- * léger scintillement ; documenté comme amélioration possible.
+ * NB : si une équipe n'existe pas, elle est affichée comme déjà
+ * éliminée (✘). Les entrées identiques sont rendues uniques par des
+ * codes couleur invisibles (contrainte du scoreboard vanilla).
  */
 public class ScoreboardManager {
 
@@ -60,28 +74,8 @@ public class ScoreboardManager {
         Scoreboard board = boardOf(player);
         Objective objective = ensureObjective(board, player);
 
-        // Construction des lignes.
-        java.util.List<String> lines = new java.util.ArrayList<>();
-        lines.add("§7État : §f" + displayName(state));
-        if (state == GameState.PREPARATION || state == GameState.COMBAT) {
-            int day = plugin.getPhaseManager().currentDay();
-            lines.add("§7Jour : §b" + day + "§8/12");
-            lines.add("§7Phase : §f" + subPhaseName());
-            lines.add(timeLine());
-            GameTeam team = plugin.getTeamManager().getTeamOf(player.getUniqueId());
-            if (team != null) {
-                lines.add("");
-                lines.add("§7Vivants : §a" + plugin.getTeamManager().aliveCount(team));
-                lines.add("§7Coeur : " + (team.isHeartAlive() ? "§a❤" : "§c✘"));
-                lines.add(team.getColor().getColoredName() + " §e"
-                        + team.getScore().getTotal() + " pts");
-            } else {
-                lines.add("");
-                lines.add("§7Statut : §5Spectateur");
-            }
-            lines.add("");
-            appendRanking(lines);
-        }
+        List<String> lines = buildLines(player, state);
+        uniquify(lines);
 
         // Application (scores décroissants = ordre visuel haut -> bas).
         clearEntries(board);
@@ -91,69 +85,171 @@ public class ScoreboardManager {
         }
     }
 
-    /** Ligne temps restant de la sous-phase (mm:ss). */
-    private String timeLine() {
-        int remaining = plugin.getPhaseManager().getRemainingSeconds(
-                plugin.getConfigManager().getSubPhaseDurationSeconds());
-        return String.format("§7Temps : §f%d:%02d", remaining / 60, remaining % 60);
+    // -----------------------------------------------------------------
+    // Construction des lignes
+    // -----------------------------------------------------------------
+
+    private List<String> buildLines(Player player, GameState state) {
+        List<String> lines = new ArrayList<>();
+
+        if (state == GameState.ENDING) {
+            lines.add("§7Partie terminée");
+            lines.add("");
+            appendRanking(lines);
+            return lines;
+        }
+
+        var phaseManager = plugin.getPhaseManager();
+
+        // --- Ligne jour courant ---------------------------------------
+        int day = phaseManager.currentDay();
+        lines.add("§7Jour §b§l" + day + "§8/12");
+
+        // --- Prochaine sous-phase + timer ------------------------------
+        lines.add(nextSubPhaseLine());
+
+        lines.add("");
+
+        // --- Lignes des QUATRE équipes ---------------------------------
+        appendTeamLines(lines, player);
+
+        lines.add("");
+
+        // --- Rappel de votre équipe -------------------------------------
+        GameTeam ownTeam = plugin.getTeamManager().getTeamOf(player.getUniqueId());
+        if (ownTeam != null) {
+            lines.add("§7Votre équipe : " + ownTeam.getColor().getColoredName());
+        } else {
+            lines.add("§5Vous êtes spectateur");
+        }
+        return lines;
     }
 
-    /** Top équipes par points totaux (max 4 lignes). */
-    private void appendRanking(java.util.List<String> lines) {
+    /**
+     * Ligne "Prochaine : <nom> dans m:ss" (timer de la sous-phase).
+     */
+    private String nextSubPhaseLine() {
+        var phaseManager = plugin.getPhaseManager();
+        String nextName;
+        GamePhase phase = phaseManager.getPhase();
+
+        if (phase == GamePhase.PREPARATION) {
+            PreparationSubPhase current = phaseManager.getPreparationSubPhase();
+            PreparationSubPhase[] values = PreparationSubPhase.values();
+            nextName = current.ordinal() + 1 < values.length
+                    ? subPhaseFr(values[current.ordinal() + 1])
+                    : "Combat";
+        } else if (phase == GamePhase.COMBAT) {
+            CombatSubPhase current = phaseManager.getCombatSubPhase();
+            CombatSubPhase[] values = CombatSubPhase.values();
+            nextName = current.ordinal() + 1 < values.length
+                    ? combatSubFr(values[current.ordinal() + 1])
+                    : "Fin de partie";
+        } else {
+            nextName = "-";
+        }
+
+        int remaining = phaseManager.getRemainingSeconds(
+                plugin.getConfigManager().getSubPhaseDurationSeconds());
+        String time = String.format("%d:%02d", remaining / 60, remaining % 60);
+
+        return "§7Prochaine : §f" + nextName + " §7dans §e" + time;
+    }
+
+    /**
+     * Les 4 lignes d'équipes, format "<Couleur> <symbole><vivants>" :
+     * ♥ = coeur vivant, ♡ = coeur détruit (joueurs encore en vie),
+     * ✘ = éliminée / inexistante.
+     * Votre équipe porte le marqueur gris "Vous".
+     */
+    private void appendTeamLines(List<String> lines, Player viewer) {
+        GameTeam viewerTeam =
+                plugin.getTeamManager().getTeamOf(viewer.getUniqueId());
+
+        for (TeamColor color : TeamColor.values()) {
+            GameTeam team = plugin.getTeamManager().getTeam(color);
+
+            String line;
+            if (team == null || team.isEliminated()) {
+                // Équipe inexistante ou éliminée => croix rouge.
+                line = color.getColorCode() + color.getDisplayName() + " §c✘";
+            } else if (team.isHeartAlive()) {
+                // Coeur en vie => coeur plein + nombre de joueurs vivants.
+                line = color.getColorCode() + color.getDisplayName()
+                        + " §a♥ §f" + plugin.getTeamManager().aliveCount(team);
+            } else {
+                // Coeur détruit mais joueurs encore debout => coeur vide.
+                line = color.getColorCode() + color.getDisplayName()
+                        + " §c♡ §f" + plugin.getTeamManager().aliveCount(team);
+            }
+
+            // Marqueur "votre équipe" : SANS crochets, en gris.
+            if (viewerTeam != null && viewerTeam.getColor() == color) {
+                line += " §8Vous";
+            }
+            lines.add(line);
+        }
+    }
+
+    /** Top équipes par points totaux (utilisé en ENDING). */
+    private void appendRanking(List<String> lines) {
         var ranking = plugin.getTeamManager().all().stream()
                 .sorted((a, b) -> Integer.compare(
                         b.getScore().getTotal(), a.getScore().getTotal()))
                 .limit(4)
                 .toList();
-        boolean first = true;
         for (GameTeam team : ranking) {
-            lines.add((first ? "§6Classement :" : "") + team.getColor().getColoredName()
-                    + " §e" + team.getScore().getTotal());
-            first = false;
+            lines.add(team.getColor().getColoredName() + " §e"
+                    + team.getScore().getTotal());
         }
     }
 
-    /** Nom FR de l'état courant. */
-    private String displayName(GameState state) {
-        return switch (state) {
-            case NONE -> "Normal";
-            case WAITING -> "Attente";
-            case COUNTDOWN -> "Lancement";
-            case CLASS_SELECTION -> "Classes";
-            case PREPARATION -> "Préparation";
-            case COMBAT -> "Combat";
-            case ENDING -> "Fin";
+    /** Nom FR d'une sous-phase de préparation. */
+    private String subPhaseFr(PreparationSubPhase sub) {
+        return switch (sub) {
+            case START -> "Début";
+            case PACKAGES -> "Colis";
+            case DUNGEONS -> "Donjons";
+            case POINT_UPGRADES -> "Points x2";
+            case PACKAGE_UPGRADE -> "Colis ++";
+            case DUNGEON_RESTOCK -> "Restock";
         };
     }
 
-    /** Nom FR de la sous-phase courante. */
-    private String subPhaseName() {
-        var phaseManager = plugin.getPhaseManager();
-        if (phaseManager.getPhase() == GamePhase.PREPARATION
-                && phaseManager.getPreparationSubPhase() != null) {
-            PreparationSubPhase sub = phaseManager.getPreparationSubPhase();
-            return switch (sub) {
-                case START -> "Début";
-                case PACKAGES -> "Colis";
-                case DUNGEONS -> "Donjons";
-                case POINT_UPGRADES -> "Points x2";
-                case PACKAGE_UPGRADE -> "Colis ++";
-                case DUNGEON_RESTOCK -> "Restock";
-            };
+    /** Nom FR d'une sous-phase de combat. */
+    private String combatSubFr(CombatSubPhase sub) {
+        return switch (sub) {
+            case START -> "Ouverture";
+            case METEORITES -> "Météorites";
+            case MORE_DAMAGE -> "Dégâts x2";
+            case ALL_CORE_DESTRUCTION -> "Cœurs détruits";
+            case MORE_METEORITES -> "Météorites ++";
+            case SUDDEN_DEATH -> "Mort subite";
+        };
+    }
+
+    // -----------------------------------------------------------------
+    // Unicité des entrées (le scoreboard refuse les doublons)
+    // -----------------------------------------------------------------
+
+    /**
+     * Rend chaque ligne unique en ajoutant des codes couleur invisibles
+     * (zéro largeur visuelle) aux doublons, notamment les lignes vides.
+     */
+    private void uniquify(List<String> lines) {
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < lines.size(); i++) {
+            String key = lines.get(i);
+            if (seen.add(key)) {
+                continue;
+            }
+            String unique = key;
+            // On empile des codes couleur (invisibles) jusqu'à unicité.
+            while (!seen.add(unique)) {
+                unique = unique + "§c";
+            }
+            lines.set(i, unique);
         }
-        if (phaseManager.getPhase() == GamePhase.COMBAT
-                && phaseManager.getCombatSubPhase() != null) {
-            CombatSubPhase sub = phaseManager.getCombatSubPhase();
-            return switch (sub) {
-                case START -> "Ouverture";
-                case METEORITES -> "Météorites";
-                case MORE_DAMAGE -> "Dégâts x2";
-                case ALL_CORE_DESTRUCTION -> "Cœurs détruits";
-                case MORE_METEORITES -> "Météorites ++";
-                case SUDDEN_DEATH -> "Mort subite";
-            };
-        }
-        return "-";
     }
 
     // -----------------------------------------------------------------
@@ -173,8 +269,8 @@ public class ScoreboardManager {
             objective = board.registerNewObjective(
                     "xii_sidebar",
                     Criteria.DUMMY,
-                    net.kyori.adventure.text.Component.text(
-                            MessageUtil.PREFIX + "§bXII DAYS"));
+                    LegacyComponentSerializer.legacySection()
+                            .deserialize("§6§lXII DAYS"));
             objective.setDisplaySlot(DisplaySlot.SIDEBAR);
         }
         player.setScoreboard(board);
@@ -183,10 +279,6 @@ public class ScoreboardManager {
 
     /** Vide les entrées actuelles de la sidebar (avant réécriture). */
     private void clearEntries(Scoreboard board) {
-        Objective objective = board.getObjective("xii_sidebar");
-        if (objective == null) {
-            return;
-        }
         for (String entry : board.getEntries()) {
             board.resetScores(entry);
         }
@@ -213,5 +305,11 @@ public class ScoreboardManager {
             }
         }
         boards.clear();
+    }
+
+    /** Composant titre exposé si besoin ailleurs. */
+    public Component titleComponent() {
+        return LegacyComponentSerializer.legacySection()
+                .deserialize("§6§lXII DAYS");
     }
 }

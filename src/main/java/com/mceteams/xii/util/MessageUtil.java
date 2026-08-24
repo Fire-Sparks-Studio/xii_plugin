@@ -6,29 +6,40 @@ import org.bukkit.entity.Player;
 
 /**
  * Utilitaire d'affichage des messages (100% français, spec §1 : plus
- * aucun système de traduction). Centralise le préfixe et les envois
- * pour garder un rendu cohérent dans tout le plugin.
+ * aucun système de traduction).
+ *
+ * STYLE : pas de préfixe [XII] - les annonces sont directement
+ * "Hypixel-like" : symboles (☠ ✦ ☄ ⚔ ✔ ✘), couleurs vives,
+ * séparateurs barrés pour les grandes phases.
  */
 public final class MessageUtil {
 
-    /** Préfixe affiché devant les messages du plugin. */
-    public static final String PREFIX = "§8[§bXII§8] §r";
+    /**
+     * Séparateur de phase (style serveur compétitif) : ligne pleine
+     * en strikethrough sombre.
+     */
+    public static final String SEPARATOR =
+            "§8§m                                                    ";
+
+    /** Préfixe désactivé (conservé pour compatibilité d'API). */
+    @SuppressWarnings("unused")
+    public static final String PREFIX = "";
 
     private MessageUtil() {
         // Classe utilitaire : pas d'instance.
     }
 
-    /** Envoie un message préfixé à un joueur/commande. */
+    /** Envoie un message brut à un joueur/commande (pas de préfixe). */
     public static void send(CommandSender sender, String message) {
         if (sender != null && message != null) {
-            sender.sendMessage(PREFIX + message);
+            sender.sendMessage(message);
         }
     }
 
-    /** Diffuse un message préfixé à tout le serveur. */
+    /** Diffuse un message brut à tout le serveur (pas de préfixe). */
     public static void broadcast(String message) {
         if (message != null) {
-            Bukkit.broadcastMessage(PREFIX + message);
+            Bukkit.broadcastMessage(message);
         }
     }
 

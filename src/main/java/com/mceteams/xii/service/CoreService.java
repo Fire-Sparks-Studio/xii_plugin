@@ -105,11 +105,13 @@ public class CoreService {
                     "coeur détruit");
         }
 
-        // 3. Annonce.
+        // 3. Annonce (style Hypixel).
         String by = breaker != null ? " §7par §c" + breaker.getName() : "";
-        MessageUtil.broadcast("§4Le cœur de l'équipe "
-                + team.getColor().getColoredName() + " §4a été détruit"
+        MessageUtil.broadcast(" ");
+        MessageUtil.broadcast(" §4§l✖ LE COEUR DE L'ÉQUIPE "
+                + team.getColor().getColoredName() + " §4§lA ÉTÉ DÉTRUIT"
                 + by + "§4 !");
+        MessageUtil.broadcast(" ");
         SoundUtil.broadcast(org.bukkit.Sound.ENTITY_WITHER_SPAWN, 1f, 0.6f);
 
         // 4. Mise à jour de l'élimination + victoire éventuelle.
@@ -135,7 +137,7 @@ public class CoreService {
             }
         }
         if (anyDestroyed) {
-            MessageUtil.broadcast("§4Tous les cœurs ont été détruits !");
+            MessageUtil.broadcast("§4✖ §fTous les cœurs §7ont été réduits à néant !");
         }
     }
 

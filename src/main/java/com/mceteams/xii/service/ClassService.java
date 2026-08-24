@@ -31,6 +31,14 @@ public class ClassService {
     public static final int MINER_LOCKED_ROW_START = 27;
     public static final int MINER_LOCKED_ROW_END = 35;
 
+    /**
+     * Constantes vanilla EXACTES (au lieu de getDefaultValue() dont le
+     * comportement s'est avéré peu fiable sur certains builds récents :
+     * c'était la cause du "speed anormal" du Guerrier).
+     */
+    private static final double VANILLA_MAX_HEALTH = 20.0;
+    private static final double VANILLA_MOVEMENT_SPEED = 0.10000000149011612D;
+
     private final XiiPlugin plugin;
 
     public ClassService(XiiPlugin plugin) {
@@ -39,7 +47,8 @@ public class ClassService {
 
     /**
      * Applique les passifs d'ATTRIBUTS de la classe du joueur.
-     * Appelable plusieurs fois : on repart toujours des valeurs par défaut.
+     * Appelable plusieurs fois : on repart TOUJOURS des constantes
+     * vanilla (idempotent, aucun cumul possible).
      */
     public void applyPassives(Player player, PlayerData data) {
         if (player == null || !player.isOnline() || !data.hasClass()) {
@@ -52,11 +61,12 @@ public class ClassService {
             case WORKER -> 10.0;   // Travailleur : 5 coeurs / 10 PV
             case TANK -> 15.0;     // Robuste : 15 PV
             case WARRIOR -> 14.0;  // Guerrier : 7 coeurs / 14 PV
-            default -> 20.0;       // valeur vanilla pour les autres
+            default -> VANILLA_MAX_HEALTH;
         };
         AttributeInstance maxHealthAttribute =
                 player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealthAttribute != null) {
+            // On repart de la constante vanilla, jamais de la valeur actuelle.
             maxHealthAttribute.setBaseValue(maxHealth);
             if (player.getHealth() > maxHealth) {
                 player.setHealth(maxHealth);
@@ -67,13 +77,14 @@ public class ClassService {
         double speedMultiplier = switch (playerClass) {
             case AGILE -> 1.20;    // Agile : +20% vitesse
             case TANK -> 0.85;     // Robuste : -15% vitesse
-            default -> 1.0;
+            default -> 1.0;        // Guerrier/Mineur/Travailleur : NEUTRE
         };
         AttributeInstance speedAttribute =
                 player.getAttribute(Attribute.MOVEMENT_SPEED);
         if (speedAttribute != null) {
-            double base = speedAttribute.getDefaultValue();
-            speedAttribute.setBaseValue(base * speedMultiplier);
+            // Constante vanilla x multiplicateur => Guerrier strictement
+            // identique à un joueur sans classe.
+            speedAttribute.setBaseValue(VANILLA_MOVEMENT_SPEED * speedMultiplier);
         }
     }
 

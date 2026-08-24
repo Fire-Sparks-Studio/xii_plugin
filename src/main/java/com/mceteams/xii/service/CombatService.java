@@ -135,8 +135,8 @@ public class CombatService {
                     PointCategory.FIRST_KILL,
                     plugin.getConfigManager().getFirstKillPoints(),
                     "premier kill");
-            MessageUtil.broadcast("§6" + killer.getName()
-                    + " §7signe le §epremier kill§7 !");
+            MessageUtil.broadcast("§6✶ §f" + killer.getName()
+                    + " §7signe le §6§lPREMIER KILL §7de la partie !");
         } else {
             plugin.getPointService().award(killer,
                     PointCategory.KILL,
@@ -148,9 +148,10 @@ public class CombatService {
         if (killerTeam != null) {
             killerTeam.setKillStreak(killerTeam.getKillStreak() + 1);
             if (killerTeam.getKillStreak() % 3 == 0) {
-                MessageUtil.broadcast("L'équipe "
+                MessageUtil.broadcast("§d⚡ §7L'équipe "
                         + killerTeam.getColor().getColoredName()
-                        + " §7enchaîne §e" + killerTeam.getKillStreak() + " kills§7 !");
+                        + " §7enchaîne §e§l" + killerTeam.getKillStreak()
+                        + " KILLS§7 !");
             }
         }
     }

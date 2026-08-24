@@ -12,6 +12,7 @@ import org.bukkit.scoreboard.Team;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -69,14 +70,26 @@ public class TeamManager {
         GameTeam team = new GameTeam(color, defaultMaxPlayers);
         teams.put(color, team);
         syncBukkitTeam(team);
+
+        // Si la base existe déjà (zone déjà générée), câble directement
+        // le spawn de l'équipe (sinon il ne serait posé qu'au prochain
+        // buildBases).
         if (hasPlugin()) {
+            var base = plugin.getBaseManager().getBase(color);
+            if (base != null) {
+                team.setSpawn(base.getSpawn());
+            }
             plugin.getLogger().info("[Teams] Équipe créée : " + color.getColoredName());
         }
         return true;
     }
 
     /**
-     * Supprime une équipe : les membres perdent leur teamId.
+     * Supprime une équipe.
+     *
+     * En PLEINE PARTIE (préparation/combat) : les membres en ligne sont
+     * envoyés en mode SPECTATEUR permanent et les conditions de victoire
+     * sont revérifiées. En attente : ils perdent simplement leur équipe.
      *
      * @return false si l'équipe n'existait pas.
      */
@@ -85,14 +98,38 @@ public class TeamManager {
         if (team == null) {
             return false;
         }
+
+        // Capture des membres AVANT purge.
+        Set<UUID> formerMembers = team.getPlayers();
+
         // Détache tous les membres côté données plugin.
         var players = playersOrNull();
         if (players != null) {
-            for (UUID memberId : team.getPlayers()) {
+            for (UUID memberId : formerMembers) {
                 players.getData(memberId).setTeamId(null);
             }
         }
         team.clearPlayers();
+
+        // Partie en cours => spectateurs permanents.
+        boolean midGame = hasPlugin()
+                && (plugin.getGameManager().getState()
+                        == com.mceteams.xii.enums.GameState.PREPARATION
+                || plugin.getGameManager().getState()
+                        == com.mceteams.xii.enums.GameState.COMBAT);
+        if (midGame) {
+            for (UUID memberId : formerMembers) {
+                Player member = Bukkit.getPlayer(memberId);
+                if (member == null || !member.isOnline()) {
+                    continue;
+                }
+                var data = plugin.getPlayerManager().getData(memberId);
+                data.setAlive(false);
+                plugin.getSpectatorService().enterPermanent(member);
+                MessageUtil.send(member,
+                        "§c✘ Votre équipe a été supprimée : vous passez §5SPECTATEUR§c.");
+            }
+        }
 
         // Supprime l'équipe Bukkit associée si présente.
         if (hasPlugin()) {
@@ -100,6 +137,10 @@ public class TeamManager {
             Team bukkitTeam = scoreboard.getTeam(TeamUtil.bukkitTeamName(color));
             if (bukkitTeam != null) {
                 bukkitTeam.unregister();
+            }
+            // Revérifie la victoire : il reste peut-être une seule équipe !
+            if (midGame) {
+                plugin.getGameManager().checkVictoryConditions();
             }
         }
         return true;
@@ -223,8 +264,9 @@ public class TeamManager {
         if (!team.isEliminated() && isDefinitivelyDead(team)) {
             team.setEliminated(true);
             if (hasPlugin()) {
-                MessageUtil.broadcast("§7L'équipe " + team.getColor().getColoredName()
-                        + " §7est §céliminée§7 !");
+                MessageUtil.broadcast("§c✘ §7L'équipe "
+                        + team.getColor().getColoredName()
+                        + " §cvient d'être §4§lÉLIMINÉE§c !");
             }
             return true;
         }

@@ -12,27 +12,37 @@ import org.bukkit.potion.PotionEffectType;
  */
 public final class PlayerUtil {
 
+    /** Constantes vanilla (cf. ClassService) pour des resets exacts. */
+    private static final double VANILLA_MAX_HEALTH = 20.0;
+    private static final double VANILLA_MOVEMENT_SPEED = 0.10000000149011612D;
+
     private PlayerUtil() {
         // Classe utilitaire : pas d'instance.
     }
 
     /**
      * Remet le joueur dans un état Minecraft "neuf" :
-     * vie/nourriture/xp pleins, effets et feu retirés, mode survie,
-     * invulnérabilité désactivée, chute annulée, inventaire vidé.
+     * vie/vitesse/saturations aux valeurs vanilla, effets et feu
+     * retirés, mode survie, invulnérabilité désactivée, chute annulée,
+     * inventaire vidé.
      */
     public static void reset(Player player) {
         if (player == null || !player.isOnline()) {
             return;
         }
 
-        // Vie : on repasse par l'attribut pour couvrir les classes
-        // qui modifient la vie max (Tank 15 PV, Guerrier 14 PV...).
+        // Vie : constante vanilla (les classes réappliqueront leurs valeurs).
         var maxHealthAttr = player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealthAttr != null) {
-            double base = maxHealthAttr.getDefaultValue();
-            maxHealthAttr.setBaseValue(base);
-            player.setHealth(base);
+            maxHealthAttr.setBaseValue(VANILLA_MAX_HEALTH);
+            player.setHealth(VANILLA_MAX_HEALTH);
+        }
+
+        // Vitesse : remise au niveau vanilla également (sinon une vitesse
+        // de classe précédente "collerait" au joueur après un reset).
+        var speedAttr = player.getAttribute(Attribute.MOVEMENT_SPEED);
+        if (speedAttr != null) {
+            speedAttr.setBaseValue(VANILLA_MOVEMENT_SPEED);
         }
 
         player.setFoodLevel(20);
