@@ -100,15 +100,59 @@ public class DungeonManager {
             Dungeon dungeon = new Dungeon(slot,
                     "dungeon_" + structureNumber, anchor, LOOT_RADIUS);
             dungeons.add(dungeon);
+        }
 
-            // Détection des coffres de loot posés par la structure.
-            scanLootChests(dungeon);
-            fillChests(dungeon); // remplissage initial (verrouillé jusqu'à DUNGEONS)
+        // Le scan des coffres se fait APRÈS chargement ASYNCHRONE des
+        // chunks : lire des blocs à ±500 du centre en synchrone gèlerait
+        // le thread serveur (génération de chunks sur le thread principal).
+        scheduleLootScanAsync(center.getWorld());
+    }
+
+    /**
+     * Programme le scan des coffres des 4 donjons une fois tous les
+     * chunks concernés chargés de façon asynchrone.
+     */
+    private void scheduleLootScanAsync(org.bukkit.World world) {
+        if (world == null) {
+            return;
+        }
+        List<java.util.concurrent.CompletableFuture<org.bukkit.Chunk>> futures =
+                new ArrayList<>();
+
+        for (Dungeon dungeon : dungeons) {
+            Location c = dungeon.getCenter();
+            int chunkRange = (LOOT_RADIUS / 16) + 1;
+            int centerChunkX = c.getBlockX() >> 4;
+            int centerChunkZ = c.getBlockZ() >> 4;
+
+            for (int cx = centerChunkX - chunkRange; cx <= centerChunkX + chunkRange; cx++) {
+                for (int cz = centerChunkZ - chunkRange; cz <= centerChunkZ + chunkRange; cz++) {
+                    // getChunkAtAsync : génère/charge hors du thread serveur.
+                    futures.add(world.getChunkAtAsync(cx, cz));
+                }
+            }
+        }
+
+        java.util.concurrent.CompletableFuture
+                .allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
+                .thenRun(() -> org.bukkit.Bukkit.getScheduler().runTask(plugin,
+                        this::scanAndFillAllDungeons));
+    }
+
+    /**
+     * Scan + remplissage des 4 donjons. À appeler UNIQUEMENT sur le
+     * thread principal avec les chunks déjà chargés.
+     */
+    private void scanAndFillAllDungeons() {
+        for (Dungeon dungeon : dungeons) {
+            scanLootChests(dungeon);   // chunks garantis chargés => instantané
+            fillChests(dungeon);       // remplissage initial (verrouillé jusqu'à DUNGEONS)
         }
     }
 
     /**
      * Scanne les coffres dans le rayon du donjon et les enregistre.
+     * ATTENTION : les chunks doivent être chargés (cf. scheduleLootScanAsync).
      */
     private void scanLootChests(Dungeon dungeon) {
         dungeon.clearLootChests();

@@ -63,6 +63,11 @@ public final class LocationUtil {
     /**
      * Choisit un point aléatoire À LA SURFACE du terrain dans la zone.
      * Utilisé pour les colis et les impacts de météorites.
+     *
+     * ATTENTION : lecture SYNCHRONE du terrain (getHighestBlockYAt) =>
+     * ne jamais appeler sur un chunk potentiellement non chargé
+     * (gèlerait le thread serveur). Pour un point aléatoire n'importe
+     * où dans la zone, utiliser {@link #randomSurfaceInAsync}.
      */
     public static Location randomSurfaceIn(GameZone zone) {
         World world = zone.getWorld();
@@ -80,6 +85,40 @@ public final class LocationUtil {
 
         int y = world.getHighestBlockYAt(x, z);
         return new Location(world, x + 0.5, y + 1, z + 0.5);
+    }
+
+    /**
+     * Version ASYNCHRONE de {@link #randomSurfaceIn} :
+     * 1. tire des coordonnées X/Z aléatoires dans la zone ;
+     * 2. charge le chunk via getChunkAtAsync (hors thread serveur) ;
+     * 3. appelle {@code callback} avec la position finale UNE FOIS le
+     *    chunk chargé (le futur Paper est complété sur le thread principal).
+     *
+     * Si aucune position n'est résoluble (monde absent), le callback est
+     * appelé avec null.
+     */
+    public static void randomSurfaceInAsync(GameZone zone,
+                                            java.util.function.Consumer<Location> callback) {
+        World world = zone.getWorld();
+        if (world == null) {
+            callback.accept(null);
+            return;
+        }
+        int margin = 50;
+        int minX = (int) zone.getMinX() + margin;
+        int maxX = (int) zone.getMaxX() - margin;
+        int minZ = (int) zone.getMinZ() + margin;
+        int maxZ = (int) zone.getMaxZ() - margin;
+
+        int x = minX + RANDOM.nextInt(Math.max(1, maxX - minX));
+        int z = minZ + RANDOM.nextInt(Math.max(1, maxZ - minZ));
+
+        // Chargement/génération asynchrone du chunk concerné.
+        world.getChunkAtAsync(x >> 4, z >> 4).thenAccept(chunk -> {
+            // Complété sur le thread principal par Paper : lectures sûres.
+            int y = world.getHighestBlockYAt(x, z);
+            callback.accept(new Location(world, x + 0.5, y + 1, z + 0.5));
+        });
     }
 
     /**

@@ -49,6 +49,10 @@ public class SuddenDeathTask extends BukkitRunnable {
     /**
      * Spawn d'un dragon à un bord aléatoire de la zone, volant vers le
      * centre. Un dragon sur trois cible un joueur vivant au hasard.
+     *
+     * ASYNCHRONE : chargement du chunk de bord via getChunkAtAsync pour
+     * ne jamais geler le thread serveur (getHighestBlockYAt synchrone
+     * sur un chunk non chargé = génération bloquante).
      */
     private void spawnDragon() {
         var zone = plugin.getZoneManager().getZone();
@@ -56,7 +60,7 @@ public class SuddenDeathTask extends BukkitRunnable {
             return;
         }
 
-        // Point de départ : bord aléatoire de la zone, en hauteur.
+        // Point de départ : bord aléatoire de la zone.
         var random = java.util.concurrent.ThreadLocalRandom.current();
         int half = zone.getSize() / 2;
         double x = zone.getCenterX() + random.nextInt(-half, half + 1);
@@ -67,10 +71,24 @@ public class SuddenDeathTask extends BukkitRunnable {
             x = zone.getCenterX()
                     + (random.nextBoolean() ? -half : half); // ou bord est/ouest
         }
-        Location spawnLocation = new Location(zone.getWorld(), x,
-                zone.getWorld().getHighestBlockYAt((int) x, (int) z) + 30.0, z);
 
-        EnderDragon dragon = zone.getWorld().spawn(spawnLocation,
+        final double finalX = x;
+        final double finalZ = z;
+        zone.getWorld().getChunkAtAsync((int) x >> 4, (int) z >> 4)
+                .thenAccept(chunk -> {
+                    // Complété sur le thread principal par Paper.
+                    Location spawnLocation = new Location(zone.getWorld(),
+                            finalX,
+                            zone.getWorld().getHighestBlockYAt(
+                                    (int) finalX, (int) finalZ) + 30.0,
+                            finalZ);
+                    spawnDragonAt(spawnLocation);
+                });
+    }
+
+    /** Spawn effectif du dragon à la location préparée. */
+    private void spawnDragonAt(Location spawnLocation) {
+        EnderDragon dragon = spawnLocation.getWorld().spawn(spawnLocation,
                 EnderDragon.class, spawned -> {
                     // Le dragon n'a pas de barre de boss "battle" vanilla :
                     // il agit comme un mob sauvage qui détruit la map.

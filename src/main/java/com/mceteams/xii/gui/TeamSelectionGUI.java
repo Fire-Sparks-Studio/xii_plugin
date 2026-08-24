@@ -35,7 +35,40 @@ public class TeamSelectionGUI implements InventoryHolder {
         this.inventory = Bukkit.createInventory(this, 27,
                 "§8Sélection d'équipe");
         fillTeams();
+        fillLeaveButton();
         player.openInventory(inventory);
+    }
+
+    /**
+     * Bouton "quitter l'équipe" (bas de la GUI).
+     *
+     * Comportement selon l'état du jeu :
+     * - WAITING : le joueur n'a simplement plus d'équipe ;
+     * - partie en cours (PRÉPARATION/COMBAT) : il quitte son équipe et
+     *   passe en mode SPECTATEUR permanent.
+     */
+    private void fillLeaveButton() {
+        var currentTeam = plugin.getTeamManager().getTeamOf(player.getUniqueId());
+        java.util.List<String> lore = new java.util.ArrayList<>();
+        if (currentTeam != null) {
+            lore.add("§7Équipe actuelle : "
+                    + currentTeam.getColor().getColoredName());
+        } else {
+            lore.add("§7Vous n'avez pas d'équipe.");
+        }
+        var state = plugin.getGameManager().getState();
+        if (state == com.mceteams.xii.enums.GameState.PREPARATION
+                || state == com.mceteams.xii.enums.GameState.COMBAT) {
+            lore.add("§cAttention : vous deviendrez");
+            lore.add("§cSPECTATEUR jusqu'à la fin !");
+        } else {
+            lore.add("§7Cliquez pour quitter votre équipe.");
+        }
+
+        inventory.setItem(22, com.mceteams.xii.util.ItemUtil.buildNamedItem(
+                Material.RED_BED,
+                "§cQuitter l'équipe",
+                lore));
     }
 
     /** Remplit les cases des équipes selon l'état courant. */
@@ -86,6 +119,55 @@ public class TeamSelectionGUI implements InventoryHolder {
                 tryJoin(color);
                 return;
             }
+        }
+
+        // Bouton "quitter l'équipe" (lit de sortie).
+        if (event.getSlot() == 22) {
+            tryLeave();
+        }
+    }
+
+    /**
+     * Quitte l'équipe actuelle :
+     * - WAITING => simple retrait (plus d'équipe, sélecteur repasse en
+     *   barrière) ;
+     * - PRÉPARATION/COMBAT => retrait + passage en SPECTATEUR permanent
+     *   (le joueur ne peut plus revenir dans la partie).
+     */
+    private void tryLeave() {
+        var team = plugin.getTeamManager().getTeamOf(player.getUniqueId());
+        if (team == null) {
+            MessageUtil.send(player, "§7Vous n'avez pas d'équipe à quitter.");
+            return;
+        }
+        var state = plugin.getGameManager().getState();
+        boolean midGame = state == com.mceteams.xii.enums.GameState.PREPARATION
+                || state == com.mceteams.xii.enums.GameState.COMBAT;
+
+        // Retrait de l'équipe (source de vérité = GameTeam).
+        plugin.getTeamManager().removePlayer(player.getUniqueId());
+
+        // Information des anciens coéquipiers encore en ligne.
+        plugin.getTeamManager().notifyMembers(team,
+                "§e" + player.getName() + " §7a quitté l'équipe "
+                        + team.getColor().getColoredName() + "§7.",
+                player.getUniqueId());
+
+        player.closeInventory();
+
+        if (midGame) {
+            // Partie en cours : spectateur permanent (invulnérable,
+            // invisible, vol, boussole de ciblage).
+            plugin.getSpectatorService().enterPermanent(player);
+            MessageUtil.broadcast("§e" + player.getName()
+                    + " §7passe §5SPECTATEUR§7.");
+            // Un joueur actif en moins : la partie peut être terminée.
+            plugin.getGameManager().checkVictoryConditions();
+        } else {
+            // Attente : retour au lobby avec le sélecteur actualisé.
+            MessageUtil.send(player, "§7Vous avez quitté votre équipe. "
+                    + "Vous pouvez en rejoindre une autre.");
+            plugin.getLobbyItemManager().giveLobbyItems(player);
         }
     }
 

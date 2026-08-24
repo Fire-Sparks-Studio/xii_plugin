@@ -224,6 +224,10 @@ public class XiiPlugin extends JavaPlugin {
         if (zone != null) {
             zone.setExecutor(new ZoneCommand(this));
         }
+        var admin = getCommand("admin");
+        if (admin != null) {
+            admin.setExecutor(new com.mceteams.xii.command.AdminCommand(this));
+        }
     }
 
     /**

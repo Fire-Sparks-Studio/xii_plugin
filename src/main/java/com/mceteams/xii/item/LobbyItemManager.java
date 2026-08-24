@@ -23,10 +23,10 @@ import org.bukkit.inventory.ItemStack;
  */
 public class LobbyItemManager {
 
-    /** Slot fixe du sélecteur d'équipe dans la hotbar. */
-    public static final int TEAM_SELECTOR_SLOT = 0;
-    /** Slot fixe de l'item admin dans la hotbar. */
-    public static final int ADMIN_SLOT = 8;
+    /** Slot hotbar de l'item admin : index 1 (2e case, convention 0-8). */
+    public static final int ADMIN_SLOT = 1;
+    /** Slot hotbar du sélecteur d'équipe : index 4 (case du MILIEU). */
+    public static final int TEAM_SELECTOR_SLOT = 4;
 
     private final XiiPlugin plugin;
 

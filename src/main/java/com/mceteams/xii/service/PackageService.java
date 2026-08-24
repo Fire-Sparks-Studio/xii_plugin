@@ -46,7 +46,11 @@ public class PackageService {
     /**
      * Fait apparaître un colis à un point aléatoire de la zone.
      *
-     * @return le colis créé, ou null si impossible (pas de monde...).
+     * ASYNCHRONE : le chunk cible est chargé via getChunkAtAsync avant
+     * toute lecture de terrain (sinon gel du serveur, cf. LocationUtil).
+     *
+     * @return toujours null immédiatement ; le colis est créé plus tard
+     *         par callback (l'ancienne valeur de retour n'est plus utilisée).
      */
     public Package spawnRandomPackage() {
         var zone = plugin.getZoneManager().getZone();
@@ -57,9 +61,20 @@ public class PackageService {
             return null; // mécanique limitée à la préparation
         }
 
-        Location spawnLocation = LocationUtil.randomSurfaceIn(zone);
+        // Position résolue une fois le chunk chargé (thread principal).
+        LocationUtil.randomSurfaceInAsync(zone, this::placePackageAt);
+        return null;
+    }
+
+    /** Place réellement le coffre du colis à la position donnée. */
+    private void placePackageAt(Location spawnLocation) {
         if (spawnLocation == null) {
-            return null;
+            return;
+        }
+        // Re-vérification d'état : le tick asynchrone peut arriver après
+        // un changement d'état (fin de préparation, arrêt de partie...).
+        if (plugin.getGameManager().getState() != GameState.PREPARATION) {
+            return;
         }
 
         // Pose du coffre.
@@ -76,7 +91,6 @@ public class PackageService {
 
         MessageUtil.broadcast("§eUn colis est apparu§7 ! §8(x" + block.getX()
                 + " y" + block.getY() + " z" + block.getZ() + ")");
-        return pack;
     }
 
     /** Remplit le coffre du colis ; @return true si objet rare dedans. */

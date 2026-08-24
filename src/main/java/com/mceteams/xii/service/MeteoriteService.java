@@ -44,17 +44,29 @@ public class MeteoriteService {
 
     /**
      * Lance une météorite vers un point aléatoire de la zone.
+     *
+     * ASYNCHRONE : le chunk cible est chargé via getChunkAtAsync avant
+     * toute lecture de terrain (sinon gel du serveur).
      */
     public void strike() {
         GameZone zone = plugin.getZoneManager().getZone();
         if (zone == null || zone.getWorld() == null) {
             return;
         }
-        Location target = LocationUtil.randomSurfaceIn(zone);
-        if (target == null) {
-            return;
-        }
 
+        // La boule de feu est lancée une fois la position résolue.
+        LocationUtil.randomSurfaceInAsync(zone, target -> {
+            if (target == null
+                    || plugin.getGameManager().getState()
+                    != com.mceteams.xii.enums.GameState.COMBAT) {
+                return; // monde absent ou combat terminé entre-temps
+            }
+            launchFireball(target);
+        });
+    }
+
+    /** Lance la boule de feu météorite vers le point cible. */
+    private void launchFireball(Location target) {
         double power = plugin.getConfigManager().getMeteoritePower();
         int radius = plugin.getConfigManager().getMeteoriteRadius();
         ThreadLocalRandom rng = ThreadLocalRandom.current();
@@ -68,7 +80,7 @@ public class MeteoriteService {
         // Spawn de la boule de feu à 40 blocs au-dessus de la cible.
         Location launchPoint = LocationUtil.highAbove(target, 40);
         var world = target.getWorld();
-        LargeFireball fireball = world.spawn(launchPoint, LargeFireball.class,
+        world.spawn(launchPoint, LargeFireball.class,
                 fb -> {
                     fb.setVelocity(new Vector(0, -1.8, 0));   // chute verticale
                     fb.setYield((float) power);               // rayon d'explosion

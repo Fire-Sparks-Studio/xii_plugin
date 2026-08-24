@@ -18,6 +18,10 @@ commands:
   zone:
     description: Configuration de la zone de jeu (set, delete)
     usage: /zone <set|delete>
+  admin:
+    description: Ouvrir le menu d'administration
+    usage: /admin
+    permission: xii.admin
 permissions:
   xii.admin:
     description: Permission admin XII Days
