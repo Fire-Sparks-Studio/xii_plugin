@@ -101,6 +101,9 @@ public class ScoreboardManager {
 
         var phaseManager = plugin.getPhaseManager();
 
+        // --- Espace sous le titre --------------------------------------
+        lines.add("");
+
         // --- Ligne jour courant ---------------------------------------
         int day = phaseManager.currentDay();
         lines.add("§7Jour §b§l" + day + "§8/12");
@@ -115,18 +118,18 @@ public class ScoreboardManager {
 
         lines.add("");
 
-        // --- Rappel de votre équipe -------------------------------------
-        GameTeam ownTeam = plugin.getTeamManager().getTeamOf(player.getUniqueId());
-        if (ownTeam != null) {
-            lines.add("§7Votre équipe : " + ownTeam.getColor().getColoredName());
+        // --- Rappel de VOTRE CLASSE (et non plus l'équipe) --------------
+        var data = plugin.getPlayerManager().getData(player);
+        if (data.getPlayerClass() != null) {
+            lines.add("§7Votre classe : " + data.getPlayerClass().getColoredName());
         } else {
-            lines.add("§5Vous êtes spectateur");
+            lines.add("§7Aucune classe");
         }
         return lines;
     }
 
     /**
-     * Ligne "Prochaine : <nom> dans m:ss" (timer de la sous-phase).
+     * Ligne "<événement> dans m:ss" (timer de la sous-phase à venir).
      */
     private String nextSubPhaseLine() {
         var phaseManager = plugin.getPhaseManager();
@@ -153,7 +156,7 @@ public class ScoreboardManager {
                 plugin.getConfigManager().getSubPhaseDurationSeconds());
         String time = String.format("%d:%02d", remaining / 60, remaining % 60);
 
-        return "§7Prochaine : §f" + nextName + " §7dans §e" + time;
+        return "§f" + nextName + " §7dans §e" + time;
     }
 
     /**
@@ -183,9 +186,9 @@ public class ScoreboardManager {
                         + " §c♡ §f" + plugin.getTeamManager().aliveCount(team);
             }
 
-            // Marqueur "votre équipe" : SANS crochets, en gris.
+            // Marqueur "votre équipe" : VOUS en majuscules, gris clair, gras.
             if (viewerTeam != null && viewerTeam.getColor() == color) {
-                line += " §8Vous";
+                line += " §7§lVOUS";
             }
             lines.add(line);
         }

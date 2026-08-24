@@ -70,8 +70,15 @@ public class DeathService {
         String killerInfo = killer != null
                 ? " §7par §c" + killer.getName()
                 : "";
+
+        // KILL FINAL : la victime appartenait à une équipe SANS coeur
+        // => ce kill scelle son sort, on le met en avant (bleu ciel gras).
+        var victimTeam = plugin.getTeamManager().getTeamOf(victim.getUniqueId());
+        boolean finalKill = victimTeam != null && !victimTeam.isHeartAlive();
+
         MessageUtil.broadcast("§c☠ §f" + victim.getName()
-                + " §7est mort" + killerInfo + ".");
+                + " §7est mort" + killerInfo
+                + (finalKill ? " §b§lKILL FINAL" : "") + ".");
         plugin.getGameManager().checkVictoryConditions();
     }
 

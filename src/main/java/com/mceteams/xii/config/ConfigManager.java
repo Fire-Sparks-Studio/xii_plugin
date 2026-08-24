@@ -19,6 +19,15 @@ import java.util.Map;
  */
 public class ConfigManager {
 
+    /**
+     * Version attendue du config.yml embarqué. Si le fichier installé
+     * dans plugins/XII-Days/ est PLUS ANCIEN, il est remplacé par la
+     * nouvelle ressource (l'ancien est sauvegardé en .bak) : sans ça,
+     * les nouvelles valeurs de gameplay ne seraient jamais appliquées
+     * (saveDefaultConfig n'écrase jamais un fichier existant).
+     */
+    private static final int CONFIG_VERSION = 2;
+
     private final XiiPlugin plugin;
     private FileConfiguration config;
 
@@ -34,14 +43,41 @@ public class ConfigManager {
 
     /**
      * (Re)charge config.yml et les caches dérivés.
+     * Gère la migration automatique si la version du fichier diffère.
      */
     public void reload() {
+        java.io.File configFile =
+                new FileHolder(plugin).configFile();
+
+        // Migration : fichier plus ancien que la version embarquée ?
+        org.bukkit.configuration.file.YamlConfiguration onDisk =
+                org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(configFile);
+        int installedVersion = onDisk.getInt("config-version", 0);
+        if (installedVersion < CONFIG_VERSION) {
+            try {
+                if (configFile.exists()) {
+                    java.io.File backup = new java.io.File(configFile.getParentFile(),
+                            "config-backup-v" + installedVersion + ".yml");
+                    java.nio.file.Files.copy(configFile.toPath(), backup.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                plugin.saveResource("config.yml", true); // écrase avec l'embarqué
+                plugin.getLogger().info("[Config] Migrée v" + installedVersion
+                        + " -> v" + CONFIG_VERSION
+                        + " (ancienne copie : config-backup-v" + installedVersion + ".yml)");
+            } catch (Exception exception) {
+                plugin.getLogger().warning("[Config] Migration impossible : "
+                        + exception.getMessage());
+            }
+        }
+
         config = plugin.getConfig();
 
         // --- Points de minage -------------------------------------
         miningPoints.clear();
         ConfigurationSection mining = config.getConfigurationSection("points.mining");
         if (mining != null) {
+            putOre(mining, "amethyst", Material.AMETHYST_CLUSTER);
             putOre(mining, "coal", Material.COAL_ORE, Material.DEEPSLATE_COAL_ORE);
             putOre(mining, "copper", Material.COPPER_ORE, Material.DEEPSLATE_COPPER_ORE);
             putOre(mining, "iron", Material.IRON_ORE, Material.DEEPSLATE_IRON_ORE);
@@ -72,6 +108,13 @@ public class ConfigManager {
             } catch (IllegalArgumentException exception) {
                 plugin.getLogger().warning("Entrée de loot invalide : " + entry);
             }
+        }
+    }
+
+    /** Petit holder pour accéder au fichier config de façon concise. */
+    private record FileHolder(XiiPlugin plugin) {
+        java.io.File configFile() {
+            return new java.io.File(plugin.getDataFolder(), "config.yml");
         }
     }
 

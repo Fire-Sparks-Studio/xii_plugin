@@ -4,6 +4,10 @@
 #  l'effet de chaque paramètre sur le gameplay.
 # =================================================================
 
+# Version du schéma : si le fichier installé est plus ancien, il est
+# automatiquement remplacé (l'ancien est sauvegardé en .bak).
+config-version: 2
+
 # -----------------------------------------------------------------
 # Zone de jeu
 # -----------------------------------------------------------------
@@ -65,14 +69,16 @@ points:
 
   mining:
     # Points attribués par minerai cassé (MiningService).
+    # Noms français affichés dans la barre d'action.
+    amethyst: 2
     coal: 2
-    copper: 3
-    iron: 5
-    gold: 10
-    redstone: 8
+    copper: 2
+    iron: 10
+    gold: 50
+    redstone: 3
     lapis: 8
-    diamond: 25
-    emerald: 30
+    diamond: 150
+    emerald: 300
     ancient-debris: 60
 
 # -----------------------------------------------------------------

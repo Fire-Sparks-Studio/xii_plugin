@@ -264,9 +264,12 @@ public class TeamManager {
         if (!team.isEliminated() && isDefinitivelyDead(team)) {
             team.setEliminated(true);
             if (hasPlugin()) {
-                MessageUtil.broadcast("§c✘ §7L'équipe "
-                        + team.getColor().getColoredName()
-                        + " §cvient d'être §4§lÉLIMINÉE§c !");
+                // Format : EQUIPE ELIMINEE > L'équipe Jaune a été éliminée.
+                // (label blanc gras, nom d'équipe dans sa couleur, reset)
+                MessageUtil.broadcast("§f§lEQUIPE ELIMINEE > §r"
+                        + team.getColor().getColorCode()
+                        + "L'équipe " + team.getColor().getDisplayName()
+                        + "§r a été éliminée.");
             }
             return true;
         }

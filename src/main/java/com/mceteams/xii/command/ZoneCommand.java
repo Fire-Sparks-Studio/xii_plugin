@@ -2,7 +2,6 @@ package com.mceteams.xii.command;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.util.MessageUtil;
-import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -54,11 +53,13 @@ public class ZoneCommand implements TabExecutor {
     }
 
     /**
-     * /zone set : séquence officielle (spec §10), AJUSTEMENT demandé :
-     * le centre de la zone est FORCÉ à X=0 / Z=0 du monde courant
-     * (la position de l'opérateur sert uniquement à choisir le monde
-     * et la hauteur Y). Toute la génération (lobby, bases, donjons)
-     * est donc calculée autour de l'origine du monde.
+     * /zone set : séquence officielle (spec §10).
+     *
+     * NOTE : le centre = la POSITION EXACTE de l'opérateur (X/Y/Z).
+     * Le "rebase" des coordonnées d'un monde étant impossible dans
+     * Minecraft, toute la génération est calculée RELATIVEMENT à ce
+     * centre (bases +/-300, donjons +/-500...) : la map fonctionne
+     * donc identiquement où qu'elle soit construite.
      *
      * Si une partie est en cours, on l'arrête proprement avant.
      */
@@ -74,22 +75,16 @@ public class ZoneCommand implements TabExecutor {
             plugin.getGameManager().stopParty();
         }
 
-        // Centre : monde + hauteur de l'opérateur, X/Z forcés à 0.
-        Location center = new Location(
-                operator.getWorld(),
-                0.0,
-                operator.getLocation().getY(),
-                0.0);
-
-        // 1/2/3/4 : GameZone -> sauvegarde.
-        plugin.getZoneManager().defineZone(center);
+        // 1/2/3/4 : position opérateur -> GameZone -> sauvegarde.
+        plugin.getZoneManager().defineZone(operator.getLocation());
 
         // 5..11 : génération, WAITING, restrictions, téléportations.
         plugin.getGameManager().setupZone();
 
-        MessageUtil.send(operator, "§a✔ Zone définie au centre §fX:0 Z:0 "
-                + "(Y=" + center.getBlockY() + ")§a dans §f"
-                + operator.getWorld().getName()
+        var zone = plugin.getZoneManager().getZone();
+        MessageUtil.send(operator, "§a✔ Zone définie au centre §f"
+                + (int) zone.getCenterX() + "§7, §f" + (int) zone.getCenterZ()
+                + " §7(dans §f" + zone.getWorldName() + "§7)"
                 + "§a. Taille : " + plugin.getConfigManager().getZoneSize() + " blocs.");
     }
 
