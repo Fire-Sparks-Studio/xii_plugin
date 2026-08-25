@@ -50,6 +50,27 @@ public class WorldListener implements Listener {
     }
 
     // -----------------------------------------------------------------
+    // Atterrissage des colis en parachute
+    // -----------------------------------------------------------------
+
+    /**
+     * Un FallingBlock taggué "xii_package_falling" vient de toucher le
+     * sol : on laisse vanilla poser le bloc CHEST puis on délègue au
+     * PackageService (loot + enregistrement + annonces + parachute).
+     */
+    @EventHandler
+    public void onEntityChangeBlock(org.bukkit.event.entity.EntityChangeBlockEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.FallingBlock falling)) {
+            return;
+        }
+        if (!falling.getScoreboardTags().contains(
+                com.mceteams.xii.service.PackageService.FALLING_TAG)) {
+            return;
+        }
+        plugin.getPackageService().handlePackageLanded(falling, event);
+    }
+
+    // -----------------------------------------------------------------
     // Explosions
     // -----------------------------------------------------------------
 

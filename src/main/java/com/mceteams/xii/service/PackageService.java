@@ -73,42 +73,144 @@ public class PackageService {
             return; // mécanique limitée à la préparation
         }
 
-        // Position résolue une fois le chunk chargé (thread principal).
-        LocationUtil.randomSurfaceInAsync(zone, this::placePackageAt);
+        // Surface SÈCHE garantie (jamais sur/dans l'eau), chargée async.
+        com.mceteams.xii.util.LocationUtil.randomDrySurfaceInAsync(zone,
+                this::launchParachuteDrop);
     }
 
-    /** Place réellement le coffre du colis à la position donnée. */
-    private void placePackageAt(Location spawnLocation) {
-        if (spawnLocation == null) {
+    // -----------------------------------------------------------------
+    // DROP EN PARACHUTE
+    // -----------------------------------------------------------------
+
+    /** Tag du bloc coffre en chute. */
+    public static final String FALLING_TAG = "xii_package_falling";
+    /** Tag du stand-parachute au-dessus du coffre. */
+    public static final String PARACHUTE_TAG = "xii_package_parachute";
+
+    /** Tâches de chute lente par entité FallingBlock. */
+    private final java.util.Map<UUID, org.bukkit.scheduler.BukkitRunnable> slowFallTasks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Lance un coffre en chute avec PARACHUTE depuis le ciel vers la
+     * surface sèche résolue :
+     * - FallingBlock CHEST taggué, descente freinée (~0.18/tick) ;
+     * - ArmorStand passager coiffé d'une BANNIÈRE blanche = parachute ;
+     * - à l'atterrissage (WorldListener -> handlePackageLanded) :
+     *   remplissage du loot + enregistrement + annonces.
+     */
+    private void launchParachuteDrop(Location ground) {
+        if (ground == null) {
             return;
         }
-        // Re-vérification d'état : le tick asynchrone peut arriver après
-        // un changement d'état (fin de préparation, arrêt de partie...).
         if (plugin.getGameManager().getState() != GameState.PREPARATION) {
             return;
         }
+        var world = ground.getWorld();
 
-        // Pose du coffre.
-        Block block = spawnLocation.getBlock();
-        block.setType(Material.CHEST);
+        Location start = ground.clone().add(0, 30, 0);
 
-        // Remplissage avec la table de loot.
+        org.bukkit.entity.FallingBlock falling = world.spawn(start,
+                org.bukkit.entity.FallingBlock.class, fb -> {
+                    fb.setBlockData(Material.CHEST.createBlockData());
+                    fb.setDropItem(false);
+                    fb.setHurtEntities(false);
+                    fb.addScoreboardTag(FALLING_TAG);
+                });
+
+        // Parachute : petit stand coiffé d'une bannière blanche.
+        world.spawn(start.clone().add(0, 1.4, 0),
+                org.bukkit.entity.ArmorStand.class, as -> {
+                    as.setVisible(true);
+                    as.setSmall(true);
+                    as.setGravity(false);
+                    as.setBasePlate(false);
+                    as.setArms(false);
+                    as.setInvulnerable(true);
+                    as.getEquipment().setHelmet(
+                            new ItemStack(Material.WHITE_BANNER));
+                    as.addScoreboardTag(PARACHUTE_TAG);
+                });
+
+        // Descente freinée : on maintient une vitesse de chute douce.
+        UUID fallingId = falling.getUniqueId();
+        org.bukkit.scheduler.BukkitRunnable slow = new org.bukkit.scheduler.BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!falling.isValid()) {
+                    cancel();
+                    slowFallTasks.remove(fallingId);
+                    return;
+                }
+                var v = falling.getVelocity();
+                if (v.getY() < -0.18) {
+                    v.setY(-0.18);
+                    falling.setVelocity(v);
+                }
+            }
+        };
+        slow.runTaskTimer(plugin, 1L, 1L);
+        slowFallTasks.put(fallingId, slow);
+
+        MessageUtil.broadcast("§e✦ §fUn colis descend du ciel §7! "
+                + "§b(" + start.getBlockX() + " " + ground.getBlockY()
+                + " " + start.getBlockZ() + ")");
+    }
+
+    /**
+     * ATTERRISSAGE (appelé par WorldListener sur EntityChangeBlockEvent) :
+     * arrêt de la descente freinée, retrait du parachute, puis
+     * finalisation du colis (loot + enregistrement + annonces).
+     */
+    public void handlePackageLanded(org.bukkit.entity.FallingBlock falling,
+                                    org.bukkit.event.entity.EntityChangeBlockEvent event) {
+        org.bukkit.scheduler.BukkitRunnable slow =
+                slowFallTasks.remove(falling.getUniqueId());
+        if (slow != null) {
+            try { slow.cancel(); } catch (IllegalStateException ignored) {}
+        }
+
+        Block landedBlock = event.getBlock();
+
+        // Retire le parachute juste après l'impact.
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (var entity : landedBlock.getWorld().getNearbyEntities(
+                    landedBlock.getLocation().add(0.5, 1, 0.5), 2, 2, 2)) {
+                if (entity.getScoreboardTags().contains(PARACHUTE_TAG)) {
+                    entity.remove();
+                }
+            }
+        }, 2L);
+
+        // Hors préparation : retire simplement le coffre posé.
+        if (plugin.getGameManager().getState() != GameState.PREPARATION) {
+            Bukkit.getScheduler().runTask(plugin,
+                    () -> landedBlock.setType(Material.AIR));
+            return;
+        }
+
+        // Finalisation au tick suivant (bloc réellement posé).
+        Bukkit.getScheduler().runTask(plugin, () -> finalizePackageAt(landedBlock));
+    }
+
+    /**
+     * Finalise un coffre de colis DÉJÀ POSÉ dans le monde :
+     * remplissage loot + enregistrement + annonces chat/titre/son.
+     */
+    private void finalizePackageAt(Block block) {
         boolean containsRareItem = fillChest(block);
 
-        // Enregistrement du model.
         Package pack = new Package(UUID.randomUUID(), block.getLocation(),
                 containsRareItem);
         plugin.getPackageManager().register(pack);
 
-        // Annonce CHAT + TITRE pour tous les joueurs (coordonnées partout,
-        // en BLEU CIEL).
         String coords = "§b(" + block.getX() + " " + block.getY()
                 + " " + block.getZ() + ")";
-        MessageUtil.broadcast("§e✦ §fUn colis est apparu §7! " + coords);
+        MessageUtil.broadcast("§e✦ §fLe colis a atterri §7! " + coords);
         for (Player online : Bukkit.getOnlinePlayers()) {
             MessageUtil.sendTitle(online,
                     "§e§lCOLIS",
-                    "§7Un colis est apparu " + coords,
+                    "§7Un colis a atterri " + coords,
                     10, 50, 10);
             com.mceteams.xii.util.SoundUtil.play(online,
                     Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.8f);

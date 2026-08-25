@@ -88,19 +88,22 @@ public final class LocationUtil {
     }
 
     /**
-     * Version ASYNCHRONE de {@link #randomSurfaceIn} :
-     * 1. tire des coordonnées X/Z aléatoires dans la zone ;
-     * 2. charge le chunk via getChunkAtAsync (hors thread serveur) ;
-     * 3. appelle {@code callback} avec la position finale UNE FOIS le
-     *    chunk chargé (le futur Paper est complété sur le thread principal).
-     *
-     * Si aucune position n'est résoluble (monde absent), le callback est
-     * appelé avec null.
+     * Version ASYNCHRONE garantissant une surface SÈCHE (jamais sur ou
+     * dans de l'eau) : jusqu'à {@code maxAttempts} essais de coordonnées,
+     * chaque essai chargeant le chunk via getChunkAtAsync puis vérifiant
+     * que le bloc de surface n'est pas liquide/végétation aquatique.
+     * Callback appelé avec null si aucun point sec trouvé.
      */
-    public static void randomSurfaceInAsync(GameZone zone,
-                                            java.util.function.Consumer<Location> callback) {
+    public static void randomDrySurfaceInAsync(GameZone zone,
+                                               java.util.function.Consumer<Location> callback) {
+        tryPickDrySurface(zone, 20, callback);
+    }
+
+    /** Essai unique avec réessais restants (récursion async). */
+    private static void tryPickDrySurface(GameZone zone, int attemptsLeft,
+                                          java.util.function.Consumer<Location> callback) {
         World world = zone.getWorld();
-        if (world == null) {
+        if (world == null || attemptsLeft <= 0) {
             callback.accept(null);
             return;
         }
@@ -113,10 +116,20 @@ public final class LocationUtil {
         int x = minX + RANDOM.nextInt(Math.max(1, maxX - minX));
         int z = minZ + RANDOM.nextInt(Math.max(1, maxZ - minZ));
 
-        // Chargement/génération asynchrone du chunk concerné.
         world.getChunkAtAsync(x >> 4, z >> 4).thenAccept(chunk -> {
-            // Complété sur le thread principal par Paper : lectures sûres.
             int y = world.getHighestBlockYAt(x, z);
+            org.bukkit.block.Block top = world.getBlockAt(x, y, z);
+
+            // Surface humide ? (eau, kelp, glace...) => nouvel essai.
+            if (top.isLiquid()
+                    || top.getType() == org.bukkit.Material.KELP
+                    || top.getType() == org.bukkit.Material.KELP_PLANT
+                    || top.getType() == org.bukkit.Material.SEAGRASS
+                    || top.getType() == org.bukkit.Material.TALL_SEAGRASS
+                    || top.getType() == org.bukkit.Material.ICE) {
+                tryPickDrySurface(zone, attemptsLeft - 1, callback);
+                return;
+            }
             callback.accept(new Location(world, x + 0.5, y + 1, z + 0.5));
         });
     }

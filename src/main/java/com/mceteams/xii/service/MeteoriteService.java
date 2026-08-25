@@ -55,7 +55,7 @@ public class MeteoriteService {
         }
 
         // La boule de feu est lancée une fois la position résolue.
-        LocationUtil.randomSurfaceInAsync(zone, target -> {
+        LocationUtil.randomDrySurfaceInAsync(zone, target -> {
             if (target == null
                     || plugin.getGameManager().getState()
                     != com.mceteams.xii.enums.GameState.COMBAT) {
