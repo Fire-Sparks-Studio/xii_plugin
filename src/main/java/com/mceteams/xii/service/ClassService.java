@@ -162,11 +162,12 @@ public class ClassService {
         return slot >= MINER_LOCKED_ROW_START && slot <= MINER_LOCKED_ROW_END;
     }
 
-    /**
+/**
      * Passe de nettoyage chaque seconde (PhaseTask) :
      * - Mineur     : barrières présentes, AUCUN objet étranger dans la
-     *                ligne => couvre le cas du /clear qui viderait tout ;
-     * - non-Mineur : barrières éventuelles retirées.
+     *                ligne => les objets étrangers sont DROP au sol au lieu
+     *                d'être supprimés (couvre le cas du /clear).
+     * - non-Mineur : barrières retirées.
      */
     public void sweepMinerLockedRow() {
         for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
@@ -180,12 +181,18 @@ public class ClassService {
                 boolean isBarrier = com.mceteams.xii.util.ItemUtil
                         .isType(item, MINER_BARRIER_TYPE);
 
-                if (isMiner && !isBarrier) {
-                    // Objet étranger OU barrière manquante (/clear) :
-                    // restauration de la barrière.
-                    inventory.setItem(slot, buildBarrier());
-                    changed = true;
-                } else if (!isMiner && isBarrier) {
+                if (isMiner) {
+                    if (!isBarrier) {
+                        // Objet étranger OU barrière manquante (/clear) :
+                        // on drop l'éventuel objet au sol et on restaure la barrière.
+                        if (item != null && !item.getType().isAir()) {
+                            inventory.setItem(slot, null);
+                            player.getWorld().dropItemNaturally(player.getLocation(), item);
+                        }
+                        inventory.setItem(slot, buildBarrier());
+                        changed = true;
+                    }
+                } else if (isBarrier) {
                     inventory.setItem(slot, null);
                     changed = true;
                 }
