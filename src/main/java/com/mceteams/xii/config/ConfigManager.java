@@ -151,6 +151,42 @@ public class ConfigManager {
         return config.getInt("zone.waiting-lobby-height", 40);
     }
 
+    /** Décalage de l'ancre du lobby par rapport au centre de la zone. */
+    public int getLobbyAnchorX() {
+        return config.getInt("zone.waiting-lobby-anchor-x", 0);
+    }
+
+    public int getLobbyAnchorY() {
+        return config.getInt("zone.waiting-lobby-anchor-y", 0);
+    }
+
+    public int getLobbyAnchorZ() {
+        return config.getInt("zone.waiting-lobby-anchor-z", 0);
+    }
+
+    /** Auto-centrage du lobby : l'ancre est décalée pour que le centre
+     * géométrique des blocs du .nbt tombe sur le centre de la zone. */
+    public boolean isLobbyAutoCenter() {
+        return config.getBoolean("zone.waiting-lobby-auto-center", true);
+    }
+
+    /**
+     * Apparition des joueurs DANS le lobby, relatif à l'ORIGINE du .nbt
+     * (= position du bloc structure lors de la sauvegarde). Convention :
+     * le bloc structure est posé sur le point de spawn voulu => (0,0,0).
+     */
+    public int getLobbySpawnOffsetX() {
+        return config.getInt("zone.waiting-lobby-spawn-x", 0);
+    }
+
+    public int getLobbySpawnOffsetY() {
+        return config.getInt("zone.waiting-lobby-spawn-y", 7);
+    }
+
+    public int getLobbySpawnOffsetZ() {
+        return config.getInt("zone.waiting-lobby-spawn-z", 0);
+    }
+
     // -----------------------------------------------------------------
     // Bases (spec §7)
     // -----------------------------------------------------------------

@@ -87,6 +87,20 @@ public class GameManager {
         plugin.getBaseManager().buildBases(zone);
         plugin.getDungeonManager().buildDungeons(zone);
 
+        // Spawn du MONDE calé sur le point d'apparition du lobby :
+        // toute connexion (ou mort sans lit) arrive dans la zone d'attente
+        // et non au spawn vanilla de la map.
+        Location worldSpawn = getLobbySpawn();
+        if (worldSpawn != null && worldSpawn.getWorld() != null) {
+            worldSpawn.getWorld().setSpawnLocation(
+                    worldSpawn.getBlockX(),
+                    worldSpawn.getBlockY(),
+                    worldSpawn.getBlockZ());
+            plugin.getLogger().info("[Zone] Spawn du monde défini sur le lobby "
+                    + "(" + worldSpawn.getBlockX() + ", " + worldSpawn.getBlockY()
+                    + ", " + worldSpawn.getBlockZ() + ").");
+        }
+
         // 9/11 : passage en WAITING + restrictions + téléportations.
         enterWaiting(false);
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
@@ -110,6 +124,8 @@ public class GameManager {
         plugin.getLobbyItemManager().clearAllOnline();
         plugin.getBaseManager().clearAll();
         plugin.getDungeonManager().clearAll();
+        // Retire les blocs des structures posées (lobby, bases, donjons).
+        plugin.getStructureManager().removeAllPlacedBlocks();
         plugin.getStructureManager().clearHistory();
         plugin.getTeamManager().resetTransientState();
         plugin.getRespawnManager().clearAll();
@@ -163,35 +179,15 @@ public class GameManager {
     }
 
     /**
-     * Géométrie de la structure waiting_lobby.nbt (fournie par le dev) :
-     * taille 30 x 24 x 38 ; point d'apparition des joueurs mesuré depuis
-     * le coin d'ORIGINE de la structure (gauche / arrière / bas) :
-     * +19 X, +16 Y, +7 Z.
-     */
-    private static final double LOBBY_SPAWN_OFFSET_X = 19.5;
-    private static final double LOBBY_SPAWN_OFFSET_Y = 16.0;
-    private static final double LOBBY_SPAWN_OFFSET_Z = 7.5;
-
-    /**
-     * Point d'apparition dans la zone d'attente : ancre de la structure
-     * (centre de zone + hauteur configurée) + décalage du centre réel
-     * de la structure (cf. constantes ci-dessus).
+     * Point d'apparition dans la zone d'attente : délègue à
+     * StructureManager.lobbySpawn (ancre auto-centrée + plancher auto).
      */
     public Location getLobbySpawn() {
         var zone = plugin.getZoneManager().getZone();
         if (zone == null || zone.getWorld() == null) {
             return null;
         }
-        // Même arrondi que StructureManager.placeWaitingLobby (getBlockX).
-        double anchorX = Math.floor(zone.getCenterX());
-        double anchorY = Math.floor(zone.getCenterY())
-                + plugin.getConfigManager().getWaitingLobbyHeight();
-        double anchorZ = Math.floor(zone.getCenterZ());
-        return new Location(
-                zone.getWorld(),
-                anchorX + LOBBY_SPAWN_OFFSET_X,
-                anchorY + LOBBY_SPAWN_OFFSET_Y,
-                anchorZ + LOBBY_SPAWN_OFFSET_Z);
+        return plugin.getStructureManager().lobbySpawn(zone);
     }
 
     // -----------------------------------------------------------------
@@ -229,16 +225,17 @@ public class GameManager {
                 + plugin.getConfigManager().getCountdownSeconds() + " secondes§e§l !");
 
         int seconds = plugin.getConfigManager().getCountdownSeconds();
-        // Countdown de lancement : TITLES + pling grave chaque seconde,
-        // puis GROWL DE DRAGON quand la partie DÉMARRE réellement
-        // (téléportation aux bases dès la fin du countdown).
+        // Countdown de lancement : TITLES + pling grave chaque seconde.
+        // PAS de son de fin ici : le GROWL DE DRAGON est joué dans
+        // beginPreparation APRÈS la téléportation aux bases (sinon il
+        // résonne encore dans le lobby).
         activeCountdownTask = new CountdownTask(
                 plugin, seconds,
                 this::beginPreparation,
                 false,                          // mode titles
                 null,                           // (pas d'action bar)
                 org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f,   // pling grave
-                org.bukkit.Sound.ENTITY_ENDER_DRAGON_GROWL, 1.0f // départ !
+                null, 0f                        // pas de son de fin ici
         );
         activeCountdownTask.runTaskTimer(plugin, 0L, 20L);
         return null;
@@ -313,6 +310,14 @@ public class GameManager {
             player.teleport(spawnPoint);
             plugin.getClassService().applyPassives(player, data);
         }
+
+        // Tout le monde est en jeu : le GROWL DE DRAGON retentit ICI
+        // (après téléportation, donc depuis les bases et pas le lobby).
+        com.mceteams.xii.util.SoundUtil.broadcast(
+                org.bukkit.Sound.ENTITY_ENDER_DRAGON_GROWL, 1f, 1f);
+
+        // Le lobby d'attente disparaît (il sera reposé au retour).
+        plugin.getStructureManager().removeLobbyBlocks();
 
         // 7 : passage officiel en PREPARATION (phase + sous-phase START).
         state = GameState.PREPARATION;
@@ -572,8 +577,11 @@ public class GameManager {
         plugin.getSpectatorService().exitAll();
         resetAllPlayerData();
 
-        enterWaiting(false);
-        MessageUtil.broadcast("§c✖ Partie arrêtée. §7Retour à l'attente.");
+        // Différé de quelques ticks : la restauration du lobby est
+        // ASYNCHRONE (chargement chunks) => on TP une fois les blocs posés.
+        MessageUtil.broadcast("§c✖ Partie arrêtée. §7Retour à l'attente...");
+        Bukkit.getScheduler().runTaskLater(plugin,
+                () -> enterWaiting(false), 15L);
     }
 
     /**
@@ -601,7 +609,10 @@ public class GameManager {
         plugin.getPhaseManager().reset();
         plugin.getSpectatorService().exitAll();
         resetAllPlayerData();
-        enterWaiting(false);
+        // Différé : laisse la restauration ASYNC du lobby se terminer
+        // avant de téléporter les joueurs (sinon chute dans le vide).
+        Bukkit.getScheduler().runTaskLater(plugin,
+                () -> enterWaiting(false), 15L);
     }
 
     /**

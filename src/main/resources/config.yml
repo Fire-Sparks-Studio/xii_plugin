@@ -41,6 +41,24 @@ zone:
   size: 2000
   # Hauteur d'apparition de la zone d'attente au-dessus du centre.
   waiting-lobby-height: 40
+  # AUTO-CENTRAGE : le plugin décale automatiquement l'ancre pour que le
+  # CENTRE du bâtiment (calculé depuis les blocs du .nbt) tombe sur le
+  # centre de la zone, et pose les joueurs sur le plancher. Mettre false
+  # pour revenir au placement brut par l'origine + offsets ci-dessous.
+  waiting-lobby-auto-center: true
+  # Décalage de L'ANCRE du lobby (coin origine du .nbt) par rapport au
+  # centre de la zone. Exemple pour centrer un lobby de 30x38 :
+  # anchor-x: -15, anchor-z: -19.
+  waiting-lobby-anchor-x: 0
+  waiting-lobby-anchor-y: 0
+  waiting-lobby-anchor-z: 0
+  # Point d'apparition des joueurs, relatif à l'ORIGINE du .nbt
+  # (= position du bloc structure au moment de la sauvegarde).
+  # Ces offsets s'AJOUTENT au calage automatique (centrage + plancher) :
+  # spawn-y: 7 => 7 blocs AU-DESSUS du plancher détecté.
+  waiting-lobby-spawn-x: 0
+  waiting-lobby-spawn-y: 7
+  waiting-lobby-spawn-z: 0
 
 # -----------------------------------------------------------------
 # Bases des équipes
