@@ -124,6 +124,7 @@ public class XiiPlugin extends JavaPlugin {
         this.fileManager = new FileManager(this);
         this.fileManager.setup();
         ItemUtil.init(this);
+        com.mceteams.xii.util.LocationUtil.init(this);
 
         // 2) Configuration statique + données persistantes.
         this.configManager = new ConfigManager(this);

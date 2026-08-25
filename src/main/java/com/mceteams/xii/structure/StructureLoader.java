@@ -17,9 +17,9 @@ import java.nio.file.StandardCopyOption;
  *
  * Méthode compatible Paper 26.2 :
  * 1. le fichier est extrait du jar vers un dossier de cache local ;
- * 2. il est copié dans "<monde principal>/generated/structures/
- *    <namespace>/<nom>.nbt" (emplacement standard des templates
- *    vanilla, utilisé par les blocs structure en jeu) ;
+ * 2. il est copié dans "<monde principal>/generated/<namespace>/<nom>.nbt"
+ *    (emplacement EXACT des templates vanilla : c'est là que les blocs
+ *    structure sauvegardent en jeu - SANS sous-dossier "structures") ;
  * 3. il est chargé via l'API officielle :
  *    Bukkit.getStructureManager().loadStructure(NamespacedKey).
  *
@@ -51,9 +51,11 @@ public class StructureLoader {
      *         ne doit jamais faire planter le serveur).
      */
     public Structure load(String resourcePath, String structureName) {
-        // 1) Extraction depuis le jar vers le cache si nécessaire.
+        // 1) Extraction depuis le jar vers le cache - TOUJOURS écrasée :
+        // sans ça, une vieille version en cache masquerait définitivement
+        // toute mise à jour du .nbt dans les ressources.
         File cached = new File(cacheDir, structureName + ".nbt");
-        if (!cached.exists() && !extractFromJar(resourcePath, cached)) {
+        if (!extractFromJar(resourcePath, cached)) {
             plugin.getLogger().warning("[Structures] Ressource introuvable : "
                     + resourcePath
                     + ". Placez le fichier .nbt dans src/main/resources/"
@@ -71,13 +73,36 @@ public class StructureLoader {
             NamespacedKey key = new NamespacedKey(NAMESPACE, structureName.toLowerCase());
             Structure structure = Bukkit.getStructureManager().loadStructure(key);
             if (structure == null) {
-                plugin.getLogger().warning("[Structures] Impossible de charger '"
-                        + structureName + "' (fichier .nbt invalide ?).");
+                // DIAGNOSTIC : où le fichier a-t-il réellement été écrit,
+                // et existe-t-il toujours ? (le template manager vanilla
+                // MET EN CACHE les échecs de lecture jusqu'au redémarrage :
+                // un essai raté => tous les suivants ratent sans reboot)
+                World mainWorld = Bukkit.getWorlds().isEmpty()
+                        ? null : Bukkit.getWorlds().get(0);
+                Path expected = mainWorld == null ? null
+                        : mainWorld.getWorldFolder().toPath()
+                                .resolve("generated")
+                                .resolve(NAMESPACE)
+                                .resolve(structureName.toLowerCase() + ".nbt");
+                plugin.getLogger().severe("[Structures] loadStructure('" + key
+                        + "') a renvoyé null.");
+                plugin.getLogger().severe("[Structures] Chemin attendu : "
+                        + (expected == null ? "?" : expected.toAbsolutePath()));
+                plugin.getLogger().severe("[Structures] Fichier présent : "
+                        + (expected != null && java.nio.file.Files.exists(expected)));
+                plugin.getLogger().severe("[Structures] Si le fichier est "
+                        + "présent mais non chargé : un essai antérieur de la "
+                        + "MÊME session a mis l'échec en cache => REDÉMARREZ "
+                        + "le serveur puis refaites /zone set.");
+            } else {
+                plugin.getLogger().info("[Structures] '" + structureName
+                        + "' chargée depuis " + resourcePath);
             }
             return structure;
         } catch (Exception exception) {
             plugin.getLogger().severe("[Structures] Erreur lors du chargement de '"
                     + structureName + "' : " + exception.getMessage());
+            exception.printStackTrace();
             return null;
         }
     }
@@ -106,8 +131,10 @@ public class StructureLoader {
     }
 
     /**
-     * Installe le fichier dans le dossier "generated" du monde principal
-     * pour que le StructureManager puisse le lire par NamespacedKey.
+     * Installe le fichier dans le dossier "generated" du monde principal,
+     * au format EXACT attendu par le StructureTemplateManager vanilla :
+     * {@code <monde>/generated/<namespace>/<nom>.nbt} (identique à la
+     * sauvegarde d'un bloc structure en jeu).
      */
     private boolean installToWorld(File source, String structureName) {
         World mainWorld = Bukkit.getWorlds().isEmpty() ? null : Bukkit.getWorlds().get(0);
@@ -117,15 +144,16 @@ public class StructureLoader {
         }
         Path targetDir = mainWorld.getWorldFolder().toPath()
                 .resolve("generated")
-                .resolve("structures")
                 .resolve(NAMESPACE);
         try {
             Files.createDirectories(targetDir);
             // Toujours écraser : le développeur peut mettre à jour ses .nbt,
             // le cache doit suivre.
-            Files.copy(source.toPath(),
-                    targetDir.resolve(structureName.toLowerCase() + ".nbt"),
+            Path target = targetDir.resolve(structureName.toLowerCase() + ".nbt");
+            Files.copy(source.toPath(), target,
                     StandardCopyOption.REPLACE_EXISTING);
+            plugin.getLogger().info("[Structures] Installée : "
+                    + target.toAbsolutePath());
             return true;
         } catch (Exception exception) {
             plugin.getLogger().severe("[Structures] Installation impossible ("

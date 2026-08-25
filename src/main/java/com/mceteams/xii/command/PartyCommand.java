@@ -16,6 +16,11 @@ import java.util.List;
  *   /party start      => lance le compte à rebours (spec §13)
  *   /party stop       => annule le countdown ou arrête la partie (§35)
  *   /party set <jour> => saut direct à un jour 1..12 (12 sous-phases)
+ *
+ * Sous-commandes de DEBUG (tests) :
+ *   /party package    => colis aléatoire immédiat
+ *   /party item <k>   => donne un upgrade
+ *   /party debug      => colis en parachute SUR l'émetteur
  */
 public class PartyCommand implements TabExecutor {
 
@@ -43,8 +48,9 @@ public class PartyCommand implements TabExecutor {
             case "set" -> handleSetDay(sender, args);
             case "package" -> handlePackage(sender);
             case "item" -> handleItem(sender, args);
+            case "debug" -> handleDebug(sender);
             default -> MessageUtil.send(sender,
-                    "§cSous-commandes : start, stop, set, package, item");
+                    "§cSous-commandes : start, stop, set, package, item, debug");
         }
         return true;
     }
@@ -163,12 +169,36 @@ public class PartyCommand implements TabExecutor {
                 + type.getDisplayName());
     }
 
+    /**
+     * /party debug : fait TOMBER un colis en parachute DIRECTEMENT
+     * au-dessus de l'émetteur (aucune recherche aléatoire, aucun délai).
+     * Réservé aux joueurs ; utile pour tester l'animation sur place.
+     */
+    private void handleDebug(CommandSender sender) {
+        if (!(sender instanceof org.bukkit.entity.Player player)) {
+            MessageUtil.send(sender, "§cCommande réservée aux joueurs.");
+            return;
+        }
+        if (plugin.getGameManager().getState()
+                != com.mceteams.xii.enums.GameState.PREPARATION) {
+            MessageUtil.send(sender,
+                    "§cLes colis n'apparaissent que pendant la préparation.");
+            return;
+        }
+        // Point d'impact : la position du joueur (le largage part 30 blocs
+        // plus haut, cf. PackageService.launchParachuteDrop).
+        plugin.getPackageService().spawnDebugAbove(player.getLocation());
+        MessageUtil.send(sender,
+                "§e✦ [DEBUG] Colis en chute vers votre position...");
+    }
+
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command,
                                       String alias, String[] args) {
         List<String> suggestions = new ArrayList<>();
         if (args.length == 1) {
-            suggestions.addAll(List.of("start", "stop", "set", "package", "item"));
+            suggestions.addAll(List.of("start", "stop", "set", "package",
+                    "item", "debug"));
         } else if (args[0].equalsIgnoreCase("item")) {
             if (args.length == 2) {
                 for (var upgrade : com.mceteams.xii.enums.PlayerUpgrade.values()) {

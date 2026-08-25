@@ -99,14 +99,16 @@ public class ProtectionListener implements Listener {
     /**
      * Blocage du PvP dans les états protégés. Pendant PREPARATION/COMBAT,
      * la décision fine appartient à CombatService via CombatListener.
+     * Résolution AUSSI via projectile (flèches...) cf. DamageUtil.
      */
     @EventHandler(priority = EventPriority.LOW)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
         if (!systemEnabled()) {
             return;
         }
-        if (!(event.getDamager() instanceof Player attacker)
-                || !(event.getEntity() instanceof Player victim)) {
+        Player attacker = com.mceteams.xii.util.DamageUtil
+                .resolveAttacker(event.getDamager());
+        if (!(event.getEntity() instanceof Player victim) || attacker == null) {
             return; // seulement joueur -> joueur ici
         }
         if (plugin.getGameManager().getState() == com.mceteams.xii.enums.GameState.PREPARATION

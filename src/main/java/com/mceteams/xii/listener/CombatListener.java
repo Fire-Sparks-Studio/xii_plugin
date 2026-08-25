@@ -32,21 +32,25 @@ public class CombatListener implements Listener {
      * Coup joueur -> joueur : calcul des dégâts via CombatService.
      * Priorité HIGH : après ProtectionListener/TeamListener qui ont déjà
      * annulé les coups illégaux.
+     *
+     * FIX : l'attaquant est résolu AUSSI via projectile (flèche, trident...)
+     * sinon tout le pipeline était contourné à l'arc (dégâts dans les
+     * bases en préparation notamment).
      */
     @EventHandler(priority = EventPriority.HIGH)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
         if (!systemEnabled()) {
             return;
         }
-        // Un spectateur ne peut PAS frapper (invisible mais parfois
-        // en survie : on bloque à la source).
-        if (event.getDamager() instanceof Player damagerPlayer
-                && plugin.getProtectionService().isSpectator(damagerPlayer)) {
-            event.setCancelled(true);
+        Player attacker = com.mceteams.xii.util.DamageUtil
+                .resolveAttacker(event.getDamager());
+        if (!(event.getEntity() instanceof Player victim) || attacker == null) {
             return;
         }
-        if (!(event.getDamager() instanceof Player attacker)
-                || !(event.getEntity() instanceof Player victim)) {
+        // Un spectateur ne peut PAS frapper (invisible mais parfois
+        // en survie : on bloque à la source).
+        if (plugin.getProtectionService().isSpectator(attacker)) {
+            event.setCancelled(true);
             return;
         }
         if (event.isCancelled()) {

@@ -56,7 +56,7 @@ public class WorldListener implements Listener {
     /**
      * Un FallingBlock taggué "xii_package_falling" vient de toucher le
      * sol : on laisse vanilla poser le bloc CHEST puis on délègue au
-     * PackageService (loot + enregistrement + annonces + parachute).
+     * PackageService (loot + enregistrement silencieux + parachute).
      */
     @EventHandler
     public void onEntityChangeBlock(org.bukkit.event.entity.EntityChangeBlockEvent event) {

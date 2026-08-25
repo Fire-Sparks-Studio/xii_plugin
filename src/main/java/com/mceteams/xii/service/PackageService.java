@@ -41,9 +41,13 @@ import java.util.concurrent.ThreadLocalRandom;
  * À la fin : points PACKAGE (+ RARE_ITEM éventuel) et accès au coffre.
  *
  * Annonces :
- * - spawn          : chat + titre avec coordonnées ;
+ * - largage        : chat avec les coordonnées cibles ;
  * - récupération   : chat SANS nom ("Un colis a été récupéré !") ;
  * - objet rare     : chat AVEC le nom du joueur (idem légendaire plus tard).
+ *
+ * VOLONTAIREMENT SILENCIEUX à l'atterrissage : le colis tombe sous les
+ * yeux des joueurs et les coordonnées sont données au largage ; aucun
+ * message/titre/son ne confirme la pose du coffre.
  */
 public class PackageService {
 
@@ -82,6 +86,18 @@ public class PackageService {
     // DROP EN PARACHUTE
     // -----------------------------------------------------------------
 
+    /**
+     * DEBUG : lance un colis en parachute au-dessus d'une position DONNÉE
+     * (généralement celle d'un administrateur) sans aucune recherche de
+     * surface sèche. Permet de tester visuellement la descente immédiatement.
+     */
+    public void spawnDebugAbove(Location groundSpot) {
+        if (plugin.getGameManager().getState() != GameState.PREPARATION) {
+            return;
+        }
+        launchParachuteDrop(groundSpot);
+    }
+
     /** Tag du bloc coffre en chute. */
     public static final String FALLING_TAG = "xii_package_falling";
     /** Tag du stand-parachute au-dessus du coffre. */
@@ -95,15 +111,41 @@ public class PackageService {
      * Lance un coffre en chute avec PARACHUTE depuis le ciel vers la
      * surface sèche résolue :
      * - FallingBlock CHEST taggué, descente freinée (~0.18/tick) ;
-     * - ArmorStand passager coiffé d'une BANNIÈRE blanche = parachute ;
+     * - ArmorStand INVISIBLE coiffé d'une BANNIÈRE blanche = parachute
+     *   (un stand invisible rend toujours son équipement) ;
      * - à l'atterrissage (WorldListener -> handlePackageLanded) :
-     *   remplissage du loot + enregistrement + annonces.
+     *   remplissage du loot + enregistrement, sans annonce.
+     *
+     * Le chunk cible est chargé ASYNC avant le spawn : sans ça, un colis
+     * lâché loin des joueurs tombait dans un chunk non chargé (chute
+     * invisible, coffre disparu).
      */
     private void launchParachuteDrop(Location ground) {
         if (ground == null) {
             return;
         }
         if (plugin.getGameManager().getState() != GameState.PREPARATION) {
+            return;
+        }
+        var world = ground.getWorld();
+
+        world.getChunkAtAsync(
+                ground.getBlockX() >> 4, ground.getBlockZ() >> 4)
+                .thenAccept(chunk -> {
+                    // Spawn d'entités : TOUJOURS sur le thread principal.
+                    if (org.bukkit.Bukkit.isPrimaryThread()) {
+                        dropWithParachute(ground);
+                    } else {
+                        Bukkit.getScheduler().runTask(plugin,
+                                () -> dropWithParachute(ground));
+                    }
+                });
+    }
+
+    /** Spawn effectif (thread principal, chunk cible chargé). */
+    private void dropWithParachute(Location ground) {
+        if (ground == null
+                || plugin.getGameManager().getState() != GameState.PREPARATION) {
             return;
         }
         var world = ground.getWorld();
@@ -118,21 +160,26 @@ public class PackageService {
                     fb.addScoreboardTag(FALLING_TAG);
                 });
 
-        // Parachute : petit stand coiffé d'une bannière blanche.
-        world.spawn(start.clone().add(0, 1.4, 0),
+        // Parachute : stand INVISIBLE coiffé d'une bannière blanche.
+        // Un armor stand invisible continue de rendre son équipement :
+        // seule la bannière flotte au-dessus du coffre.
+        org.bukkit.entity.ArmorStand parachute = world.spawn(
+                start.clone().add(0, 1.4, 0),
                 org.bukkit.entity.ArmorStand.class, as -> {
-                    as.setVisible(true);
+                    as.setVisible(false);
                     as.setSmall(true);
                     as.setGravity(false);
                     as.setBasePlate(false);
                     as.setArms(false);
                     as.setInvulnerable(true);
+                    as.setMarker(true);
                     as.getEquipment().setHelmet(
                             new ItemStack(Material.WHITE_BANNER));
                     as.addScoreboardTag(PARACHUTE_TAG);
                 });
 
-        // Descente freinée : on maintient une vitesse de chute douce.
+        // Descente freinée : on maintient une vitesse de chute douce
+        // et le parachute reste soudé au coffre pendant toute la descente.
         UUID fallingId = falling.getUniqueId();
         org.bukkit.scheduler.BukkitRunnable slow = new org.bukkit.scheduler.BukkitRunnable() {
             @Override
@@ -147,20 +194,30 @@ public class PackageService {
                     v.setY(-0.18);
                     falling.setVelocity(v);
                 }
+                parachute.teleport(falling.getLocation().add(0, 1.3, 0));
             }
         };
         slow.runTaskTimer(plugin, 1L, 1L);
         slowFallTasks.put(fallingId, slow);
 
-        MessageUtil.broadcast("§e✦ §fUn colis descend du ciel §7! "
-                + "§b(" + start.getBlockX() + " " + ground.getBlockY()
-                + " " + start.getBlockZ() + ")");
+        // Annonce de LARGAGE : chat + TITRE pour tous (avec coordonnées).
+        String coords = "§b(" + start.getBlockX() + " " + ground.getBlockY()
+                + " " + start.getBlockZ() + ")";
+        MessageUtil.broadcast("§e✦ §fUn colis descend du ciel §7! " + coords);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            MessageUtil.sendTitle(online,
+                    "§e§lCOLIS",
+                    "§7Un colis descend du ciel " + coords,
+                    10, 50, 10);
+            com.mceteams.xii.util.SoundUtil.play(online,
+                    Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.9f);
+        }
     }
 
     /**
      * ATTERRISSAGE (appelé par WorldListener sur EntityChangeBlockEvent) :
      * arrêt de la descente freinée, retrait du parachute, puis
-     * finalisation du colis (loot + enregistrement + annonces).
+     * finalisation SILENCIEUSE du colis (loot + enregistrement).
      */
     public void handlePackageLanded(org.bukkit.entity.FallingBlock falling,
                                     org.bukkit.event.entity.EntityChangeBlockEvent event) {
@@ -172,8 +229,12 @@ public class PackageService {
 
         Block landedBlock = event.getBlock();
 
-        // Retire le parachute juste après l'impact.
+        // Retire le parachute juste après l'impact : passager/stand
+        // suivi par la task + balayage de proximité autour du coffre.
+        java.util.List<org.bukkit.entity.Entity> riders =
+                new java.util.ArrayList<>(falling.getPassengers());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            riders.forEach(org.bukkit.entity.Entity::remove);
             for (var entity : landedBlock.getWorld().getNearbyEntities(
                     landedBlock.getLocation().add(0.5, 1, 0.5), 2, 2, 2)) {
                 if (entity.getScoreboardTags().contains(PARACHUTE_TAG)) {
@@ -195,7 +256,8 @@ public class PackageService {
 
     /**
      * Finalise un coffre de colis DÉJÀ POSÉ dans le monde :
-     * remplissage loot + enregistrement + annonces chat/titre/son.
+     * remplissage loot + enregistrement. AUCUNE annonce : l'atterrissage
+     * est volontairement silencieux (le largage a déjà été annoncé).
      */
     private void finalizePackageAt(Block block) {
         boolean containsRareItem = fillChest(block);
@@ -203,18 +265,6 @@ public class PackageService {
         Package pack = new Package(UUID.randomUUID(), block.getLocation(),
                 containsRareItem);
         plugin.getPackageManager().register(pack);
-
-        String coords = "§b(" + block.getX() + " " + block.getY()
-                + " " + block.getZ() + ")";
-        MessageUtil.broadcast("§e✦ §fLe colis a atterri §7! " + coords);
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            MessageUtil.sendTitle(online,
-                    "§e§lCOLIS",
-                    "§7Un colis a atterri " + coords,
-                    10, 50, 10);
-            com.mceteams.xii.util.SoundUtil.play(online,
-                    Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.8f);
-        }
     }
 
     /**

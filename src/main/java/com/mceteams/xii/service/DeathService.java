@@ -90,9 +90,6 @@ public class DeathService {
         SoundUtil.playDeath(victim);
 
         // Annonce à tous + vérification victoire anticipée (style Hypixel).
-        String killerInfo = killer != null
-                ? " §7par §c" + killer.getName()
-                : "";
 
         // KILL FINAL : UNIQUEMENT si le coeur de l'équipe de la victime
         // est détruit (chaque kill est alors définitif).
@@ -106,9 +103,16 @@ public class DeathService {
             plugin.getTeamManager().updateElimination(victimTeam);
         }
 
-        MessageUtil.broadcast("§c☠ §f" + victim.getName()
-                + " §7est mort" + killerInfo
-                + (finalKill ? " §b§lKILL FINAL" : "") + ".");
+        String finalSuffix = (finalKill ? " §b§lKILL FINAL" : "") + ".";
+        if (killer != null) {
+            MessageUtil.broadcast("§c☠ §f" + victim.getName()
+                    + " §7a été tué par §c" + killer.getName()
+                    + finalSuffix);
+        } else {
+            MessageUtil.broadcast("§c☠ §f" + victim.getName()
+                    + " §7est mort"
+                    + finalSuffix);
+        }
         plugin.getGameManager().checkVictoryConditions();
     }
 

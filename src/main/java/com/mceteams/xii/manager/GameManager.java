@@ -163,19 +163,35 @@ public class GameManager {
     }
 
     /**
-     * Point d'apparition dans la zone d'attente : centre de la zone +
-     * hauteur configurée (+2 pour poser les pieds sur la structure).
+     * Géométrie de la structure waiting_lobby.nbt (fournie par le dev) :
+     * taille 30 x 24 x 38 ; point d'apparition des joueurs mesuré depuis
+     * le coin d'ORIGINE de la structure (gauche / arrière / bas) :
+     * +19 X, +16 Y, +7 Z.
+     */
+    private static final double LOBBY_SPAWN_OFFSET_X = 19.5;
+    private static final double LOBBY_SPAWN_OFFSET_Y = 16.0;
+    private static final double LOBBY_SPAWN_OFFSET_Z = 7.5;
+
+    /**
+     * Point d'apparition dans la zone d'attente : ancre de la structure
+     * (centre de zone + hauteur configurée) + décalage du centre réel
+     * de la structure (cf. constantes ci-dessus).
      */
     public Location getLobbySpawn() {
         var zone = plugin.getZoneManager().getZone();
         if (zone == null || zone.getWorld() == null) {
             return null;
         }
+        // Même arrondi que StructureManager.placeWaitingLobby (getBlockX).
+        double anchorX = Math.floor(zone.getCenterX());
+        double anchorY = Math.floor(zone.getCenterY())
+                + plugin.getConfigManager().getWaitingLobbyHeight();
+        double anchorZ = Math.floor(zone.getCenterZ());
         return new Location(
                 zone.getWorld(),
-                zone.getCenterX(),
-                zone.getCenterY() + plugin.getConfigManager().getWaitingLobbyHeight() + 2,
-                zone.getCenterZ());
+                anchorX + LOBBY_SPAWN_OFFSET_X,
+                anchorY + LOBBY_SPAWN_OFFSET_Y,
+                anchorZ + LOBBY_SPAWN_OFFSET_Z);
     }
 
     // -----------------------------------------------------------------

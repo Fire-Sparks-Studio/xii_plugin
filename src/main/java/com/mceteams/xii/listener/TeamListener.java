@@ -32,8 +32,11 @@ public class TeamListener implements Listener {
         if (!systemEnabled()) {
             return;
         }
-        if (!(event.getDamager() instanceof Player attacker)
-                || !(event.getEntity() instanceof Player victim)) {
+        // Résolution AUSSI via projectile : une flèche tirée par un
+        // coéquipier/intrus doit être traitée comme son tireur.
+        Player attacker = com.mceteams.xii.util.DamageUtil
+                .resolveAttacker(event.getDamager());
+        if (!(event.getEntity() instanceof Player victim) || attacker == null) {
             return;
         }
         // Double vérification friendly fire : si ProtectionService
