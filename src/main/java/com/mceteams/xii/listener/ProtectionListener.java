@@ -40,10 +40,19 @@ public class ProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOW)
     public void onBlockBreak(BlockBreakEvent event) {
+        Player player = event.getPlayer();
+
+        // Protection des colis : on ne peut JAMAIS casser un coffre de colis.
+        if (plugin.getPackageManager().at(event.getBlock().getLocation()) != null) {
+            event.setCancelled(true);
+            com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                    "§c✘ Ce colis est protégé.");
+            return;
+        }
+
         if (!systemEnabled()) {
             return;
         }
-        Player player = event.getPlayer();
         if (plugin.getProtectionService().shouldBlockWorldInteraction(player)) {
             event.setCancelled(true);
             return;

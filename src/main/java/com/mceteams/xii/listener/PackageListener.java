@@ -1,6 +1,7 @@
 package com.mceteams.xii.listener;
 
 import com.mceteams.xii.XiiPlugin;
+import com.mceteams.xii.service.SpectatorService;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -36,6 +37,11 @@ public class PackageListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
+
+        // Un spectateur ne peut PAS interagir avec les colis.
+        if (plugin.getProtectionService().isSpectator(player)) {
+            return;
+        }
 
         // Ce bloc est-il un colis actif ?
         var pack = plugin.getPackageManager().at(event.getClickedBlock().getLocation());

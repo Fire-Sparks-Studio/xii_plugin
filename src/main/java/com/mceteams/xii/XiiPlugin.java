@@ -19,7 +19,6 @@ import com.mceteams.xii.listener.MiningListener;
 import com.mceteams.xii.listener.PackageListener;
 import com.mceteams.xii.listener.ProtectionListener;
 import com.mceteams.xii.listener.RarePickupListener;
-import com.mceteams.xii.listener.ResourcePackListener;
 import com.mceteams.xii.listener.TeamListener;
 import com.mceteams.xii.listener.WorldListener;
 import com.mceteams.xii.manager.BaseManager;
@@ -222,7 +221,6 @@ public class XiiPlugin extends JavaPlugin {
         pm.registerEvents(new CoreListener(this), this);
         pm.registerEvents(new PackageListener(this), this);
         pm.registerEvents(new RarePickupListener(this), this);
-        pm.registerEvents(new ResourcePackListener(this), this);
         pm.registerEvents(new WorldListener(this), this);
     }
 

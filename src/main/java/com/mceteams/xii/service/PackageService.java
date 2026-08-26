@@ -58,6 +58,11 @@ public class PackageService {
         this.plugin = plugin;
     }
 
+    /** Colis en cours d'ouverture (animation) : uniquement un joueur à la fois. */
+    private final java.util.Set<UUID> openingPackages =
+            java.util.Collections.newSetFromMap(
+                    new java.util.concurrent.ConcurrentHashMap<UUID, Boolean>());
+
     // -----------------------------------------------------------------
     // Apparition
     // -----------------------------------------------------------------
@@ -368,6 +373,13 @@ public class PackageService {
      * et le VRAI coffre s'ouvre.
      */
     public void startOpeningAnimation(Player player, Package pack) {
+        // Un seul joueur peut ouvrir un colis à la fois.
+        if (!openingPackages.add(pack.getId())) {
+            com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                    "§c✘ Ce colis est déjà en cours d'ouverture !");
+            return;
+        }
+
         Inventory gui = Bukkit.createInventory(
                 new OpeningHolder(pack.getId()), 27, "§eOuverture du colis...");
 
@@ -394,6 +406,7 @@ public class PackageService {
                         || !(player.getOpenInventory().getTopInventory()
                         .getHolder() instanceof OpeningHolder holder)
                         || !holder.packageId().equals(pack.getId())) {
+                    openingPackages.remove(pack.getId());
                     if (player.isOnline()) {
                         playInterruption(player);
                     }
@@ -422,6 +435,7 @@ public class PackageService {
      * du contenu du coffre vers l'inventaire du joueur.
      */
     private void finishOpening(Player player, Package pack, Inventory gui) {
+        openingPackages.remove(pack.getId());
         handleOpen(player, pack);
 
         // Petite pose finale puis bascule vers le transfert item par item.
@@ -652,9 +666,9 @@ public class PackageService {
      */
     private void playInterruption(Player player) {
         com.mceteams.xii.util.SoundUtil.play(player,
-                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 0.944f);
+                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.2f);
         com.mceteams.xii.util.SoundUtil.play(player,
-                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
+                Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.35f);
     }
 
     /**

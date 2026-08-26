@@ -3,11 +3,13 @@ package com.mceteams.xii.listener;
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.util.MessageUtil;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 
 /**
  * Événements de connexion/déconnexion (spec §9/§12/§30).
@@ -96,6 +98,36 @@ public class ConnectionListener implements Listener {
         } else {
             // Sans équipe ou éliminé : spectateur permanent.
             plugin.getSpectatorService().enterPermanent(player);
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Respawn (lobby / spectators)
+    // -----------------------------------------------------------------
+
+    @EventHandler
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        GameState state = plugin.getGameManager().getState();
+
+        // Lobby : forcer le spawn au centre du lobby.
+        if (state == GameState.WAITING || state == GameState.COUNTDOWN
+                || state == GameState.CLASS_SELECTION) {
+            Location lobbySpawn = plugin.getGameManager().getLobbySpawn();
+            if (lobbySpawn != null) {
+                event.setRespawnLocation(lobbySpawn);
+            }
+            return;
+        }
+
+        // Spectateur : forcer le respawn au lobby pour éviter
+        // la boucle de morts dans le vide.
+        var data = plugin.getPlayerManager().getData(player);
+        if (data.isSpectator()) {
+            Location lobbySpawn = plugin.getGameManager().getLobbySpawn();
+            if (lobbySpawn != null) {
+                event.setRespawnLocation(lobbySpawn);
+            }
         }
     }
 

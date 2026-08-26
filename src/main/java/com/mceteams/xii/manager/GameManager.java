@@ -133,6 +133,30 @@ public class GameManager {
         plugin.getPhaseManager().reset();
         resetAllPlayerData();
 
+        // Reset tab : noms des joueurs + header/footer nettoyés.
+        plugin.getTabManager().resetAll();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.playerListName(null);
+            player.sendPlayerListHeaderAndFooter(
+                    net.kyori.adventure.text.Component.empty(),
+                    net.kyori.adventure.text.Component.empty());
+        }
+
+        // Remet les game rules vanilla à leur état normal.
+        var world = plugin.getZoneManager().getZone() != null
+                ? plugin.getZoneManager().getZone().getWorld() : null;
+        if (world == null) {
+            world = Bukkit.getWorlds().getFirst();
+        }
+        if (world != null) {
+            world.setGameRule(org.bukkit.GameRules.IMMEDIATE_RESPAWN, false);
+            world.setGameRule(org.bukkit.GameRules.KEEP_INVENTORY, false);
+            world.setGameRule(org.bukkit.GameRules.ADVANCE_TIME, true);
+            world.setGameRule(org.bukkit.GameRules.ADVANCE_WEATHER, true);
+            world.setGameRule(org.bukkit.GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, 2);
+            world.setGameRule(org.bukkit.GameRules.SPAWN_MOBS, true);
+        }
+
         state = GameState.NONE;
         plugin.getSystemController().refresh();
         MessageUtil.broadcast("§c✘ Zone supprimée. §7Serveur Minecraft normal.");
