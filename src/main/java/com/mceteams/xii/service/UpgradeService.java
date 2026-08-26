@@ -57,10 +57,15 @@ public class UpgradeService {
      * - PDC "item_type=upgrade_item" + "item_data=upgrade:<clé>".
      */
     public ItemStack createItem(PlayerUpgrade type) {
+        // Resource pack actif => l'item est une tête dont le rendu est
+        // pris en charge par le pack via CustomModelData (index = ordinal+1).
+        // Sinon : comportement historique (tête config, sinon icône vanilla).
+        boolean packModels = plugin.getConfigManager().isResourcePackEnabled();
         String texture = plugin.getConfigManager().getHeadTexture(type.getKey());
-        Material material = texture != null && !texture.isBlank()
-                ? Material.PLAYER_HEAD
-                : type.getIcon();
+        Material material = !packModels
+                && (texture == null || texture.isBlank())
+                ? type.getIcon()
+                : Material.PLAYER_HEAD;
 
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
@@ -84,6 +89,11 @@ public class UpgradeService {
                 lore.add("");
                 lore.add("§aClic droit pour ressusciter");
                 lore.add("§aun coéquipier en attente.");
+            }
+            if (packModels) {
+                // Correspond au "when" du select dans le resource pack
+                // (assets/minecraft/items/player_head.json).
+                meta.setCustomModelData(type.ordinal() + 1);
             }
             meta.setLore(lore);
             item.setItemMeta(meta);

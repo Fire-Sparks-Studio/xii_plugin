@@ -30,6 +30,13 @@ public final class ItemUtil {
      */
     private static NamespacedKey itemDataKey;
 
+    /**
+     * Clé PDC "xii:rare_claimed" (BYTE) : présente uniquement sur les
+     * objets RARES/LÉGENDAIRES générés par le loot. Valeur :
+     * 0 = pas encore réclamé, 1 = réclamé par un joueur.
+     */
+    private static NamespacedKey rareClaimKey;
+
     /** Type interne pour les items UPGRADE consommables. */
     public static final String TYPE_UPGRADE = "upgrade_item";
 
@@ -44,6 +51,7 @@ public final class ItemUtil {
     public static void init(XiiPlugin plugin) {
         itemTypeKey = new NamespacedKey(plugin, "item_type");
         itemDataKey = new NamespacedKey(plugin, "item_data");
+        rareClaimKey = new NamespacedKey(plugin, "rare_claimed");
     }
 
     /**
@@ -174,5 +182,74 @@ public final class ItemUtil {
                     && upgrade.getRarity() != com.mceteams.xii.enums.ItemRarity.COMMON;
         }
         return false;
+    }
+
+    // -----------------------------------------------------------------
+    // Suivi de RÉCLAMATION des objets rares (PDC rare_claimed : 0/1)
+    // -----------------------------------------------------------------
+
+    /**
+     * Rareté de l'item si celui-ci est identifiable (tag direct ou
+     * upgrade), sinon null. Sert à distinguer l'annonce RARE vs
+     * LÉGENDAIRE à la récupération.
+     */
+    public static com.mceteams.xii.enums.ItemRarity rarityOf(ItemStack item) {
+        String type = getInternalType(item);
+        if (TYPE_LEGENDARY.equals(type)) {
+            return com.mceteams.xii.enums.ItemRarity.LEGENDARY;
+        }
+        if (TYPE_RARE.equals(type)) {
+            return com.mceteams.xii.enums.ItemRarity.RARE;
+        }
+        String data = getItemData(item);
+        if (data != null && data.startsWith("upgrade:")) {
+            var upgrade = com.mceteams.xii.enums.PlayerUpgrade
+                    .fromKey(data.substring("upgrade:".length()));
+            return upgrade != null ? upgrade.getRarity() : null;
+        }
+        return null;
+    }
+
+    /**
+     * Marque un objet RARE/LÉGENDAIRE comme "pas encore réclamé"
+     * (rare_claimed = 0). No-op si l'item n'est pas rare.
+     */
+    public static ItemStack markUnclaimedRare(ItemStack item) {
+        if (item == null || !isRareOrLegendary(item)) {
+            return item;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer()
+                    .set(rareClaimKey, PersistentDataType.BYTE, (byte) 0);
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    /**
+     * Cet item est-il un objet rare généré par le loot PAS ENCORE
+     * réclamé par un joueur ?
+     */
+    public static boolean isUnclaimedRare(ItemStack item) {
+        if (item == null || !item.hasItemMeta() || rareClaimKey == null) {
+            return false;
+        }
+        Byte value = item.getItemMeta().getPersistentDataContainer()
+                .get(rareClaimKey, PersistentDataType.BYTE);
+        return value != null && value == 0;
+    }
+
+    /** Enregistre la réclamation d'un objet rare (rare_claimed = 1). */
+    public static void markClaimed(ItemStack item) {
+        if (item == null || !item.hasItemMeta() || rareClaimKey == null) {
+            return;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer()
+                    .set(rareClaimKey, PersistentDataType.BYTE, (byte) 1);
+            item.setItemMeta(meta);
+        }
     }
 }

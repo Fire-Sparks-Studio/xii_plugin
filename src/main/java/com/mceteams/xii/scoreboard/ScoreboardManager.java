@@ -36,7 +36,8 @@ import java.util.UUID;
  *   §cRouge ✘                         <- éliminée
  *   §aVert ♥ 8 §8Vous                 <- votre équipe : marqueur gris
  *   (vide)
- *   §7Votre équipe : §aVert
+ *   §7Votre classe : §aMineur
+ *   §7Points équipe : §e240           <- total de VOTRE équipe uniquement
  *
  * NB : si une équipe n'existe pas, elle est affichée comme déjà
  * éliminée (✘). Les entrées identiques sont rendues uniques par des
@@ -124,6 +125,14 @@ public class ScoreboardManager {
             lines.add("§7Votre classe : " + data.getPlayerClass().getColoredName());
         } else {
             lines.add("§7Aucune classe");
+        }
+
+        // --- Points de VOTRE équipe (jamais ceux des adversaires) -------
+        var viewerTeam =
+                plugin.getTeamManager().getTeamOf(player.getUniqueId());
+        if (viewerTeam != null) {
+            lines.add("§7Points équipe : §e"
+                    + viewerTeam.getScore().getTotal());
         }
         return lines;
     }

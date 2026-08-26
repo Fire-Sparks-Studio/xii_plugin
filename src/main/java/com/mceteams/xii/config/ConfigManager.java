@@ -188,6 +188,35 @@ public class ConfigManager {
     }
 
     // -----------------------------------------------------------------
+    // Resource pack serveur (obligatoire ou déconnexion)
+    // -----------------------------------------------------------------
+    public boolean isResourcePackEnabled() {
+        return config.getBoolean("resource-pack.enabled", false);
+    }
+
+    public String getResourcePackUrl() {
+        return config.getString("resource-pack.url", "");
+    }
+
+    public String getResourcePackSha1() {
+        return config.getString("resource-pack.sha1", "");
+    }
+
+    public boolean isResourcePackMandatory() {
+        return config.getBoolean("resource-pack.mandatory", true);
+    }
+
+    public String getResourcePackPrompt() {
+        return config.getString("resource-pack.prompt",
+                "§6XII-Days §7nécessite son resource pack.");
+    }
+
+    public String getResourcePackKickMessage() {
+        return config.getString("resource-pack.kick-message",
+                "§cLe resource pack du serveur est OBLIGATOIRE.");
+    }
+
+    // -----------------------------------------------------------------
     // Bases (spec §7)
     // -----------------------------------------------------------------
     public int getBaseRadius() {

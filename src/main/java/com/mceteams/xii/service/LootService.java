@@ -151,7 +151,7 @@ public class LootService {
 
     private ItemStack build(LootEntry entry) {
         ThreadLocalRandom rng = ThreadLocalRandom.current();
-        return switch (entry.getType()) {
+        ItemStack item = switch (entry.getType()) {
             case RESOURCE -> new ItemStack(
                     entry.getMaterial(),
                     entry.getMin() + rng.nextInt(Math.max(1,
@@ -161,6 +161,9 @@ public class LootService {
             case TOTEM -> plugin.getUpgradeService()
                     .createItem(PlayerUpgrade.TOTEM_RESURRECTION);
         };
+        // Suivi de réclamation : tout objet rare/légendaire sorti du loot
+        // est taggué "non réclamé" (l'annonce partira à sa RÉCUPÉRATION).
+        return com.mceteams.xii.util.ItemUtil.markUnclaimedRare(item);
     }
 
     /** Tire une upgrade ALÉATOIRE parmi celles de la rareté demandée. */

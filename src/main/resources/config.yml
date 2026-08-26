@@ -61,6 +61,25 @@ zone:
   waiting-lobby-spawn-z: 0
 
 # -----------------------------------------------------------------
+# Resource pack serveur (style Hypixel : obligatoire ou déconnexion)
+# -----------------------------------------------------------------
+resource-pack:
+  # Activer l'envoi automatique du pack à la connexion.
+  enabled: false
+  # URL de téléchargement DIRECT du fichier zip (https recommandé).
+  # Astuce cache : ajoutez ?v=2 et incrémentez à chaque mise à jour.
+  url: ""
+  # SHA-1 du fichier zip (recommandé : permet le cache client).
+  # Windows : certutil -hashfile pack.zip SHA1
+  sha1: ""
+  # true = refuser/échouer => le joueur est DÉCONNECTÉ (Hypixel-like).
+  mandatory: true
+  # Message affiché dans la fenêtre d'acceptation du pack.
+  prompt: "§6XII-Days §7nécessite son resource pack pour l'expérience complète."
+  # Message de déconnexion si le pack est refusé (mode obligatoire).
+  kick-message: "§cLe resource pack du serveur est OBLIGATOIRE.\n§7Rejoignez à nouveau et acceptez le pack."
+
+# -----------------------------------------------------------------
 # Bases des équipes
 # -----------------------------------------------------------------
 bases:

@@ -281,7 +281,11 @@ public class PackageService {
             return false;
         }
 
-        List<ItemStack> loot = generateLootForPackages();
+        // Chaque stack est ÉCLATÉ en unités (amount=1) puis mélangé :
+        // le contenu est réparti au hasard dans les slots, jamais empilé.
+        List<ItemStack> items = fitToCapacity(
+                expandToUnits(generateLootForPackages()),
+                chest.getInventory().getSize());
 
         // Placement aléatoire dans des slots distincts.
         List<Integer> slots = new ArrayList<>();
@@ -292,17 +296,64 @@ public class PackageService {
 
         boolean containsRareOrLegendary = false;
         int slotIndex = 0;
-        for (ItemStack stack : loot) {
+        for (ItemStack unit : items) {
             if (slotIndex >= slots.size()) {
-                break; // table trop généreuse pour le coffre
+                break; // capacité dépassée (théorique)
             }
-            chest.getInventory().setItem(slots.get(slotIndex++), stack);
-            if (com.mceteams.xii.util.ItemUtil.isRareOrLegendary(stack)) {
+            chest.getInventory().setItem(slots.get(slotIndex++), unit);
+            if (com.mceteams.xii.util.ItemUtil.isRareOrLegendary(unit)) {
                 containsRareOrLegendary = true;
             }
         }
         chest.update();
         return containsRareOrLegendary;
+    }
+
+    /**
+     * Éclate chaque stack du loot en UNITÉS individuelles (amount=1),
+     * mélangées au hasard : ex IRON_INGOT x6 => 6 slots d'1 lingot.
+     */
+    private List<ItemStack> expandToUnits(List<ItemStack> loot) {
+        List<ItemStack> units = new ArrayList<>();
+        for (ItemStack stack : loot) {
+            int amount = Math.max(1, stack.getAmount());
+            for (int i = 0; i < amount; i++) {
+                ItemStack unit = stack.clone();
+                unit.setAmount(1);
+                units.add(unit);
+            }
+        }
+        java.util.Collections.shuffle(units, random);
+        return units;
+    }
+
+    /**
+     * Si trop d'unités pour le conteneur : reconsolide les doublons en
+     * stacks max jusqu'à tenir dans {@code capacity} entrées.
+     */
+    private List<ItemStack> fitToCapacity(List<ItemStack> units,
+                                          int capacity) {
+        while (units.size() > capacity) {
+            boolean merged = false;
+            for (int i = 0; i < units.size() && !merged; i++) {
+                for (int j = i + 1; j < units.size(); j++) {
+                    ItemStack a = units.get(i);
+                    ItemStack b = units.get(j);
+                    if (a.getType() == b.getType()
+                            && a.getAmount() + b.getAmount()
+                                    <= a.getMaxStackSize()) {
+                        a.setAmount(a.getAmount() + b.getAmount());
+                        units.remove(j);
+                        merged = true;
+                        break;
+                    }
+                }
+            }
+            if (!merged) {
+                return new ArrayList<>(units.subList(0, capacity));
+            }
+        }
+        return units;
     }
 
 
@@ -492,13 +543,15 @@ public class PackageService {
         }
         plugin.getLogger().warning("[Loot] Coffre de colis VIDE à "
                 + "l'ouverture => régénération.");
-        List<ItemStack> loot = generateLootForPackages();
+        List<ItemStack> items = fitToCapacity(
+                expandToUnits(generateLootForPackages()),
+                chestInventory.getSize());
         int slot = 0;
-        for (ItemStack stack : loot) {
+        for (ItemStack unit : items) {
             if (slot >= chestInventory.getSize()) {
                 break;
             }
-            chestInventory.setItem(slot++, stack);
+            chestInventory.setItem(slot++, unit);
         }
     }
 
@@ -559,11 +612,25 @@ public class PackageService {
 
                 // Transfert d'UN stack + son "click" de DROPPER.
                 session.chestInventory.setItem(sourceSlot, null);
+
+                // OBJET RARE/LÉGENDAIRE : réclamation via le tag PDC
+                // rare_claimed. Annonce + points à la RÉCUPÉRATION
+                // effective de l'item, pas à l'ouverture du colis.
+                boolean rarePickup =
+                        com.mceteams.xii.util.ItemUtil.isUnclaimedRare(moving);
+                if (rarePickup) {
+                    com.mceteams.xii.util.ItemUtil.markClaimed(moving);
+                }
+
                 var leftovers = player.getInventory().addItem(moving);
                 leftovers.values().forEach(rest ->
                         player.getWorld().dropItemNaturally(player.getLocation(), rest));
                 com.mceteams.xii.util.SoundUtil.play(player,
                         Sound.BLOCK_DISPENSER_DISPENSE, 0.7f, 1.2f);
+
+                if (rarePickup) {
+                    handleRareRetrieval(player, moving);
+                }
             }
         };
         session.task.runTaskTimer(plugin, 2L, 2L);
@@ -650,8 +717,36 @@ public class PackageService {
     }
 
     /**
+     * Points + ANNONCE pour la récupération d'un objet RARE ou
+     * LÉGENDAIRE (message distinct selon la rareté réelle de l'item).
+     * Appelé depuis le transfert des colis ET le ramassage au sol
+     * (RarePickupListener) - l'item a déjà été marqué "réclamé".
+     */
+    public void handleRareRetrieval(Player player, ItemStack item) {
+        var rarity = com.mceteams.xii.util.ItemUtil.rarityOf(item);
+        boolean legendary =
+                rarity == com.mceteams.xii.enums.ItemRarity.LEGENDARY;
+        String label = legendary ? "§6§lLÉGENDAIRE" : "§e§lRARE";
+
+        plugin.getPointService().award(player, PointCategory.RARE_ITEM,
+                plugin.getConfigManager().getRareItemPoints(),
+                legendary ? "objet légendaire récupéré"
+                        : "objet rare récupéré");
+        MessageUtil.broadcast("§6★ " + player.getName()
+                + " §7a récupéré un objet " + label + "§7 !");
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            com.mceteams.xii.util.SoundUtil.play(online,
+                    Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f,
+                    legendary ? 2f : 1.5f);
+        }
+    }
+
+    /**
      * Traite l'ouverture (points + annonces). Idempotent : un colis ne
      * peut être revendiqué qu'une fois.
+     *
+     * NB : l'annonce "objet RARE" ne se fait PLUS ici mais à la
+     * RÉCUPÉRATION effective de l'item taggué (cf. transfert).
      */
     public void handleOpen(Player opener, Package pack) {
         if (pack.isOpened()) {
@@ -666,17 +761,6 @@ public class PackageService {
 
         // Annonce SANS nom : juste l'information que le colis est parti.
         MessageUtil.broadcast("§7✦ Un colis a été §frécupéré§7.");
-
-        // Bonus éventuel : objet rare (AVEC le nom du chanceux).
-        if (pack.containsRareItem()) {
-            plugin.getPointService().award(opener, PointCategory.RARE_ITEM,
-                    plugin.getConfigManager().getRareItemPoints(), "objet rare");
-            MessageUtil.broadcast("§6★ " + opener.getName()
-                    + " §7a trouvé un objet §e§lRARE§7 !");
-            // TODO : objet LÉGENDAIRE (même pattern, annonce dédiée plus tard).
-        } else {
-            MessageUtil.sendActionBar(opener, "§aColis récupéré !");
-        }
     }
 
     /**

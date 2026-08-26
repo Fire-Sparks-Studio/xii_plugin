@@ -62,6 +62,7 @@ public class LootManager {
 
     private void registerDefaultTables() {
         // ---------------- PACKAGE NORMAL : progression -----------------
+        // (poids rares/légendaires volontairement relevés)
         tables.put(LootTableId.PACKAGE_NORMAL, List.of(
                 LootEntry.resource(Material.COAL, 10, 4, 12),
                 LootEntry.resource(Material.IRON_INGOT, 10, 3, 8),
@@ -69,8 +70,8 @@ public class LootManager {
                 LootEntry.resource(Material.GOLD_INGOT, 8, 2, 6),
                 LootEntry.resource(Material.LAPIS_LAZULI, 7, 4, 12),
                 LootEntry.resource(Material.REDSTONE, 7, 4, 12),
-                LootEntry.resource(Material.DIAMOND, 4, 1, 2),
-                LootEntry.resource(Material.EMERALD, 4, 1, 2),
+                LootEntry.resource(Material.DIAMOND, 6, 1, 2),
+                LootEntry.resource(Material.EMERALD, 6, 1, 2),
                 LootEntry.resource(Material.QUARTZ, 6, 3, 8),
                 LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 1, 3),
                 LootEntry.resource(Material.ARROW, 6, 8, 24),
@@ -83,15 +84,17 @@ public class LootManager {
                 LootEntry.equipment("iron_boots", 1),
                 LootEntry.upgrade(ItemRarity.COMMON, 3),
                 LootEntry.upgrade(ItemRarity.RARE, 1),
-                LootEntry.totem(1)
+                LootEntry.upgrade(ItemRarity.EPIC, 3),
+                LootEntry.totem(2)
         ));
 
         // ---------------- PACKAGE UPGRADE : upgrades dominantes --------
+        // (rare plus rare que légendaire/épique : inversion demandée)
         tables.put(LootTableId.PACKAGE_UPGRADE, List.of(
-                LootEntry.upgrade(ItemRarity.COMMON, 40),
-                LootEntry.upgrade(ItemRarity.RARE, 25),
-                LootEntry.upgrade(ItemRarity.EPIC, 12),
-                LootEntry.totem(3),
+                LootEntry.upgrade(ItemRarity.COMMON, 30),
+                LootEntry.upgrade(ItemRarity.RARE, 22),
+                LootEntry.upgrade(ItemRarity.EPIC, 28),
+                LootEntry.totem(6),
                 LootEntry.resource(Material.DIAMOND, 5, 1, 2),
                 LootEntry.resource(Material.EMERALD, 5, 1, 2),
                 LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 2, 4)
@@ -107,10 +110,10 @@ public class LootManager {
                 LootEntry.resource(Material.GRAVEL, 8, 8, 24),
                 LootEntry.resource(Material.DIRT, 8, 8, 24),
                 // Jackpot exceptionnel (risque/récompense) :
-                LootEntry.upgrade(ItemRarity.COMMON, 1),
+                LootEntry.upgrade(ItemRarity.COMMON, 2),
                 LootEntry.upgrade(ItemRarity.RARE, 1),
-                LootEntry.upgrade(ItemRarity.EPIC, 1),
-                LootEntry.totem(1)
+                LootEntry.upgrade(ItemRarity.EPIC, 4),
+                LootEntry.totem(3)
         ));
 
         // ---------------- DUNGEON NORMAL --------------------------------
@@ -119,8 +122,8 @@ public class LootManager {
                 LootEntry.resource(Material.GOLD_INGOT, 9, 4, 10),
                 LootEntry.resource(Material.LAPIS_LAZULI, 7, 6, 14),
                 LootEntry.resource(Material.REDSTONE, 7, 6, 14),
-                LootEntry.resource(Material.DIAMOND, 6, 1, 3),
-                LootEntry.resource(Material.EMERALD, 5, 1, 3),
+                LootEntry.resource(Material.DIAMOND, 8, 1, 3),
+                LootEntry.resource(Material.EMERALD, 7, 1, 3),
                 LootEntry.resource(Material.QUARTZ, 6, 4, 10),
                 LootEntry.resource(Material.EXPERIENCE_BOTTLE, 7, 2, 5),
                 LootEntry.resource(Material.ARROW, 6, 16, 32),
@@ -135,9 +138,9 @@ public class LootManager {
                 LootEntry.equipment("strong_iron_chestplate", 1),
                 LootEntry.equipment("strong_iron_leggings", 1),
                 LootEntry.equipment("strong_iron_boots", 1),
-                LootEntry.upgrade(ItemRarity.RARE, 2),
-                LootEntry.upgrade(ItemRarity.EPIC, 1),
-                LootEntry.totem(1)
+                LootEntry.upgrade(ItemRarity.RARE, 3),
+                LootEntry.upgrade(ItemRarity.EPIC, 5),
+                LootEntry.totem(2)
         ));
 
         // ---------------- DUNGEON RARE : nettement meilleur --------------
@@ -154,9 +157,9 @@ public class LootManager {
                 LootEntry.equipment("diamond_chestplate", 2),
                 LootEntry.equipment("diamond_leggings", 2),
                 LootEntry.equipment("diamond_boots", 2),
-                LootEntry.upgrade(ItemRarity.RARE, 8),
-                LootEntry.upgrade(ItemRarity.EPIC, 6),
-                LootEntry.totem(6)
+                LootEntry.upgrade(ItemRarity.RARE, 10),
+                LootEntry.upgrade(ItemRarity.EPIC, 12),
+                LootEntry.totem(9)
         ));
 
         // ---------------- DUNGEON CURSED : déception OU jackpot ----------
@@ -169,10 +172,10 @@ public class LootManager {
                 LootEntry.resource(Material.DIRT, 8, 12, 32),
                 LootEntry.resource(Material.WHEAT_SEEDS, 7, 8, 24),
                 // Jackpot PLUS fréquent que le package maudit :
-                LootEntry.upgrade(ItemRarity.COMMON, 2),
+                LootEntry.upgrade(ItemRarity.COMMON, 3),
                 LootEntry.upgrade(ItemRarity.RARE, 2),
-                LootEntry.upgrade(ItemRarity.EPIC, 2),
-                LootEntry.totem(3)
+                LootEntry.upgrade(ItemRarity.EPIC, 5),
+                LootEntry.totem(5)
         ));
     }
 

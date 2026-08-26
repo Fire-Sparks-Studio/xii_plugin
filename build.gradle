@@ -18,7 +18,7 @@ if (versionFile.exists()) {
     buildNumber = props.getProperty('buildNumber', '0').toInteger()
 }
 
-version = "2.0.0-bA${buildNumber}"
+version = "2.0.1-bB${buildNumber}-fr"
 
 tasks.register('incrementBuildNumber') {
     doLast {
