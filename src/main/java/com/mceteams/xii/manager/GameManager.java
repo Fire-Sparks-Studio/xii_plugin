@@ -15,6 +15,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Comparator;
 import java.util.List;
@@ -44,6 +46,7 @@ public class GameManager {
     private PackageTask packageTask;
     private MeteoriteTask meteoriteTask;
     private SuddenDeathTask suddenDeathTask;
+    private BukkitRunnable lobbyActionbarTask;
 
     public GameManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -155,6 +158,7 @@ public class GameManager {
             world.setGameRule(org.bukkit.GameRules.ADVANCE_WEATHER, true);
             world.setGameRule(org.bukkit.GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, 2);
             world.setGameRule(org.bukkit.GameRules.SPAWN_MOBS, true);
+            world.setGameRule(org.bukkit.GameRules.LOCATOR_BAR, true);
         }
 
         state = GameState.NONE;
@@ -187,6 +191,16 @@ public class GameManager {
         if (!silent) {
             MessageUtil.broadcast("§7Les joueurs ont rejoint la §bzone d'attente§7.");
         }
+
+        // Actionbar "en attente de lancement" qui tourne toutes les 2 s.
+        if (lobbyActionbarTask != null) {
+            lobbyActionbarTask.cancel();
+        }
+        lobbyActionbarTask = (BukkitRunnable) Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                p.sendActionBar("§7En attente de lancement...");
+            }
+        }, 0L, 40L); // 0 puis toutes les 2 s (40 ticks)
     }
 
     /**
@@ -854,9 +868,21 @@ public class GameManager {
         safeCancel(packageTask);        packageTask = null;
         safeCancel(meteoriteTask);      meteoriteTask = null;
         safeCancel(suddenDeathTask);    suddenDeathTask = null;
+        safeCancel(lobbyActionbarTask); lobbyActionbarTask = null;
     }
 
     private void safeCancel(org.bukkit.scheduler.BukkitRunnable task) {
+        if (task != null) {
+            try {
+                task.cancel();
+            } catch (IllegalStateException ignored) {
+                // Pas encore schedulée ou déjà annulée.
+            }
+        }
+    }
+
+    /** Arrête une task de type BukkitTask (ou Runnable). */
+    private void safeCancelBukkitTask(org.bukkit.scheduler.BukkitTask task) {
         if (task != null) {
             try {
                 task.cancel();
@@ -891,6 +917,7 @@ public class GameManager {
         world.setGameRule(org.bukkit.GameRules.SPAWN_MOBS, false);         // mobs contrôlés
         world.setGameRule(org.bukkit.GameRules.KEEP_INVENTORY, true);      // pas de drop à la mort
         world.setGameRule(org.bukkit.GameRules.IMMEDIATE_RESPAWN, true);   // écran de mort instantané
+        world.setGameRule(org.bukkit.GameRules.LOCATOR_BAR, false);      // barre de localisation des joueurs (GPS)
         world.setTime(1000L); // jour permanent
         world.setStorm(false);
     }

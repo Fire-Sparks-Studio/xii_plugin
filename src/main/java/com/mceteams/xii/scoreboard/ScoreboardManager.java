@@ -73,7 +73,7 @@ public class ScoreboardManager {
         }
 
         Scoreboard board = boardOf(player);
-        Objective objective = ensureObjective(board, player);
+        Objective sidebarObjective = ensureObjective(board, player);
 
         List<String> lines = buildLines(player, state);
         uniquify(lines);
@@ -82,8 +82,25 @@ public class ScoreboardManager {
         clearEntries(board);
         int scoreValue = lines.size();
         for (String line : lines) {
-            objective.getScore(line).setScore(scoreValue--);
+            sidebarObjective.getScore(line).setScore(scoreValue--);
         }
+
+        // Mise à jour de l'affichage de la santé (en dessous du nom)
+        updateHealth(player, sidebarObjective);
+    }
+
+    /**
+     * Met à jour l'objective de santé (en dessous du nom du joueur).
+     * La valeur affichée est le nombre de cœurs (health / 2 arrondi).
+     */
+    private void updateHealth(Player player, Objective healthObjective) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        double health = player.getHealth();
+        // Afficher le nombre de cœurs : health / 2, arrondi à l'entier supérieur
+        int heartCount = (int) Math.ceil(health / 2);
+        healthObjective.getScore(player.getName()).setScore(heartCount);
     }
 
     // -----------------------------------------------------------------
@@ -284,6 +301,15 @@ public class ScoreboardManager {
                     LegacyComponentSerializer.legacySection()
                             .deserialize("§6§lXII DAYS"));
             objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+        }
+        // Nouvelle objective santé : affichage en dessous du nom
+        Objective healthObjective = board.getObjective("xii_health");
+        if (healthObjective == null) {
+            healthObjective = board.registerNewObjective(
+                    "xii_health",
+                    Criteria.HEALTH,
+                    ""); // String vide pas de titre s'affiché
+            healthObjective.setDisplaySlot(DisplaySlot.BELOW_NAME);
         }
         player.setScoreboard(board);
         return objective;

@@ -36,4 +36,11 @@ public enum TeamColor {
     public String getColoredName() {
         return colorCode + displayName;
     }
+
+    /**
+     * Lettre unique en majuscule (B/J/R/V) : préfixe du TAB en partie.
+     */
+    public String getLetter() {
+        return displayName.substring(0, 1).toUpperCase();
+    }
 }

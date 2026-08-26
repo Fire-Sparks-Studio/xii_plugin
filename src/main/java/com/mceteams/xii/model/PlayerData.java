@@ -39,6 +39,9 @@ public class PlayerData {
     /** Cause de la dernière mort (spec §19 étape 2). */
     private DeathCause deathCause;
 
+    /** Kills de joueurs réalisés (affichage TAB, alimenté par CombatService). */
+    private int kills;
+
     /**
      * Dernier attaquant + horodatage : alimente la "fenêtre de combat"
      * de 15 secondes utilisée pour qualifier les déconnexions (§30).

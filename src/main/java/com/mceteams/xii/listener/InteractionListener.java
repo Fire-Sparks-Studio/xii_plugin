@@ -1,8 +1,10 @@
 package com.mceteams.xii.listener;
 
 import com.mceteams.xii.XiiPlugin;
+import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.item.AdminItem;
 import com.mceteams.xii.item.TeamSelectorItem;
+import com.mceteams.xii.util.MessageUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -36,15 +38,21 @@ public class InteractionListener implements Listener {
         if (item != null && (action == Action.RIGHT_CLICK_AIR
                 || action == Action.RIGHT_CLICK_BLOCK)) {
 
-            // UPGRADE consommable : délégation au service (consomme
-            // l'item et applique l'effet / ouvre le totem).
-            String itemData = com.mceteams.xii.util.ItemUtil.getItemData(item);
-            if (itemData != null && itemData.startsWith("upgrade:")) {
-                event.setCancelled(true);
-                plugin.getUpgradeService().handleUse(player, item,
-                        itemData.substring("upgrade:".length()));
-                return;
-            }
+            // UPGRADE consommable : vérification de l'état de partie avant usage.
+// Les upgrades ne sont utilisables qu'en Préparation ou Combat.
+String itemData = com.mceteams.xii.util.ItemUtil.getItemData(item);
+if (itemData != null && itemData.startsWith("upgrade:")) {
+    var state = plugin.getGameManager().getState();
+    if (state != GameState.PREPARATION && state != GameState.COMBAT) {
+        MessageUtil.send(player, "§cLes upgrades ne sont utilisables qu'en préparation ou en combat.");
+        event.setCancelled(true);
+        return;
+    }
+    event.setCancelled(true);
+    plugin.getUpgradeService().handleUse(player, item,
+            itemData.substring("upgrade:".length()));
+    return;
+}
 
             // Sélecteur d'équipe.
             if (com.mceteams.xii.util.ItemUtil
