@@ -48,6 +48,8 @@ public class ScoreboardManager {
     private final XiiPlugin plugin;
     /** Scoreboard dédié par joueur. */
     private final Map<UUID, Scoreboard> boards = new HashMap<>();
+    /** Entrées sidebar par joueur (pour clear sélectif). */
+    private final Map<UUID, Set<String>> sidebarEntries = new HashMap<>();
 
     public ScoreboardManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -79,14 +81,21 @@ public class ScoreboardManager {
         uniquify(lines);
 
         // Application (scores décroissants = ordre visuel haut -> bas).
-        clearEntries(board);
+        clearEntries(board, player.getUniqueId());
+        Set<String> tracked = sidebarEntries.computeIfAbsent(
+                player.getUniqueId(), k -> new HashSet<>());
+        tracked.clear();
         int scoreValue = lines.size();
         for (String line : lines) {
             sidebarObjective.getScore(line).setScore(scoreValue--);
+            tracked.add(line);
         }
 
         // Mise à jour de l'affichage de la santé (en dessous du nom)
-        updateHealth(player, sidebarObjective);
+        Objective healthObjective = board.getObjective("xii_health");
+        if (healthObjective != null) {
+            updateHealth(player, healthObjective);
+        }
     }
 
     /**
@@ -316,8 +325,10 @@ public class ScoreboardManager {
     }
 
     /** Vide les entrées actuelles de la sidebar (avant réécriture). */
-    private void clearEntries(Scoreboard board) {
-        for (String entry : board.getEntries()) {
+    private void clearEntries(Scoreboard board, UUID playerUuid) {
+        Set<String> tracked = sidebarEntries.get(playerUuid);
+        if (tracked == null) return;
+        for (String entry : tracked) {
             board.resetScores(entry);
         }
     }
@@ -328,7 +339,8 @@ public class ScoreboardManager {
         if (board == null) {
             return;
         }
-        clearEntries(board);
+        clearEntries(board, player.getUniqueId());
+        sidebarEntries.remove(player.getUniqueId());
         player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
         boards.remove(player.getUniqueId());
     }

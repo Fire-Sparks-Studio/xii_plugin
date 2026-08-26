@@ -257,6 +257,10 @@ public class GameManager {
         }
 
         state = GameState.COUNTDOWN;
+        if (lobbyActionbarTask != null) {
+            lobbyActionbarTask.cancel();
+            lobbyActionbarTask = null;
+        }
         plugin.getSystemController().refresh(); // retire sélecteur + item admin
         MessageUtil.broadcast(" ");
         MessageUtil.broadcast("§e§lLa partie démarre dans §f§l"
@@ -409,6 +413,7 @@ public class GameManager {
 
         // Affichage + restriction Mineur + faim verrouillée + upgrades.
         plugin.getScoreboardManager().updateAll();
+        plugin.getTabManager().updateAll();
         plugin.getClassService().sweepMinerLockedRow();
         plugin.getUpgradeService().tickSecond();
         for (Player online : Bukkit.getOnlinePlayers()) {

@@ -1,7 +1,7 @@
 {
   "pack": {
     "description": "§6XII-Days §7Resource Pack",
-    "max_format": 88,
+    "max_format": [88, 1],
     "min_format": [88, 1]
   }
 }

@@ -60,6 +60,18 @@ public class ConfigManager {
         return config.getString("upgrades.texture." + upgradeKey.toLowerCase());
     }
 
+    public String getResourcePackUrl() {
+        return config.getString("resource-pack.url", "");
+    }
+
+    public String getResourcePackSha1() {
+        return config.getString("resource-pack.sha1", "");
+    }
+
+    public String getResourcePackPrompt() {
+        return config.getString("resource-pack.prompt", "");
+    }
+
     private final XiiPlugin plugin;
     private FileConfiguration config;
 

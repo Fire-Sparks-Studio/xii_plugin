@@ -37,6 +37,24 @@ public class ConnectionListener implements Listener {
         Player player = event.getPlayer();
         GameState state = plugin.getGameManager().getState();
 
+        // Envoi du resource pack si configuré.
+        String packUrl = plugin.getConfigManager().getResourcePackUrl();
+        if (packUrl != null && !packUrl.isEmpty()) {
+            String sha1 = plugin.getConfigManager().getResourcePackSha1();
+            String prompt = plugin.getConfigManager().getResourcePackPrompt();
+            try {
+                byte[] sha1Bytes = sha1 != null && sha1.length() == 40
+                        ? hexToBytes(sha1) : null;
+                java.util.UUID uuid = java.util.UUID.nameUUIDFromBytes(
+                        packUrl.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                // Force = true pour re-demander le pack à chaque fois
+                player.setResourcePack(uuid, packUrl, sha1Bytes,
+                        prompt != null ? prompt : "", true);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Impossible d'envoyer le resource pack: " + e.getMessage());
+            }
+        }
+
         // Les spectateurs (morts/éliminés) doivent être invisibles pour
         // le nouveau arrivant aussi.
         plugin.getSpectatorService().hideAllSpectatorsFrom(player);
@@ -169,5 +187,15 @@ public class ConnectionListener implements Listener {
         if (cause != null) {
             plugin.getDeathService().handleOfflineDeath(player.getUniqueId(), cause);
         }
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
+                    + Character.digit(hex.charAt(i + 1), 16));
+        }
+        return data;
     }
 }

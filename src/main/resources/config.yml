@@ -151,6 +151,14 @@ sudden-death:
   dragon-interval-seconds: 60   # un dragon spawn toutes les X secondes
 
 # -----------------------------------------------------------------
+# Resource Pack (envoi automatique aux joueurs)
+# -----------------------------------------------------------------
+resource-pack:
+  url: ""                        # URL http/https du zip du resource pack
+  sha1: ""                       # SHA1 du fichier zip (hex, 40 caractères)
+  prompt: ""                     # message affiché au joueur (vide = pas de prompt)
+
+# -----------------------------------------------------------------
 # Équipes
 # -----------------------------------------------------------------
 teams:
