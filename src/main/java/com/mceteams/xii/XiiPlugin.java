@@ -106,6 +106,7 @@ public class XiiPlugin extends JavaPlugin {
     private MeteoriteService meteoriteService;
     private ProtectionService protectionService;
     private UpgradeService upgradeService;
+    private PointFeedService pointFeedService;
 
     // --- Affichage / items ----------------------------------------------------
     private ScoreboardManager scoreboardManager;

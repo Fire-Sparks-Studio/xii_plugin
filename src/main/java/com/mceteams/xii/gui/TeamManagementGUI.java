@@ -35,6 +35,10 @@ public class TeamManagementGUI implements InventoryHolder {
     public void open() {
         this.inventory = Bukkit.createInventory(this, 27, "§bGestion des équipes");
         fillTeams();
+        // Retour vers l'accueil d'administration (spec §5).
+        inventory.setItem(22, ItemUtil.buildNamedItem(
+                Material.ARROW, "§7← Accueil administration",
+                java.util.List.of("§7Retour à la gestion.")));
         player.openInventory(inventory);
     }
 
@@ -71,6 +75,13 @@ public class TeamManagementGUI implements InventoryHolder {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player clicker)
                 || !clicker.equals(player)) {
+            return;
+        }
+
+        // Retour vers l'accueil d'administration.
+        if (event.getSlot() == 22) {
+            Bukkit.getScheduler().runTask(plugin,
+                    () -> new AdminGUI(plugin, player).open());
             return;
         }
 

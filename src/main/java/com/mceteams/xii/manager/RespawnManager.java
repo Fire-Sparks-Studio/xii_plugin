@@ -95,8 +95,13 @@ public class RespawnManager {
             if (entry.getValue() > now) {
                 continue; // pas encore à échéance
             }
-            iterator.remove();
-            handleRespawn(entry.getKey());
+            // handleRespawn retourne FALSE si le joueur est encore HORS
+            // LIGNE : le respawn reste DANS LA MAP et sera retenté à la
+            // seconde suivante (sinon il était PERDU définitivement et le
+            // joueur retombait en spectateur permanent à son retour).
+            if (handleRespawn(entry.getKey())) {
+                iterator.remove();
+            }
         }
     }
 
@@ -120,8 +125,11 @@ public class RespawnManager {
                 combatPending.remove(uuid); // déjà géré, pas de timer
                 continue;
             }
-            combatPending.remove(uuid);
-            handleRespawn(uuid);
+            // Hors ligne => le joueur reste en attente (retenté à la
+            // prochaine sous-phase) au lieu de perdre son respawn.
+            if (handleRespawn(uuid)) {
+                combatPending.remove(uuid);
+            }
         }
     }
 
@@ -152,15 +160,21 @@ public class RespawnManager {
      * Exécute le respawn d'un joueur :
      * - COMBAT + coeur détruit => élimination DÉFINITIVE ;
      * - sinon => retour dans sa base (spec §19 dernier point).
+     *
+     * @return true si le joueur a été traité (respawn effectué ou mise
+     *         au pool totem), false s'il est encore HORS LIGNE (respawn
+     *         reporté, à retenter).
      */
-    private void handleRespawn(UUID uuid) {
+    private boolean handleRespawn(UUID uuid) {
         Player player = Bukkit.getPlayer(uuid);
         var data = plugin.getPlayerManager().getData(uuid);
 
-        // Joueur toujours hors ligne : il reprendra via ConnectionListener.
-        data.setDisconnected(false);
+        // Joueur toujours hors ligne : le respawn reste PROGRAMMÉ et
+        // sera retenté à la seconde suivante. Ne pas marquer
+        // disconnected=false ici : l'annonce "est revenu" sera émise par
+        // sa reconnexion.
         if (player == null || !player.isOnline()) {
-            return;
+            return false;
         }
 
         var team = plugin.getTeamManager().getTeamOf(uuid);
@@ -181,7 +195,7 @@ public class RespawnManager {
             // un totem pourra plus tard ramener ses membres.
             plugin.getTeamManager().updateElimination(team);
             plugin.getGameManager().checkVictoryConditions();
-            return;
+            return true;
         }
 
         // Respawn normal : retour dans sa base.
@@ -201,6 +215,10 @@ public class RespawnManager {
         plugin.getClassService().applyPassives(player, data);
 
         MessageUtil.send(player, "§aRéapparition ! Bon retour.");
+        // Title bien visible (le joueur sortait du mode spectateur).
+        MessageUtil.sendTitle(player, "§aRÉAPPARITION",
+                "§7Bon retour dans la partie !", 10, 50, 10);
+        return true;
     }
 
     /** Un respawn est-il programmé pour ce joueur ? */

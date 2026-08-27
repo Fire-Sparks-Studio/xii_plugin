@@ -321,15 +321,15 @@ public class TabManager {
         return layout.withPlayerSlots(playerSlots);
     }
 
-    /** Footer : statut de la partie en bas de la liste TAB. */
+    /** Footer : phase de la partie en bas de la liste TAB. */
     private String footerText(GameState state, int day) {
         return switch (state) {
-            case PREPARATION -> "§eStatut : §7Préparation - Jour §b"
+            case PREPARATION -> "§ePhase : §7Préparation - Jour §b"
                     + day + "§8/12";
-            case COMBAT -> "§eStatut : §7Combat - Jour §b"
+            case COMBAT -> "§ePhase : §7Combat - Jour §b"
                     + day + "§8/12";
-            case ENDING -> "§eStatut : §6Fin de partie";
-            default -> "§eStatut : §7En attente";
+            case ENDING -> "§ePhase : §6Fin de partie";
+            default -> "§ePhase : §7En attente";
         };
     }
 

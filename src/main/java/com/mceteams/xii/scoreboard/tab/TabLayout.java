@@ -133,7 +133,8 @@ public class TabLayout {
                         uuidOf("nf", infoIndex),
                         "XII Info",
                         row,
-                        INFO_BASE - infoIndex));
+                        INFO_BASE - infoIndex,
+                        STONE_BLOCK_PROFILE));
                 infoIndex++;
             }
         }
@@ -146,33 +147,33 @@ public class TabLayout {
     /** Ligne vide (un espace) qui bouche une colonne de la grille. */
     private static FakeTabEntry filler(String ns, int index, int order) {
         return new FakeTabEntry(uuidOf(ns, index), "XII F", " ", order,
-                GRAY_BLOCK_PROFILE);
+                STONE_BLOCK_PROFILE);
     }
 
     /**
-     * Profil "bloc gris" : peau intégralement grise (data-URI), affichée
-     * par le client comme une petite tête de bloc grise à la place de la
-     * tête de joueur par défaut (Steve) sur les entrées vides du TAB.
+     * Profil "bloc de pierre" : texture URL (minecraft-heads "Stone"),
+     * affichée par le client comme une petite tête grise à la place de la
+     * tête de joueur par défaut (Steve) sur les entrées INFO et VIDES.
+     *
+     * NB : une peau en "data:image/png;base64,..." N'EST pas récupérable
+     * par le service de texture de Mojang (le client garde la tête par
+     * défaut) => on utilise une texture reference classique
+     * (http://textures.minecraft.net/texture/...) qui, elle, est résolue.
      */
-    private static final GameProfile GRAY_BLOCK_PROFILE = buildGrayBlockProfile();
+    private static final GameProfile STONE_BLOCK_PROFILE = buildStoneBlockProfile();
 
-    private static GameProfile buildGrayBlockProfile() {
+    private static GameProfile buildStoneBlockProfile() {
         // NB : PropertyMap (authlib 9) COPIE toute multimap passée en
         // constructeur dans une ImmutableMultimap : put() y lève
         // UnsupportedOperationException. On insère donc la texture AVANT
         // l'encapsulation.
-        //
-        // Peau 64x64 entièrement grise générée hors ligne et embarquée en
-        // "data:image/png;base64,..." : quelle que soit la zone que le
-        // client recadre pour l'icône du TAB, elle est grise dense.
-        String textureValue = "{\"textures\":{\"SKIN\":{\"url\":\"data:image/png;base64,"
-                + "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACuSURBVHhe7daxDcQgDAXQTMwqbMRqd6IgOsFZbkl4xW+whaUnF75KKZ+Tc80Pp+UGqLX+TWtteXtSPQoAAAAAAPgF6B+dFhsAAAAAAAAAuANsAAAAAJaGkWzA7vUoAAC4A2wAAAAAAAAA4A6wAQAAAACwNIxkA3avRwEwA/SPTosNAAAAAAAAANwBNgAAAABLw0g2YPd6FAAAAAAAAAAAgBsgSh8wvz2pniUFeHu+I0SGsqT3mS8AAAAASUVORK5CYII=\"}}}";
+        String textureValue = "{\"textures\":{\"SKIN\":{\"url\":\"http://textures.minecraft.net/texture/8c78100b74836cb351f9fc7dadfa88141354038a9be086421efe9d69e7e6231e\"}}}";
         Multimap<String, Property> mutable = HashMultimap.create();
         mutable.put("textures", new Property("textures", textureValue));
         return new GameProfile(
                 UUID.nameUUIDFromBytes(
-                        "xii:grey-block".getBytes(StandardCharsets.UTF_8)),
-                "XII Grey Block",
+                        "xii:stone-block".getBytes(StandardCharsets.UTF_8)),
+                "XII Stone Block",
                 new PropertyMap(mutable));
     }
 

@@ -7,7 +7,6 @@ import com.mceteams.xii.enums.PointCategory;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.PointEvent;
 import com.mceteams.xii.model.PlayerData;
-import com.mceteams.xii.util.MessageUtil;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -109,10 +108,11 @@ public class PointService {
 
         recordEvent(player, team, category, finalAmount, reason);
 
-        // Feedback discret en action bar (+N points).
+        // Feedback action bar MUTUALISÉ : les points du même style se
+        // somment sur une fenêtre courte (cf. PointFeedService), au lieu
+        // d'écraser la barre à chaque attribution.
         if (player != null && finalAmount > 0) {
-            MessageUtil.sendActionBar(player,
-                    "§a+" + finalAmount + " pts §7(" + reason + ")");
+            plugin.getPointFeedService().push(player, finalAmount, reason);
         }
     }
 

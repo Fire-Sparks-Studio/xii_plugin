@@ -50,6 +50,8 @@ public class ScoreboardManager {
     private final Map<UUID, Scoreboard> boards = new HashMap<>();
     /** Entrées sidebar par joueur (pour clear sélectif). */
     private final Map<UUID, Set<String>> sidebarEntries = new HashMap<>();
+    /** Entrées "PV sous le nom" déjà poussées par joueur (pour purge). */
+    private final Map<UUID, Set<String>> healthEntries = new HashMap<>();
 
     public ScoreboardManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -92,10 +94,10 @@ public class ScoreboardManager {
         }
 
         // Mise à jour de l'affichage de la santé (en dessous du nom).
-        // NB : l'objective utilise Criteria.HEALTH, dont les scores sont
-        // AUTO-GÉRÉS par le serveur (lecture seule : setScore = exception).
-        // On s'assure simplement que l'objective BELOW_NAME est bien posée
-        // sur le scoreboard du joueur (fait dans ensureObjective).
+        // NB : l'objective est en Criteria.DUMMY pilotée MANUELLEMENT ici
+        // (synchro dans ensureObjective) : avec Criteria.HEALTH, le
+        // serveur ne pousse aucun score tant que la vie ne change pas =>
+        // les PV restaient invisibles au démarrage sans une actualisation.
     }
 
     // -----------------------------------------------------------------
@@ -299,19 +301,48 @@ public class ScoreboardManager {
         }
         // Objective santé sous le nametag (au-dessus de la tête) :
         // rendu "❤ 15" = titre (cœur rouge) + nombre de PV (INTEGER).
-        // Les scores sont auto-gérés par le serveur via Criteria.HEALTH.
+        // CRITERIA.DUMMY => les valeurs sont poussées par
+        // syncHealthScores (cf. ci-dessous), pas pilotées par le serveur.
         Objective healthObjective = board.getObjective("xii_health");
         if (healthObjective == null) {
             healthObjective = board.registerNewObjective(
                     "xii_health",
-                    Criteria.HEALTH,
+                    Criteria.DUMMY,
                     LegacyComponentSerializer.legacySection()
                             .deserialize("§c❤"),
                     org.bukkit.scoreboard.RenderType.INTEGER);
             healthObjective.setDisplaySlot(DisplaySlot.BELOW_NAME);
         }
         player.setScoreboard(board);
+        syncHealthScores(board, player.getUniqueId());
         return objective;
+    }
+
+    /**
+     * Pousse les "PV sous le nom" de TOUS les joueurs en ligne sur le
+     * scoreboard d'un spectateur. L'objective étant en DUMMY, on écrit
+     * nous-mêmes chaque valeur ; les entrées des joueurs déconnectés
+     * sont purgées pour ne pas laisser d'affichage périmé.
+     */
+    private void syncHealthScores(Scoreboard board, UUID boardOwner) {
+        Objective health = board.getObjective("xii_health");
+        if (health == null) {
+            return;
+        }
+        Set<String> current = new HashSet<>();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            String entryName = online.getName();
+            current.add(entryName);
+            int healthValue = Math.max(0, (int) Math.ceil(online.getHealth()));
+            health.getScore(entryName).setScore(healthValue);
+        }
+        Set<String> previous = healthEntries.getOrDefault(boardOwner, Set.of());
+        for (String stale : previous) {
+            if (!current.contains(stale)) {
+                health.getScore(stale).resetScore();
+            }
+        }
+        healthEntries.put(boardOwner, current);
     }
 
     /** Vide les entrées actuelles de la sidebar (avant réécriture). */
@@ -331,6 +362,7 @@ public class ScoreboardManager {
         }
         clearEntries(board, player.getUniqueId());
         sidebarEntries.remove(player.getUniqueId());
+        healthEntries.remove(player.getUniqueId());
         player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
         boards.remove(player.getUniqueId());
     }
@@ -345,6 +377,7 @@ public class ScoreboardManager {
             }
         }
         boards.clear();
+        healthEntries.clear();
     }
 
     /** Composant titre exposé si besoin ailleurs. */
