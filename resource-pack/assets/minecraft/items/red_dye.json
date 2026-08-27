@@ -1,0 +1,19 @@
+{
+  "model": {
+    "cases": [
+      {
+        "when": 1,
+        "model": {
+          "type": "model",
+          "model": "xii:item/upgrades/vitalite"
+        }
+      }
+    ],
+    "type": "select",
+    "fallback": {
+      "type": "model",
+      "model": "minecraft:item/red_dye"
+    },
+    "property": "custom_model_data"
+  }
+}

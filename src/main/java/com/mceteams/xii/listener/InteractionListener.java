@@ -38,21 +38,23 @@ public class InteractionListener implements Listener {
         if (item != null && (action == Action.RIGHT_CLICK_AIR
                 || action == Action.RIGHT_CLICK_BLOCK)) {
 
-            // UPGRADE consommable : vérification de l'état de partie avant usage.
-// Les upgrades ne sont utilisables qu'en Préparation ou Combat.
-String itemData = com.mceteams.xii.util.ItemUtil.getItemData(item);
-if (itemData != null && itemData.startsWith("upgrade:")) {
-    var state = plugin.getGameManager().getState();
-    if (state != GameState.PREPARATION && state != GameState.COMBAT) {
-        MessageUtil.send(player, "§cLes upgrades ne sont utilisables qu'en préparation ou en combat.");
-        event.setCancelled(true);
-        return;
-    }
-    event.setCancelled(true);
-    plugin.getUpgradeService().handleUse(player, item,
-            itemData.substring("upgrade:".length()));
-    return;
-}
+            // UPGRADE consommable : vérification de l'état de partie avant
+            // usage. Les upgrades ne sont utilisables qu'en Préparation ou
+            // Combat (jamais au lobby, en countdown ni en fin de partie).
+            String itemData = com.mceteams.xii.util.ItemUtil.getItemData(item);
+            if (itemData != null && itemData.startsWith("upgrade:")) {
+                var state = plugin.getGameManager().getState();
+                if (state != GameState.PREPARATION && state != GameState.COMBAT) {
+                    MessageUtil.send(player,
+                            "§cLes upgrades ne sont utilisables qu'en préparation ou en combat.");
+                    event.setCancelled(true);
+                    return;
+                }
+                event.setCancelled(true);
+                plugin.getUpgradeService().handleUse(player, item,
+                        itemData.substring("upgrade:".length()));
+                return;
+            }
 
             // Sélecteur d'équipe.
             if (com.mceteams.xii.util.ItemUtil

@@ -46,6 +46,7 @@ public class ClassService {
      */
     private static final double VANILLA_MAX_HEALTH = 20.0;
     private static final double VANILLA_MOVEMENT_SPEED = 0.10000000149011612D;
+    private static final double VANILLA_ATTACK_SPEED = 4.0;
 
     private final XiiPlugin plugin;
 
@@ -104,6 +105,17 @@ public class ClassService {
                 player.getAttribute(Attribute.MOVEMENT_SPEED);
         if (speedAttribute != null) {
             speedAttribute.setBaseValue(VANILLA_MOVEMENT_SPEED * speedMultiplier);
+        }
+
+        // --- Vitesse d'attaque ------------------------------------------
+        // UPGRADE Frappe rapide : +10% par niveau.
+        int attackSpeedLevel = data.getUpgradeLevel(
+                com.mceteams.xii.enums.PlayerUpgrade.FRAPPE_RAPIDE);
+        AttributeInstance attackSpeedAttribute =
+                player.getAttribute(Attribute.ATTACK_SPEED);
+        if (attackSpeedAttribute != null) {
+            attackSpeedAttribute.setBaseValue(
+                    VANILLA_ATTACK_SPEED * (1.0 + 0.10 * attackSpeedLevel));
         }
 
         // --- Barrières Mineur (pose si mineur / retire sinon) ----------

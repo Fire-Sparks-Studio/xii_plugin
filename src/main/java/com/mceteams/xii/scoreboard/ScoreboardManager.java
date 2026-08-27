@@ -91,25 +91,37 @@ public class ScoreboardManager {
             tracked.add(line);
         }
 
-        // Mise à jour de l'affichage de la santé (en dessous du nom)
-        Objective healthObjective = board.getObjective("xii_health");
-        if (healthObjective != null) {
-            updateHealth(player, healthObjective);
-        }
+        // Mise à jour de l'affichage de la santé (en dessous du nom).
+        // NB : l'objective utilise Criteria.HEALTH, dont les scores sont
+        // AUTO-GÉRÉS par le serveur (lecture seule : setScore = exception).
+        // On s'assure simplement que l'objective BELOW_NAME est bien posée
+        // sur le scoreboard du joueur (fait dans ensureObjective).
+
+        // Score numérique à droite du pseudo dans le TAB : les POINTS
+        // apportés par chaque joueur à son équipe (objective PLAYER_LIST).
+        updateTabScores(board);
     }
 
     /**
-     * Met à jour l'objective de santé (en dessous du nom du joueur).
-     * La valeur affichée est le nombre de cœurs (health / 2 arrondi).
+     * Objective "points" du TAB (DisplaySlot.PLAYER_LIST) : affiche un
+     * nombre à droite du pseudo de chaque joueur listé. Valeur = points
+     * totaux apportés par le joueur (PlayerScore.getTotal).
      */
-    private void updateHealth(Player player, Objective healthObjective) {
-        if (player == null || !player.isOnline()) {
-            return;
+    private void updateTabScores(Scoreboard board) {
+        Objective tabObjective = board.getObjective("xii_tab");
+        if (tabObjective == null) {
+            tabObjective = board.registerNewObjective(
+                    "xii_tab",
+                    Criteria.DUMMY,
+                    LegacyComponentSerializer.legacySection()
+                            .deserialize("Points"));
+            tabObjective.setDisplaySlot(DisplaySlot.PLAYER_LIST);
         }
-        double health = player.getHealth();
-        // Afficher le nombre de cœurs : health / 2, arrondi à l'entier supérieur
-        int heartCount = (int) Math.ceil(health / 2);
-        healthObjective.getScore(player.getName()).setScore(heartCount);
+        for (Player listed : Bukkit.getOnlinePlayers()) {
+            var data = plugin.getPlayerManager().getData(listed);
+            int points = data != null ? data.getScore().getTotal() : 0;
+            tabObjective.getScore(listed.getName()).setScore(points);
+        }
     }
 
     // -----------------------------------------------------------------
@@ -311,13 +323,17 @@ public class ScoreboardManager {
                             .deserialize("§6§lXII DAYS"));
             objective.setDisplaySlot(DisplaySlot.SIDEBAR);
         }
-        // Nouvelle objective santé : affichage en dessous du nom
+        // Objective santé sous le nametag (au-dessus de la tête) :
+        // rendu "❤ 15" = titre (cœur rouge) + nombre de PV (INTEGER).
+        // Les scores sont auto-gérés par le serveur via Criteria.HEALTH.
         Objective healthObjective = board.getObjective("xii_health");
         if (healthObjective == null) {
             healthObjective = board.registerNewObjective(
                     "xii_health",
                     Criteria.HEALTH,
-                    ""); // String vide pas de titre s'affiché
+                    LegacyComponentSerializer.legacySection()
+                            .deserialize("§c❤"),
+                    org.bukkit.scoreboard.RenderType.INTEGER);
             healthObjective.setDisplaySlot(DisplaySlot.BELOW_NAME);
         }
         player.setScoreboard(board);

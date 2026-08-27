@@ -109,6 +109,33 @@ public final class ItemUtil {
     }
 
     /**
+     * Construit une TÊTE DE JOUEUR avec le visage réel du joueur.
+     * - joueur EN LIGNE : son profil courant (textures garanties) ;
+     * - hors ligne : profil créé puis complété (fetch session synchrone).
+     * NB : setOwningPlayer(offline) ne résout pas les textures de façon
+     * fiable en 26.2 (têtes "Steve" dans les GUI) => profils explicites.
+     */
+    public static ItemStack buildPlayerHead(java.util.UUID playerUuid,
+                                            String name,
+                                            List<String> lore) {
+        ItemStack item = buildNamedItem(Material.PLAYER_HEAD, name, lore);
+        ItemMeta meta = item.getItemMeta();
+        if (meta instanceof org.bukkit.inventory.meta.SkullMeta skullMeta) {
+            var online = org.bukkit.Bukkit.getPlayer(playerUuid);
+            if (online != null) {
+                skullMeta.setPlayerProfile(online.getPlayerProfile());
+            } else {
+                com.destroystokyo.paper.profile.PlayerProfile profile =
+                        org.bukkit.Bukkit.createProfile(playerUuid, name);
+                profile.complete(true); // fetch textures (session Mojang)
+                skullMeta.setPlayerProfile(profile);
+            }
+            item.setItemMeta(skullMeta);
+        }
+        return item;
+    }
+
+    /**
      * Marque un item avec un type interne (PDC). Ex : tag(item,"team_selector").
      */
     public static ItemStack tag(ItemStack item, String internalType) {

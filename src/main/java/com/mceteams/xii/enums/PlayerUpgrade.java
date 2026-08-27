@@ -8,15 +8,12 @@ import org.bukkit.Material;
  *
  * Chaque entrée porte ses données d'affichage et ses limites ; les
  * EFFETS sont appliqués par les services :
- * - Vitalité/Agilité/Endurance -> ClassService.applyPassives
+ * - Vitalité/Agilité/Endurance/Frappe rapide -> ClassService.applyPassives
  * - Puissance/Saignement        -> CombatService
  * - Résistance/Pas léger/Garde  -> CombatListener
  * - Hâte/Aimant                 -> UpgradeService.tickSecond
  * - Prospecteur                 -> MiningService
  * - Totem de Résurrection       -> UpgradeService.handleUse (+ RespawnManager)
- *
- * NB : Frappe rapide est DÉCLARÉ mais volontairement SANS effet tant
- * que sa faisabilité technique n'est pas validée (spec utilisateur).
  */
 public enum PlayerUpgrade {
 
@@ -45,8 +42,8 @@ public enum PlayerUpgrade {
             "§7lors d'une attaque"),
     FRAPPE_RAPIDE("frappe_rapide", "Frappe rapide", ItemRarity.EPIC, 3,
             Material.LIGHT_BLUE_DYE,
-            "§7Augmente la vitesse d'attaque",
-            "§8(à venir - équilibrage en cours)"),
+            "§7+10% de vitesse d'attaque",
+            "§7par niveau"),
     GARDE("garde", "Garde", ItemRarity.EPIC, 3,
             Material.PRISMARINE_CRYSTALS,
             "§7Résistance temporaire après",

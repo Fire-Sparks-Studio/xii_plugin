@@ -1,7 +1,5 @@
 package com.mceteams.xii.service;
 
-import com.destroystokyo.paper.profile.PlayerProfile;
-import com.destroystokyo.paper.profile.ProfileProperty;
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.ItemRarity;
 import com.mceteams.xii.enums.PlayerUpgrade;
@@ -11,7 +9,6 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -27,9 +24,10 @@ import java.util.UUID;
  * plafonné au maximum de l'upgrade. Les niveaux vivent dans PlayerData,
  * l'ITEM ne porte que sa clé (même tête quel que soit le niveau).
  *
- * APPARENCE : custom heads façon SkyBlock - la texture base64 de chaque
- * upgrade peut être fournie dans config.yml (upgrades.texture.<clé>).
- * Sans texture : icône vanilla de repli par upgrade.
+ * APPARENCE : chaque upgrade est une icône MARÉRIEL VANILLA distincte
+ * (PlayerUpgrade.getIcon()), avec un CustomModelData qui sélectionne sa
+ * texture personnalisée dans le resource pack (assets/minecraft/items).
+ * L'item reste consommable (pas de slot dédié).
  *
  * EFFETS (répartis dans les services spécialisés) :
  * cf. documentation de l'enum PlayerUpgrade.
@@ -53,16 +51,14 @@ public class UpgradeService {
      * Construit l'item physique d'une upgrade :
      * - nom coloré selon la RARETÉ de l'objet ;
      * - lore = description + rappel d'usage ;
-     * - tête custom si texture configurée, sinon icône vanilla ;
-     * - PDC "item_type=upgrade_item" + "item_data=upgrade:<clé>".
+     * - composant ITEM_MODEL -> item definition du resource pack
+     *   (assets/xii/items/upgrades/<clé>.json) : texture custom garantie,
+     *   rendu vanilla de repli (icône du matériau) sans resource pack ;
+     * - PDC "item_data=upgrade:<clé>".
      */
     public ItemStack createItem(PlayerUpgrade type) {
-        // Les modèles custom viennent du RESOURCE PACK (imposé par le
-        // serveur via server.properties OU par le plugin) : le CMD est
-        // donc appliqué SYSTÉMATIQUEMENT (inoffensif sans pack).
-        // Sans pack côté client : rendu tête vanilla + icônes historiques.
-        String texture = plugin.getConfigManager().getHeadTexture(type.getKey());
-        Material material = Material.PLAYER_HEAD;
+        // Matériau vanilla de repli (sans resource pack) : icône dédiée.
+        Material material = type.getIcon();
 
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
@@ -70,6 +66,11 @@ public class UpgradeService {
         if (meta != null) {
             ItemRarity rarity = type.getRarity();
             meta.setDisplayName(rarity.getColorCode() + type.getDisplayName());
+
+            // Texture custom : l'item definition du pack remplace
+            // intégralement le rendu de l'item (upgrades ET totem).
+            meta.setItemModel(new org.bukkit.NamespacedKey(
+                    "xii", "upgrades/" + type.getKey()));
 
             List<String> lore = new ArrayList<>();
             lore.add("§8" + rarity.getColoredName());
@@ -87,27 +88,8 @@ public class UpgradeService {
                 lore.add("§aClic droit pour ressusciter");
                 lore.add("§aun coéquipier en attente.");
             }
-            // Correspond au "when" du select dans le resource pack
-            // (assets/minecraft/items/player_head.json).
-            meta.setCustomModelData(type.ordinal() + 1);
             meta.setLore(lore);
             item.setItemMeta(meta);
-        }
-
-        // Texture de tête custom (base64) si fournie dans la config.
-        if (material == Material.PLAYER_HEAD && meta instanceof SkullMeta skullMeta) {
-            try {
-                PlayerProfile profile = Bukkit.createProfile(
-                        UUID.nameUUIDFromBytes(
-                                (type.getKey() + "|" + texture).getBytes()),
-                        "xii_" + type.getKey());
-                profile.setProperty(new ProfileProperty("textures", texture));
-                skullMeta.setPlayerProfile(profile);
-                item.setItemMeta(skullMeta);
-            } catch (Exception exception) {
-                plugin.getLogger().warning("[Upgrades] Texture invalide pour '"
-                        + type.getKey() + "' : " + exception.getMessage());
-            }
         }
 
         // Identification : clé d'upgrade dans les données PDC.

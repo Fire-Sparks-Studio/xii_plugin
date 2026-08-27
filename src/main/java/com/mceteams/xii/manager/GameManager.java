@@ -46,7 +46,7 @@ public class GameManager {
     private PackageTask packageTask;
     private MeteoriteTask meteoriteTask;
     private SuddenDeathTask suddenDeathTask;
-    private BukkitRunnable lobbyActionbarTask;
+    private org.bukkit.scheduler.BukkitTask lobbyActionbarTask;
 
     public GameManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -196,7 +196,7 @@ public class GameManager {
         if (lobbyActionbarTask != null) {
             lobbyActionbarTask.cancel();
         }
-        lobbyActionbarTask = (BukkitRunnable) Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        lobbyActionbarTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 p.sendActionBar("§7En attente de lancement...");
             }
@@ -257,10 +257,8 @@ public class GameManager {
         }
 
         state = GameState.COUNTDOWN;
-        if (lobbyActionbarTask != null) {
-            lobbyActionbarTask.cancel();
-            lobbyActionbarTask = null;
-        }
+        safeCancelBukkitTask(lobbyActionbarTask);
+        lobbyActionbarTask = null;
         plugin.getSystemController().refresh(); // retire sélecteur + item admin
         MessageUtil.broadcast(" ");
         MessageUtil.broadcast("§e§lLa partie démarre dans §f§l"
@@ -873,7 +871,7 @@ public class GameManager {
         safeCancel(packageTask);        packageTask = null;
         safeCancel(meteoriteTask);      meteoriteTask = null;
         safeCancel(suddenDeathTask);    suddenDeathTask = null;
-        safeCancel(lobbyActionbarTask); lobbyActionbarTask = null;
+        safeCancelBukkitTask(lobbyActionbarTask); lobbyActionbarTask = null;
     }
 
     private void safeCancel(org.bukkit.scheduler.BukkitRunnable task) {

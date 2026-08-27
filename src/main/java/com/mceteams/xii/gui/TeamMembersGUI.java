@@ -78,8 +78,8 @@ public class TeamMembersGUI implements InventoryHolder {
                     ? offlinePlayer.getName()
                     : memberUuid.toString().substring(0, 8);
 
-            ItemStack head = ItemUtil.buildNamedItem(
-                    Material.PLAYER_HEAD,
+            ItemStack head = ItemUtil.buildPlayerHead(
+                    memberUuid,
                     "§f" + name,
                     java.util.List.of(
                             "§7Vivant : " + (plugin.getPlayerManager()
@@ -125,8 +125,8 @@ public class TeamMembersGUI implements InventoryHolder {
             String teamInfo = current != null
                     ? "§7Actuellement : " + current.getColor().getColoredName()
                     : "§7Sans équipe";
-            ItemStack head = ItemUtil.buildNamedItem(
-                    Material.PLAYER_HEAD,
+            ItemStack head = ItemUtil.buildPlayerHead(
+                    online.getUniqueId(),
                     "§f" + online.getName(),
                     java.util.List.of(teamInfo,
                             "",

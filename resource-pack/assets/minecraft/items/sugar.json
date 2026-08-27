@@ -1,0 +1,19 @@
+{
+  "model": {
+    "cases": [
+      {
+        "when": 3,
+        "model": {
+          "type": "model",
+          "model": "xii:item/upgrades/agilite"
+        }
+      }
+    ],
+    "type": "select",
+    "fallback": {
+      "type": "model",
+      "model": "minecraft:item/sugar"
+    },
+    "property": "custom_model_data"
+  }
+}

@@ -52,14 +52,6 @@ public class ConfigManager {
         return config.getDouble("upgrades.prospecteur-chance-par-niveau", 0.10);
     }
 
-    /**
-     * Texture base64 d'une custom head d'upgrade (null si non configurée :
-     * icône vanilla de repli).
-     */
-    public String getHeadTexture(String upgradeKey) {
-        return config.getString("upgrades.texture." + upgradeKey.toLowerCase());
-    }
-
     public String getResourcePackUrl() {
         return config.getString("resource-pack.url", "");
     }
