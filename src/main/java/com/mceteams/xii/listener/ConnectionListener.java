@@ -59,6 +59,10 @@ public class ConnectionListener implements Listener {
         // le nouveau arrivant aussi.
         plugin.getSpectatorService().hideAllSpectatorsFrom(player);
 
+        // TAB : header/footer + fausses entrées d'infos pour le nouveau
+        // joueur (no-op si NONE : le plugin n'interfère pas).
+        plugin.getTabManager().onJoin(player);
+
         // Serveur normal : aucune interférence (spec §3/§9).
         if (state == GameState.NONE) {
             return;
@@ -157,6 +161,9 @@ public class ConnectionListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         GameState state = plugin.getGameManager().getState();
+
+        // TAB : oublie l'état poussé à ce joueur qui se déconnecte.
+        plugin.getTabManager().onQuit(player.getUniqueId());
 
         if (state == GameState.NONE || state == GameState.WAITING
                 || state == GameState.COUNTDOWN || state == GameState.ENDING) {

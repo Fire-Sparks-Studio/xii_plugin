@@ -111,9 +111,11 @@ public final class ItemUtil {
     /**
      * Construit une TÊTE DE JOUEUR avec le visage réel du joueur.
      * - joueur EN LIGNE : son profil courant (textures garanties) ;
-     * - hors ligne : profil créé puis complété (fetch session synchrone).
-     * NB : setOwningPlayer(offline) ne résout pas les textures de façon
-     * fiable en 26.2 (têtes "Steve" dans les GUI) => profils explicites.
+     * - hors ligne : texture mémorisée au dernier passage en ligne, ou
+     *   fetch session (best effort) si inconnue.
+     * NB : la texture est CACHÉE par UUID à la première rencontre en ligne :
+     * les têtes restent donc exactes même après déconnexion (et même sur un
+     * serveur offline-mode, où le fetch session ne fonctionne pas).
      */
     public static ItemStack buildPlayerHead(java.util.UUID playerUuid,
                                             String name,
@@ -121,18 +123,81 @@ public final class ItemUtil {
         ItemStack item = buildNamedItem(Material.PLAYER_HEAD, name, lore);
         ItemMeta meta = item.getItemMeta();
         if (meta instanceof org.bukkit.inventory.meta.SkullMeta skullMeta) {
-            var online = org.bukkit.Bukkit.getPlayer(playerUuid);
-            if (online != null) {
-                skullMeta.setPlayerProfile(online.getPlayerProfile());
-            } else {
-                com.destroystokyo.paper.profile.PlayerProfile profile =
-                        org.bukkit.Bukkit.createProfile(playerUuid, name);
-                profile.complete(true); // fetch textures (session Mojang)
+            var profile = resolveHeadProfile(playerUuid, name);
+            if (profile != null) {
                 skullMeta.setPlayerProfile(profile);
             }
             item.setItemMeta(skullMeta);
         }
         return item;
+    }
+
+    /**
+     * Cache des textures de peau par UUID (propriété "textures").
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<
+            java.util.UUID, com.destroystokyo.paper.profile.ProfileProperty>
+            HEAD_TEXTURES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * @return la propriété "textures" d'un profil Paper, ou null.
+     */
+    private static com.destroystokyo.paper.profile.ProfileProperty findTexture(
+            com.destroystokyo.paper.profile.PlayerProfile profile) {
+        for (com.destroystokyo.paper.profile.ProfileProperty property :
+                profile.getProperties()) {
+            if (property.getName().equals("textures")) {
+                return property;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Profil "tête" pour un UUID :
+     * 1. joueur EN LIGNE : profil courant, on en mémorise les textures ;
+     * 2. HORS LIGNE avec texture mémorisée : on la rejoue directement ;
+     * 3. HORS LIGNE sans mémoire : fetch session Mojang (best effort).
+     */
+    private static com.destroystokyo.paper.profile.PlayerProfile resolveHeadProfile(
+            java.util.UUID playerUuid, String name) {
+        var online = org.bukkit.Bukkit.getPlayer(playerUuid);
+        if (online != null) {
+            com.destroystokyo.paper.profile.PlayerProfile live =
+                    online.getPlayerProfile();
+            com.destroystokyo.paper.profile.ProfileProperty tex = findTexture(live);
+            if (tex != null) {
+                HEAD_TEXTURES.put(playerUuid, tex);
+            }
+            return live;
+        }
+
+        com.destroystokyo.paper.profile.PlayerProfile profile;
+        try {
+            profile = (name == null || name.isBlank())
+                    ? org.bukkit.Bukkit.createProfile(playerUuid)
+                    : org.bukkit.Bukkit.createProfile(playerUuid, name);
+        } catch (IllegalArgumentException e) {
+            return null; // UUID illégal : tête sans profil (Steve par défaut).
+        }
+
+        com.destroystokyo.paper.profile.ProfileProperty cached =
+                HEAD_TEXTURES.get(playerUuid);
+        if (cached != null && cached.getValue() != null) {
+            profile.setProperty(cached);
+            return profile;
+        }
+        try {
+            profile.complete(true); // fetch textures (session Mojang)
+            com.destroystokyo.paper.profile.ProfileProperty tex = findTexture(profile);
+            if (tex != null) {
+                HEAD_TEXTURES.put(playerUuid, tex);
+            }
+        } catch (IllegalStateException | IllegalArgumentException ignored) {
+            // Profil incomplet (serveur offline-mode, textures indisponibles) :
+            // on garde le profil vide -> tête "Steve" côté client.
+        }
+        return profile;
     }
 
     /**

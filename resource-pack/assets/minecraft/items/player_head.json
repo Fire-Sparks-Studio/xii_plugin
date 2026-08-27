@@ -95,8 +95,11 @@
     ],
     "type": "select",
     "fallback": {
-      "type": "model",
-      "model": "minecraft:item/player_head"
+      "type": "minecraft:special",
+      "base": "minecraft:item/template_skull",
+      "model": {
+        "type": "minecraft:player_head"
+      }
     },
     "property": "custom_model_data"
   }

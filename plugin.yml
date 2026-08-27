@@ -1,0 +1,31 @@
+# ---------------------------------------------------------------
+# XII-Days - plugin de jeu compétitif par équipes.
+# Les commandes officielles sont : /teams, /party, /zone
+# Il n'existe plus de /xii ni de /admin (voir spécification §34).
+# ---------------------------------------------------------------
+name: XII-Days
+version: 2.0.1-b52-fr
+main: com.mceteams.xii.XiiPlugin
+api-version: '26.2'
+description: XII Days Plugin
+commands:
+  teams:
+    description: Gestion des équipes (create, remove, add, set)
+    usage: /teams <create|remove|add|set> ...
+  party:
+    description: Gestion de la partie (start, stop, set <jour>)
+    usage: /party <start|stop|set> [jour]
+  zone:
+    description: Configuration de la zone de jeu (set, delete)
+    usage: /zone <set|delete>
+  admin:
+    description: Ouvrir le menu d'administration
+    usage: /admin
+    permission: xii.admin
+permissions:
+  xii.admin:
+    description: Permission admin XII Days
+    default: op
+  xii.play:
+    description: Permission de jouer
+    default: true

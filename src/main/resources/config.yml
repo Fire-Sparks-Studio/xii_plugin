@@ -140,7 +140,7 @@ sudden-death:
 # -----------------------------------------------------------------
 resource-pack:
   url: "https://raw.githubusercontent.com/Fire-Sparks-Studio/xii_plugin/refs/heads/master/resource-pack.zip"
-  sha1: "12beff135ba0a30edb7d7e8b0f7c1167c662bd85"
+  sha1: "e6990363f4d34dc7b36f5325794c06da2d1b12fa"
   prompt: ""                     # message affiché au joueur (vide = pas de prompt)
 
 # -----------------------------------------------------------------

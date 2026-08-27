@@ -1,7 +1,11 @@
 plugins {
     id 'java'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.22'
 }
 
+// Paper 26.1+ : serveur NON-obfusqué (Mojang mappings). La tâche jar
+// produit directement le jar de production : PAS de réobfuscation (le
+// dev bundle 26.2 ne fournit d'ailleurs plus de mappings de réobf).
 group = 'com.mceteams.xii'
 
 // ------------------------------------------------------------------
@@ -18,7 +22,7 @@ if (versionFile.exists()) {
     buildNumber = props.getProperty('buildNumber', '0').toInteger()
 }
 
-version = "2.0.1-bB${buildNumber}-fr"
+version = "2.0.1-b${buildNumber}-fr"
 
 tasks.register('incrementBuildNumber') {
     doLast {
@@ -38,8 +42,10 @@ repositories {
 }
 
 dependencies {
-    // API Paper fournie par le serveur : jamais embarquée dans le jar.
-    compileOnly 'io.papermc.paper:paper-api:26.2.build.+'
+    // Dev bundle Paper (26.2, Mojang-mapped) : fournit l'API Paper +
+    // les classes NMS net.minecraft.* au statique. CompileOnly, jamais
+    // embarqué dans le jar. Aucune dépendance runtime sur le serveur.
+    paperweight.paperDevBundle("26.2.build.+")
 
     // JUnit uniquement pour les tests unitaires (voir src/test).
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -49,10 +55,6 @@ dependencies {
     // TeamManager l'utilise pour les préfixes d'équipes Bukkit.
     // Le sérialiseur legacy tire adventure-api/key/examination en transitif.
     testRuntimeOnly 'net.kyori:adventure-text-serializer-legacy:5.2.0'
-    // Les classes Bukkit doivent exister au runtime des tests (jamais
-    // appelées : le code est gardé par des null-checks / try-catch),
-    // mais leur ABSENCE ferait échouer le chargement des classes.
-    testRuntimeOnly 'io.papermc.paper:paper-api:26.2.build.+'
 }
 
 java {
@@ -64,6 +66,10 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 processResources {
+    // La version est injectée dans plugin.yml ; on la déclare comme input
+    // pour que le task re-s'exécute à chaque changement de version (sinon
+    // Gradle gardait un plugin.yml obsolète "up-to-date").
+    inputs.property("version", version)
     filesMatching('plugin.yml') {
         expand(
                 version: project.version
@@ -77,4 +83,13 @@ test {
 
 jar {
     finalizedBy incrementBuildNumber
+}
+
+// Paper 26.1+ : le jar "java" IS le jar de production Mojang-mapped.
+// prepareDeployJar copie son résultat vers le nom de déploiement
+// (retire les suffixes de dev/all si présents).
+tasks.register('prepareDeployJar', Copy) {
+    from tasks.jar
+    into layout.buildDirectory.dir('libs')
+    rename { it.replaceAll(/-dev-|-dev\\.|-all-|-all\\./, '-') }
 }

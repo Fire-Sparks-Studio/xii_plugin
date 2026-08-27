@@ -128,6 +128,9 @@ public class SpectatorService {
             }
             if (isSpectator(online.getUniqueId())) {
                 joiningPlayer.hidePlayer(plugin, online);
+                // Le hide retire aussi l'entrée du TAB : on la remet pour
+                // que le mort reste visible dans la liste.
+                plugin.getTabManager().restoreHiddenPlayer(joiningPlayer, online);
             }
         }
     }
@@ -145,6 +148,9 @@ public class SpectatorService {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             if (!viewer.equals(player)) {
                 viewer.hidePlayer(plugin, player);
+                // Le hide retire aussi l'entrée du TAB : on la remet pour
+                // que le mort reste visible dans la liste (pas dans le monde).
+                plugin.getTabManager().restoreHiddenPlayer(viewer, player);
             }
         }
         // (le joueur lui-même se voit : pas grave, il est seul à le voir)

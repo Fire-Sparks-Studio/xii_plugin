@@ -96,32 +96,6 @@ public class ScoreboardManager {
         // AUTO-GÉRÉS par le serveur (lecture seule : setScore = exception).
         // On s'assure simplement que l'objective BELOW_NAME est bien posée
         // sur le scoreboard du joueur (fait dans ensureObjective).
-
-        // Score numérique à droite du pseudo dans le TAB : les POINTS
-        // apportés par chaque joueur à son équipe (objective PLAYER_LIST).
-        updateTabScores(board);
-    }
-
-    /**
-     * Objective "points" du TAB (DisplaySlot.PLAYER_LIST) : affiche un
-     * nombre à droite du pseudo de chaque joueur listé. Valeur = points
-     * totaux apportés par le joueur (PlayerScore.getTotal).
-     */
-    private void updateTabScores(Scoreboard board) {
-        Objective tabObjective = board.getObjective("xii_tab");
-        if (tabObjective == null) {
-            tabObjective = board.registerNewObjective(
-                    "xii_tab",
-                    Criteria.DUMMY,
-                    LegacyComponentSerializer.legacySection()
-                            .deserialize("Points"));
-            tabObjective.setDisplaySlot(DisplaySlot.PLAYER_LIST);
-        }
-        for (Player listed : Bukkit.getOnlinePlayers()) {
-            var data = plugin.getPlayerManager().getData(listed);
-            int points = data != null ? data.getScore().getTotal() : 0;
-            tabObjective.getScore(listed.getName()).setScore(points);
-        }
     }
 
     // -----------------------------------------------------------------
