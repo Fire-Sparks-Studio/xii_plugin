@@ -165,6 +165,9 @@ public class ConnectionListener implements Listener {
         // TAB : oublie l'état poussé à ce joueur qui se déconnecte.
         plugin.getTabManager().onQuit(player.getUniqueId());
 
+        // Barre d'action des points : purge le flux cumulé du joueur.
+        plugin.getPointFeedService().onQuit(player.getUniqueId());
+
         if (state == GameState.NONE || state == GameState.WAITING
                 || state == GameState.COUNTDOWN || state == GameState.ENDING) {
             return; // hors gameplay : rien de spécial

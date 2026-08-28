@@ -44,6 +44,7 @@ import com.mceteams.xii.service.LootService;
 import com.mceteams.xii.service.MeteoriteService;
 import com.mceteams.xii.service.MiningService;
 import com.mceteams.xii.service.PackageService;
+import com.mceteams.xii.service.PointFeedService;
 import com.mceteams.xii.service.PointService;
 import com.mceteams.xii.service.ProtectionService;
 import com.mceteams.xii.service.SpectatorService;
@@ -51,6 +52,7 @@ import com.mceteams.xii.service.UpgradeService;
 import com.mceteams.xii.system.GameSystems;
 import com.mceteams.xii.system.SystemController;
 import com.mceteams.xii.util.ItemUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -161,6 +163,8 @@ public class XiiPlugin extends JavaPlugin {
         this.protectionService = new ProtectionService(this);
         // Nouvelle mécanique : items d'upgrade + totem de résurrection.
         this.upgradeService = new UpgradeService(this);
+        // Barre d'action des points CUMULÉS (fenêtre courte mutualisée).
+        this.pointFeedService = new PointFeedService(this);
 
         // 7bis) SYSTÈME DE LOOT : manager (tables) puis service (génération).
         this.lootManager = new LootManager();
@@ -191,11 +195,17 @@ public class XiiPlugin extends JavaPlugin {
         // 11) Purge d'une éventuelle zone de session précédente.
         restoreZoneState();
 
+        // 12) Barre d'action des points : tick toutes les 200 ms (fenêtre
+        // de mutualisation de 3 s, cf. PointFeedService).
+        Bukkit.getScheduler().runTaskTimer(this,
+                () -> pointFeedService.tick(), 20L, 4L);
+
         getLogger().info("===[READY]===");
     }
 
     @Override
     public void onDisable() {
+        Bukkit.getScheduler().cancelTasks(this);
         if (gameManager != null) {
             gameManager.shutdown();
         }
@@ -298,6 +308,7 @@ public class XiiPlugin extends JavaPlugin {
     public MeteoriteService getMeteoriteService() { return meteoriteService; }
     public ProtectionService getProtectionService() { return protectionService; }
     public UpgradeService getUpgradeService() { return upgradeService; }
+    public PointFeedService getPointFeedService() { return pointFeedService; }
     public LootManager getLootManager() { return lootManager; }
     public LootService getLootService() { return lootService; }
 
