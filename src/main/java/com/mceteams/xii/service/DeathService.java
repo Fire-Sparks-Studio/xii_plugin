@@ -55,10 +55,10 @@ public class DeathService {
         data.setDeathCause(cause);
 
         // 1bis. DROP SPÉCIFIQUE : les produits de MINERAI (fondus ou non)
-        // et les objets RARES/LÉGENDAIRES tombent au sol à l'endroit de
-        // la mort. TOUT le reste de l'inventaire est conservé
-        // (keepInventory). Les items spéciaux du plugin (barrières
-        // Mineur, items lobby) ne sont jamais droppés.
+        // et les items d'UPGRADE (dont le Totem Rez) tombent au sol à
+        // l'endroit de la mort. TOUT le reste de l'inventaire est conservé
+        // (keepInventory). Les items spéciaux du plugin (barrières Mineur,
+        // items lobby) ne sont jamais droppés.
         dropLootItems(victim);
 
         // Kills / streaks / points du tueur (spec §18 : surveillance combat).
@@ -119,13 +119,17 @@ public class DeathService {
     /**
      * DROP les items "précieux" à la mort du joueur :
      * - produits de minerai (bruts ou fondus) - cf. MiningService ;
-     * - objets RARES / LÉGENDAIRES (tag PDC).
+     * - objets d'UPGRADE consommables (les 12 upgrades + Totem Rez).
      *
-     * Les items spéciaux du plugin (barrières Mineur, boussole...) et
-     * tout le RESTE de l'inventaire restent sur le joueur
-     * (keepInventory actif).
+     * Le reste de l'inventaire (armes, matériaux, items rares/légendaires
+     * standalone...) reste sur le joueur (keepInventory actif). Les items
+     * spéciaux du plugin (barrières Mineur, boussole...) ne sont jamais
+     * droppés.
+     *
+     * Utilisable aussi lors d'une déconnexion (le joueur est encore
+     * connecté pendant PlayerQuitEvent, son inventaire est lisible).
      */
-    private void dropLootItems(Player victim) {
+    public void dropLootItems(Player victim) {
         var inventory = victim.getInventory();
         var location = victim.getLocation();
 
@@ -141,10 +145,10 @@ public class DeathService {
 
             boolean isOre = com.mceteams.xii.service.MiningService
                     .isOreDrop(item.getType());
-            boolean isRare = com.mceteams.xii.util.ItemUtil
-                    .isRareOrLegendary(item);
+            boolean isUpgrade = com.mceteams.xii.util.ItemUtil
+                    .isUpgradeItem(item);
 
-            if (isOre || isRare) {
+            if (isOre || isUpgrade) {
                 inventory.setItem(slot, null);
                 victim.getWorld().dropItemNaturally(location, item);
             }
@@ -166,19 +170,23 @@ public class DeathService {
      * pris en charge à sa reconnexion par ConnectionListener (revenu
      * vivant une fois son délai de respawn écoulé).
      */
-    public void handleOfflineDeath(UUID victimUuid, DeathCause cause) {
-        PlayerData data = plugin.getPlayerManager().getData(victimUuid);
+    public void handleOfflineDeath(Player victim, DeathCause cause) {
+        PlayerData data = plugin.getPlayerManager().getData(victim.getUniqueId());
         if (!data.isAlive()) {
             return;
         }
         data.setAlive(false);
         data.setDeathCause(cause);
 
+        // Drop du butin comme une mort classique : le joueur est encore
+        // connecté pendant PlayerQuitEvent, son inventaire est lisible.
+        dropLootItems(victim);
+
         // Pénalité + respawn programmé même hors ligne.
         int penalty = plugin.getConfigManager().getDeathPenalty();
         data.getScore().addPenalty(penalty);
 
-        var team = plugin.getTeamManager().getTeamOf(victimUuid);
+        var team = plugin.getTeamManager().getTeamOf(victim.getUniqueId());
         if (team != null) {
             team.resetKillStreak();          // streak réinitialisé
             team.getScore().addPenalty(penalty);
@@ -189,11 +197,11 @@ public class DeathService {
         // afficher (le tueur est aussi parti).
         UUID lastDamager = data.getLastDamager();
         if (lastDamager != null) {
-            plugin.getCombatService().registerKill(lastDamager, victimUuid);
+            plugin.getCombatService().registerKill(lastDamager, victim.getUniqueId());
         }
         data.clearLastDamage();
 
-        plugin.getRespawnManager().schedule(victimUuid);
+        plugin.getRespawnManager().schedule(victim.getUniqueId());
         plugin.getGameManager().checkVictoryConditions();
     }
 

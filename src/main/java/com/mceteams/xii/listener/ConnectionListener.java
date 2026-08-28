@@ -198,7 +198,7 @@ public class ConnectionListener implements Listener {
         com.mceteams.xii.enums.DeathCause cause =
                 plugin.getDeathService().qualifyDisconnect(data);
         if (cause != null) {
-            plugin.getDeathService().handleOfflineDeath(player.getUniqueId(), cause);
+            plugin.getDeathService().handleOfflineDeath(player, cause);
         }
     }
 

@@ -1,6 +1,8 @@
 package com.mceteams.xii.util;
 
 import com.mceteams.xii.XiiPlugin;
+import com.mceteams.xii.enums.ItemRarity;
+import com.mceteams.xii.enums.PlayerUpgrade;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -266,14 +268,33 @@ public final class ItemUtil {
         if (TYPE_RARE.equals(type) || TYPE_LEGENDARY.equals(type)) {
             return true;
         }
+        return isUpgradeItem(item) && upgradeRarity(item) != null;
+    }
+
+    /**
+     * L'item est-il un objet d'UPGRADE consommable (via le PDC "upgrade:") ?
+     * Couvre les 12 upgrades graduées ET le Totem de Résurrection
+     * (TOTEM_RESURRECTION), quelle que soit leur rareté.
+     */
+    public static boolean isUpgradeItem(ItemStack item) {
+        String data = getItemData(item);
+        return data != null && data.startsWith("upgrade:");
+    }
+
+    /**
+     * L'upgrade portée par un item (si "upgrade:<clé>"), sinon null.
+     */
+    public static PlayerUpgrade upgradeOf(ItemStack item) {
         String data = getItemData(item);
         if (data != null && data.startsWith("upgrade:")) {
-            var upgrade = com.mceteams.xii.enums.PlayerUpgrade
-                    .fromKey(data.substring("upgrade:".length()));
-            return upgrade != null
-                    && upgrade.getRarity() != com.mceteams.xii.enums.ItemRarity.COMMON;
+            return PlayerUpgrade.fromKey(data.substring("upgrade:".length()));
         }
-        return false;
+        return null;
+    }
+
+    /** Rareté d'une upgrade portée par l'item, sinon null. */
+    private static ItemRarity upgradeRarity(ItemStack item) {
+        return upgradeOf(item) != null ? upgradeOf(item).getRarity() : null;
     }
 
     // -----------------------------------------------------------------

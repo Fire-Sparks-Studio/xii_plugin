@@ -533,6 +533,12 @@ public class GameManager {
         }
         cancelGameplayTasks();
 
+        // On bascule en ENDING AVANT d'annoncer la fin : setState actualise
+        // immédiatement le scoreboard (vue "Partie terminée" + classement)
+        // et le TAB, sinon le rendu de la toute fin de partie resterait
+        // figé sur la dernière vue de PREPARATION/COMBAT.
+        setState(GameState.ENDING);
+
         // Classement (spec §27) : 1) joueurs vivants décroissants,
         // 2) points décroissants.
         // ATTENTION piège Java : un SEUL .reversed() à la FIN de la
@@ -581,9 +587,6 @@ public class GameManager {
                     "",
                     10, 100, 20);
         }
-
-        state = GameState.ENDING;
-        plugin.getSystemController().refresh();
 
         // Retour automatique en WAITING après la durée d'affichage.
         int endingTicks = plugin.getConfigManager().getEndingSeconds() * 20;
