@@ -105,13 +105,13 @@ public class DeathService {
 
         String finalSuffix = (finalKill ? " §b§lKILL FINAL" : "") + ".";
         if (killer != null) {
-            MessageUtil.broadcast("§c☠ §f" + victim.getName()
+            MessageUtil.broadcast("\n§c☠ §f" + victim.getName()
                     + " §7a été tué par §c" + killer.getName()
-                    + finalSuffix);
+                    + finalSuffix + "\n");
         } else {
-            MessageUtil.broadcast("§c☠ §f" + victim.getName()
+            MessageUtil.broadcast("\n§c☠ §f" + victim.getName()
                     + " §7est mort"
-                    + finalSuffix);
+                    + finalSuffix + "\n");
         }
         plugin.getGameManager().checkVictoryConditions();
     }
@@ -153,12 +153,18 @@ public class DeathService {
     }
 
     /**
-     * Traite une mort SANS joueur en ligne :
-     * - déconnexion pendant la préparation (traitée comme une mort, §30) ;
-     * - déconnexion en fenêtre de combat (DeathCause.DISCONNECT, §30).
+     * Traite une mort SANS joueur en ligne (déconnexion en pleine
+     * partie, spec §30).
+     *
+     * RÈGLE UTILISATEUR : toute déconnexion pendant une partie =
+     * UNE VRAIE MORT (même système punitif que les morts en ligne :
+     * pénalité de points + reset de kill streak + respawn programmé).
+     * Si le joueur avait récemment été touché par un adversaire, ce
+     * dernier se voit créditer le kill (comme une mort classique).
      *
      * Pas de titre ni de spectateur : le joueur est hors ligne. Il sera
-     * géré à sa reconnexion par ConnectionListener.
+     * pris en charge à sa reconnexion par ConnectionListener (revenu
+     * vivant une fois son délai de respawn écoulé).
      */
     public void handleOfflineDeath(UUID victimUuid, DeathCause cause) {
         PlayerData data = plugin.getPlayerManager().getData(victimUuid);
@@ -178,23 +184,28 @@ public class DeathService {
             team.getScore().addPenalty(penalty);
         }
 
+        // Kill crédité au dernier adversaire l'ayant touché (mort jugée).
+        // S'il est EN LIGNE il reçoit points/annonces; sinon rien à
+        // afficher (le tueur est aussi parti).
+        UUID lastDamager = data.getLastDamager();
+        if (lastDamager != null) {
+            plugin.getCombatService().registerKill(lastDamager, victimUuid);
+        }
+        data.clearLastDamage();
+
         plugin.getRespawnManager().schedule(victimUuid);
         plugin.getGameManager().checkVictoryConditions();
     }
 
     /**
-     * La cause doit-elle être qualifiée DISCONNECT ? Centralise la règle
-     * spec §30 : uniquement si le joueur était dans la fenêtre de combat.
+     * Qualifie la cause d'une déconnexion en pleine partie.
+     *
+     * RÈGLE UTILISATEUR (spec §30 simplifiée) : EN JEU (préparation OU
+     * combat), TOUTE déconnexion compte comme une mort classique
+     * (DeathCause.DISCONNECT), avec la même punition et le même délai de
+     * respawn que les autres morts.
      */
     public DeathCause qualifyDisconnect(PlayerData data) {
-        boolean preparationActive =
-                plugin.getGameManager().getState() == GameState.PREPARATION;
-        if (preparationActive) {
-            return DeathCause.OTHER;      // préparation : toute déconnexion = mort
-        }
-        if (plugin.getCombatService().isInCombatWindow(data)) {
-            return DeathCause.DISCONNECT; // fenêtre de combat 15 s
-        }
-        return null;                      // pas une mort : simple absence
+        return DeathCause.DISCONNECT;
     }
 }

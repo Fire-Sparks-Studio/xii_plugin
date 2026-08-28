@@ -55,6 +55,13 @@ public class BaseManager {
     private final XiiPlugin plugin;
     /** Bases placées, par couleur. */
     private final Map<TeamColor, GameBase> bases = new EnumMap<>(TeamColor.class);
+    /**
+     * BEACONS "coeur provisoire" posés par putBase (structures .nbt non
+     * finalisées). Suivis pour être retirés au NETTOYAGE (deleteZone /
+     * reset) : sans ça ils flottaient en l'air et restaient après la
+     * suppression de la zone.
+     */
+    private final Set<Location> placedCoreBeacons = new HashSet<>();
 
     public BaseManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -70,6 +77,7 @@ public class BaseManager {
      */
     public void buildBases(GameZone zone) {
         bases.clear();
+        placedCoreBeacons.clear();
 
         Location center = zone.getCenterLocation();
         if (center == null || center.getWorld() == null) {
@@ -187,18 +195,22 @@ public class BaseManager {
         Location spawn = resolveDrySpawnNear(world, spawnWanted, anchor);
         spawn.setY(worldGroundY(spawn));
 
-        // Coeur : au-dessus de l'ancrage (offset configurable, à aligner
-        // avec la structure fournie par le développeur).
-        Location core = anchor.clone()
-                .add(0, plugin.getConfigManager().getCoreOffsetY(), 0);
+        // Coeur : POSÉ SUR LE SOL (et non en l'air) : le niveau de
+        // l'ancre est le PREMIER bloc d'air au-dessus de la surface,
+        // donc poser le coeur à l'ancre = posé sur le terrain.
+        Location core = anchor.clone();
 
         // MESURE PROVISOIRE : tant que les structures .nbt définitives ne
         // contiennent pas leur propre coeur, on pose un BEACON visible
         // près du spawn pour permettre les tests de destruction.
         // (On n'écrase jamais un bloc existant : si la structure fournit
-        // déjà son coeur à cet endroit, il reste en place.)
+        // déjà son coeur à cet endroit, il reste en place et n'est pas
+        // retiré au nettoyage.)
         if (core.getBlock().getType().isAir()) {
             core.getBlock().setType(org.bukkit.Material.BEACON);
+            if (core.getWorld() != null) {
+                placedCoreBeacons.add(core.clone());
+            }
         }
 
         bases.put(color, new GameBase(
@@ -338,6 +350,14 @@ public class BaseManager {
 
     /** Vide toutes les bases (retour WAITING / zone supprimée). */
     public void clearAll() {
+        // Retire les coeurs provisoires posés par putBase (beacons) pour
+        // que la suppression de zone / reset laisse la map propre.
+        for (Location beacon : placedCoreBeacons) {
+            if (beacon != null && beacon.getWorld() != null) {
+                beacon.getBlock().setType(org.bukkit.Material.AIR);
+            }
+        }
+        placedCoreBeacons.clear();
         bases.clear();
     }
 }

@@ -227,7 +227,9 @@ public class TeamManager {
 
     /**
      * Nombre de joueurs VIVANTS dans une équipe (pour la fin de partie,
-     * spec §27). Sans plugin (tests) : compte simplement les membres.
+     * spec §27). Un joueur mort/en attente de respawn, spectateur ou
+     * DÉCONNECTÉ n'est PAS compté comme vivant. Sans plugin (tests) :
+     * compte simplement les membres.
      */
     public int aliveCount(GameTeam team) {
         int count = 0;
@@ -238,7 +240,8 @@ public class TeamManager {
                 continue;
             }
             var data = players.getData(member);
-            if (data.isAlive() && !data.isEliminated()) {
+            if (data.isAlive() && !data.isEliminated()
+                    && !data.isSpectator() && !data.isDisconnected()) {
                 count++;
             }
         }
@@ -275,10 +278,10 @@ public class TeamManager {
         if (!hasPlugin()) {
             return;
         }
-        MessageUtil.broadcast("§f§lEQUIPE ELIMINEE > §r"
+        MessageUtil.broadcast("\n§f§lEQUIPE ELIMINEE > §r"
                 + team.getColor().getColorCode()
                 + "L'équipe " + team.getColor().getDisplayName()
-                + "§r a été éliminée.");
+                + "§r a été éliminée.\n");
     }
 
     /**

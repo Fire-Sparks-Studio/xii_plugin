@@ -106,11 +106,14 @@ public class ConnectionListener implements Listener {
                         player.getUniqueId());
             }
             if (data.isAlive()) {
-                // Vivant : retour direct à la base.
+                // Vivant : retour direct à la base. Nettoyage préventif des
+                // restes spectateur (invisibilité persistée par la vanilla)
+                // si la vie a été restaurée pendant la déconnexion.
+                plugin.getSpectatorService().ensureNormalState(player);
                 if (team.getSpawn() != null) {
                     player.teleport(team.getSpawn());
                 }
-                plugin.getClassService().applyPassives(player, data);
+                plugin.getClassService().applyPassives(player, data, true);
             } else {
                 // Mort en attente de respawn : spectateur temporaire,
                 // la RespawnTask fera revenir le joueur à échéance.

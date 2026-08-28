@@ -7,7 +7,10 @@ import com.mceteams.xii.enums.PointCategory;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.PlayerData;
 import com.mceteams.xii.util.MessageUtil;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+
+import java.util.UUID;
 
 /**
  * Logique métier du COMBAT (spec §18/§23/§30).
@@ -164,17 +167,36 @@ public class CombatService {
      * @param killer tueur (peut être null : mort environnementale).
      */
     public void registerKill(Player killer, Player victim) {
+        registerKill(killer != null ? killer.getUniqueId() : null,
+                victim != null ? victim.getUniqueId() : null);
+    }
+
+    /**
+     * Variante par UUID : permet de créditer un kill à une victime ou un
+     * tueur DÉCONNECTÉ (mort jugée d'une déconnexion, spec §30).
+     */
+    public void registerKill(UUID killerUuid, UUID victimUuid) {
+        if (victimUuid == null) {
+            return;
+        }
         // Kill streak de l'équipe de la victime : réinitialisé (spec §19).
-        var victimTeam = plugin.getTeamManager().getTeamOf(victim.getUniqueId());
+        var victimTeam = plugin.getTeamManager().getTeamOf(victimUuid);
         if (victimTeam != null) {
             victimTeam.resetKillStreak();
         }
 
-        if (killer == null || killer.getUniqueId().equals(victim.getUniqueId())) {
+        if (killerUuid == null || killerUuid.equals(victimUuid)) {
             return; // pas d'attributaire => pas de points de kill
         }
 
-        var killerTeam = plugin.getTeamManager().getTeamOf(killer.getUniqueId());
+        // Tueur hors ligne (décro lui aussi) : rien à annoncer ni à
+        // créditer en direct - il verra les points à sa reconnexion.
+        Player killer = Bukkit.getPlayer(killerUuid);
+        if (killer == null || !killer.isOnline()) {
+            return;
+        }
+
+        var killerTeam = plugin.getTeamManager().getTeamOf(killerUuid);
 
         // Premier kill de la partie (une seule fois).
         if (!firstKillAwarded) {
@@ -183,8 +205,8 @@ public class CombatService {
                     PointCategory.FIRST_KILL,
                     plugin.getConfigManager().getFirstKillPoints(),
                     "premier kill");
-            MessageUtil.broadcast("§6✶ §f" + killer.getName()
-                    + " §7signe le §6§lPREMIER KILL §7de la partie !");
+            MessageUtil.broadcast("\n§6✶ §f" + killer.getName()
+                    + " §7signe le §6§lPREMIER KILL §7de la partie !\n");
         } else {
             plugin.getPointService().award(killer,
                     PointCategory.KILL,
@@ -196,10 +218,10 @@ public class CombatService {
         if (killerTeam != null) {
             killerTeam.setKillStreak(killerTeam.getKillStreak() + 1);
             if (killerTeam.getKillStreak() % 3 == 0) {
-                MessageUtil.broadcast("§d⚡ §7L'équipe "
+                MessageUtil.broadcast("\n§d⚡ §7L'équipe "
                         + killerTeam.getColor().getColoredName()
                         + " §7enchaîne §e§l" + killerTeam.getKillStreak()
-                        + " KILLS§7 !");
+                        + " KILLS§7 !\n");
             }
         }
     }

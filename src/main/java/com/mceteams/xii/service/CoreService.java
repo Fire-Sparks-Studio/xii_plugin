@@ -125,8 +125,8 @@ public class CoreService {
             var playerTeam = plugin.getTeamManager().getTeamOf(online.getUniqueId());
             if (playerTeam == team) {
                 MessageUtil.send(online,
-                        "§f§lDESTRUCTION COEUR > §rvotre coeur a été détruit"
-                                + destroyerPart + ".");
+                        "\n§f§lDESTRUCTION COEUR > §rvotre coeur a été détruit"
+                                + destroyerPart + ".\n");
                 // TITRE dédié aux membres de l'équipe touchée.
                 MessageUtil.sendTitle(online,
                         "§c§lCOEUR DETRUIT !",
@@ -134,10 +134,10 @@ public class CoreService {
                         10, 80, 20);
             } else {
                 MessageUtil.send(online,
-                        "§f§lDESTRUCTION COEUR > §rle coeur de "
+                        "\n§f§lDESTRUCTION COEUR > §rle coeur de "
                                 + team.getColor().getColorCode()
                                 + "l'équipe " + team.getColor().getDisplayName()
-                                + "§r a été détruit" + destroyerPart + ".");
+                                + "§r a été détruit" + destroyerPart + ".\n");
             }
         }
 
@@ -167,7 +167,7 @@ public class CoreService {
             }
         }
         if (anyDestroyed) {
-            MessageUtil.broadcast("§4✖ §fTous les cœurs §7ont été réduits à néant !");
+            MessageUtil.broadcast("\n§4✖ §fTous les cœurs §7ont été réduits à néant !\n");
         }
     }
 

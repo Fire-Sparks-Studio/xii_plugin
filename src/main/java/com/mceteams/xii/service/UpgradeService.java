@@ -3,6 +3,7 @@ package com.mceteams.xii.service;
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.ItemRarity;
 import com.mceteams.xii.enums.PlayerUpgrade;
+import com.mceteams.xii.model.PlayerData;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -86,7 +87,7 @@ public class UpgradeService {
             } else {
                 lore.add("");
                 lore.add("§aClic droit pour ressusciter");
-                lore.add("§aun coéquipier en attente.");
+                lore.add("§aun coéquipier mort (jour 7+).");
             }
             meta.setLore(lore);
             item.setItemMeta(meta);
@@ -176,8 +177,13 @@ public class UpgradeService {
     // -----------------------------------------------------------------
 
     /**
-     * Utilise un Totem : ressuscite UN coéquipier du pool "totem de
-     * revive" (mort APRÈS la destruction du coeur de son équipe).
+     * Utilise un Totem : ressuscite UN coéquipier MORT.
+     *
+     * CONDITIONS (règles utilisateur, simplifiées) :
+     * 1. journée >= 7 (fin de la phase de préparation -> combat) ;
+     * 2. un coéquipier est mort (data.isAlive() == false), qu'il soit en
+     *    attente de respawn, au pool "totem" (coeur détruit) ou hors lig
+     *    - c'est TOUT - peu importe le mode de mort / le délai restant.
      *
      * @return true si le totem doit être consommé.
      */
@@ -189,10 +195,20 @@ public class UpgradeService {
             return false;
         }
 
-        // Premier coéquipier en attente de résurrection.
+        // Condition d'usage : à partir du jour 7 uniquement.
+        if (plugin.getPhaseManager().currentDay() < 7) {
+            com.mceteams.xii.util.MessageUtil.send(user,
+                    "§cLe totem de résurrection n'est utilisable qu'à partir "
+                            + "du §ejour 7§c.");
+            return false;
+        }
+
+        // Premier coéquipier SANS VIE (mort). Déconnecté et mort, séparé
+        // ou en attente : ressuscitable dans tous les cas.
         UUID targetUuid = null;
         for (UUID member : team.getPlayers()) {
-            if (plugin.getRespawnManager().isAwaitingRevive(member)) {
+            PlayerData data = plugin.getPlayerManager().getData(member);
+            if (data != null && !data.isAlive()) {
                 targetUuid = member;
                 break;
             }
@@ -200,7 +216,7 @@ public class UpgradeService {
 
         if (targetUuid == null) {
             com.mceteams.xii.util.MessageUtil.send(user,
-                    "§cAucun coéquipier à ressusciter actuellement.");
+                    "§cAucun coéquipier mort à ressusciter actuellement.");
             return false;
         }
 

@@ -63,6 +63,19 @@ public class ClassService {
      * ce qui permet le nettoyage lors des resets.
      */
     public void applyPassives(Player player, PlayerData data) {
+        applyPassives(player, data, false);
+    }
+
+    /**
+     * Variante avec remplissage de la barre de vie.
+     *
+     * @param fillHealth true => ramène la vie au NOUVEL max (choix de
+     *                   classe, respawn, début de partie, reconnection) ;
+     *                   false => se contente de cliquer la vie si elle
+     *                   dépassait le max (consommation d'upgrade : pas de
+     *                   soin gratuit en pleine action).
+     */
+    public void applyPassives(Player player, PlayerData data, boolean fillHealth) {
         if (player == null || !player.isOnline()) {
             return;
         }
@@ -83,7 +96,11 @@ public class ClassService {
                 player.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealthAttribute != null) {
             maxHealthAttribute.setBaseValue(maxHealth);
-            if (player.getHealth() > maxHealth) {
+            if (fillHealth) {
+                // Ex : Robuste choisi => on gagne les PV et la barre est
+                // remplie au nouveau maximum (sinon elle restait à moitié).
+                player.setHealth(maxHealth);
+            } else if (player.getHealth() > maxHealth) {
                 player.setHealth(maxHealth);
             }
         }

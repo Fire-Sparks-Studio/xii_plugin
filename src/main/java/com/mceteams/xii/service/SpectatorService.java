@@ -190,6 +190,25 @@ public class SpectatorService {
         }
     }
 
+    /**
+     * Nettoie les éventuels RESTES de l'état spectateur au retour en
+     * ligne d'un joueur dont la vie a été restaurée pendant son absence
+     * (respawn traité hors ligne). La vanilla persiste en effet
+     * l'invisibilité, le vol et les états hidePlayer des autres joueurs.
+     *
+     * NO-OP si le joueur est encore spectateur légitime (le nettoyage
+     * passera alors par exit(), après son vrai respawn).
+     */
+    public void ensureNormalState(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        if (plugin.getPlayerManager().getData(player).isSpectator()) {
+            return;
+        }
+        restoreNormalState(player);
+    }
+
     public boolean isSpectator(UUID uuid) {
         return plugin.getPlayerManager().getData(uuid).isSpectator();
     }

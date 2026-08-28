@@ -7,6 +7,7 @@ import com.mceteams.xii.config.ConfigManager;
 import com.mceteams.xii.config.DataManager;
 import com.mceteams.xii.config.FileManager;
 import com.mceteams.xii.item.LobbyItemManager;
+import com.mceteams.xii.listener.AchievementsListener;
 import com.mceteams.xii.listener.BlockPlaceListener;
 import com.mceteams.xii.listener.CombatListener;
 import com.mceteams.xii.listener.ConnectionListener;
@@ -216,7 +217,7 @@ public class XiiPlugin extends JavaPlugin {
     // Initialisation
     // -----------------------------------------------------------------
 
-    /** Enregistre les 13 listeners du plugin. */
+    /** Enregistre les 14 listeners du plugin. */
     private void registerListeners() {
         var pm = getServer().getPluginManager();
         pm.registerEvents(new ConnectionListener(this), this);
@@ -233,6 +234,7 @@ public class XiiPlugin extends JavaPlugin {
         pm.registerEvents(new PackageListener(this), this);
         pm.registerEvents(new RarePickupListener(this), this);
         pm.registerEvents(new WorldListener(this), this);
+        pm.registerEvents(new AchievementsListener(this), this);
     }
 
     /** Relie les 3 commandes officielles à leurs executors. */

@@ -95,10 +95,9 @@ public class RespawnManager {
             if (entry.getValue() > now) {
                 continue; // pas encore à échéance
             }
-            // handleRespawn retourne FALSE si le joueur est encore HORS
-            // LIGNE : le respawn reste DANS LA MAP et sera retenté à la
-            // seconde suivante (sinon il était PERDU définitivement et le
-            // joueur retombait en spectateur permanent à son retour).
+            // handleRespawn traite le respawn MÊME si le joueur est hors
+            // ligne (la décoche = une vraie mort, timers réels) : il
+            // reviendra vivant à sa reconnexion, après l'échéance.
             if (handleRespawn(entry.getKey())) {
                 iterator.remove();
             }
@@ -125,8 +124,8 @@ public class RespawnManager {
                 combatPending.remove(uuid); // déjà géré, pas de timer
                 continue;
             }
-            // Hors ligne => le joueur reste en attente (retenté à la
-            // prochaine sous-phase) au lieu de perdre son respawn.
+            // Même HORS LIGNE le respawn est consommé (ramené vivant à sa
+            // reconnexion) : la mort d'une déconnexion est une vraie mort.
             if (handleRespawn(uuid)) {
                 combatPending.remove(uuid);
             }
@@ -149,8 +148,13 @@ public class RespawnManager {
                 continue;
             }
             int seconds = (int) Math.ceil(remaining / 1000.0);
+            // Titre différencié si la cause est une DÉCONNEXION : pas
+            // "TU ES MORT" mais "TU AS ÉTÉ DÉCONNECTÉ" (même punition).
+            boolean wasDisconnect =
+                    plugin.getPlayerManager().getData(entry.getKey()).getDeathCause()
+                            == com.mceteams.xii.enums.DeathCause.DISCONNECT;
             com.mceteams.xii.util.MessageUtil.sendTitle(player,
-                    "§cTU ES MORT",
+                    wasDisconnect ? "§cTU AS ÉTÉ DÉCONNECTÉ" : "§cTU ES MORT",
                     "§7Réapparition dans §e" + seconds + " s",
                     0, 25, 0);
         }
@@ -161,36 +165,35 @@ public class RespawnManager {
      * - COMBAT + coeur détruit => élimination DÉFINITIVE ;
      * - sinon => retour dans sa base (spec §19 dernier point).
      *
-     * @return true si le joueur a été traité (respawn effectué ou mise
-     *         au pool totem), false s'il est encore HORS LIGNE (respawn
-     *         reporté, à retenter).
+     * Traite le respawn MÊME SI LE JOUEUR EST HORS LIGNE : la mort est
+     * une vraie mort (même punition/timing que les morts en ligne), seuls
+     * les effets physiques (sortie spectateur, téléportation, son) sont
+     * différés jusqu'à sa reconnexion (ConnectionListener.handleMidGameJoin
+     * retrouvera un joueur VIVANT et le ramènera à sa base).
+     *
+     * @return toujours true (l'entrée est consommée : plus de report).
      */
     private boolean handleRespawn(UUID uuid) {
-        Player player = Bukkit.getPlayer(uuid);
         var data = plugin.getPlayerManager().getData(uuid);
-
-        // Joueur toujours hors ligne : le respawn reste PROGRAMMÉ et
-        // sera retenté à la seconde suivante. Ne pas marquer
-        // disconnected=false ici : l'annonce "est revenu" sera émise par
-        // sa reconnexion.
-        if (player == null || !player.isOnline()) {
-            return false;
-        }
+        Player player = Bukkit.getPlayer(uuid);
+        boolean online = player != null && player.isOnline();
 
         var team = plugin.getTeamManager().getTeamOf(uuid);
         // Équipe sans coeur en COMBAT : PAS de respawn automatique.
-        // Le joueur rejoint le pool "totem de revive" (mécanique à venir) :
-        // seul un totem utilisé par son équipe pourra le ramener.
+        // Le joueur rejoint le pool "totem de revive" : seul un totem
+        // utilisé par son équipe pourra le ramener.
         boolean combatActive =
                 plugin.getGameManager().getState()
                         == com.mceteams.xii.enums.GameState.COMBAT;
         if (combatActive && team != null && !team.isHeartAlive()) {
             data.setAlive(false);
             revivePending.add(uuid);
-            plugin.getSpectatorService().enterPermanent(player);
-            MessageUtil.send(player,
-                    "§5☾ §7Ton coeur d'équipe est détruit : tu reviendras "
-                            + "uniquement via un §dtotem de revive§5.");
+            if (online) {
+                plugin.getSpectatorService().enterPermanent(player);
+                MessageUtil.send(player,
+                        "§5☾ §7Ton coeur d'équipe est détruit : tu reviendras "
+                                + "uniquement via un §dtotem de revive§5.");
+            }
             // L'ÉQUIPE peut être marquée éliminée (dernier debout) même si
             // un totem pourra plus tard ramener ses membres.
             plugin.getTeamManager().updateElimination(team);
@@ -201,23 +204,31 @@ public class RespawnManager {
         // Respawn normal : retour dans sa base.
         data.setAlive(true);
         data.setDeathCause(null);
-        plugin.getSpectatorService().exit(player);
-        PlayerUtil.heal(player);
+        data.clearLastDamage();
+        if (online) {
+            plugin.getSpectatorService().exit(player);
+            PlayerUtil.heal(player);
 
-        Location spawnPoint = team != null && team.getSpawn() != null
-                ? team.getSpawn()
-                : plugin.getZoneManager().getZone().getCenterLocation();
-        if (spawnPoint != null) {
-            player.teleport(spawnPoint);
+            Location spawnPoint = team != null && team.getSpawn() != null
+                    ? team.getSpawn()
+                    : plugin.getZoneManager().getZone().getCenterLocation();
+            if (spawnPoint != null) {
+                player.teleport(spawnPoint);
+            }
+            // Les passifs (vie/speed des classes) sont réappliqués car le
+            // reset a remis les attributs par défaut ; vie remplie.
+            plugin.getClassService().applyPassives(player, data, true);
+
+            MessageUtil.send(player, "§aRéapparition !");
+            // Title bien visible (le joueur sortait du mode spectateur),
+            // SANS sous-titre : le chat a déjà annoncé "Réapparition !".
+            MessageUtil.sendTitle(player, "§aRÉAPPARITION", "", 10, 50, 10);
+        } else {
+            // Traitement hors ligne : exit() ne s'applique qu'aux joueurs
+            // EN LIGNE, on force donc le drapeau ici (les restes physiques
+            // seront nettoyés à la reconnexion par ensureNormalState).
+            data.setSpectator(false);
         }
-        // Les passifs (vie/speed des classes) sont réappliqués car le
-        // reset a remis les attributs par défaut.
-        plugin.getClassService().applyPassives(player, data);
-
-        MessageUtil.send(player, "§aRéapparition ! Bon retour.");
-        // Title bien visible (le joueur sortait du mode spectateur).
-        MessageUtil.sendTitle(player, "§aRÉAPPARITION",
-                "§7Bon retour dans la partie !", 10, 50, 10);
         return true;
     }
 
@@ -235,26 +246,33 @@ public class RespawnManager {
     }
 
     /**
-     * TOTEM DE REVIVE (mécanique à venir) : ramène un joueur du pool.
-     * Réinitialise son état complet : vivant, non éliminé, sortie du
-     * spectateur, retour à la base, passifs réappliqués.
+     * TOTEM DE REVIVE : ramène UN membre MORT (pas besoin d'être dans un
+     * pool particulier). Réinitialise son état complet : vivant, non
+     * éliminé, sortie du spectateur, retour à la base, passifs réappliqués
+     * (vie remplie). Purge aussi les éventuels respawns programmés pour
+     * éviter le double retour.
      *
-     * NB : si l'ÉQUIPE avait été marquée éliminée pendant son absence,
-     * c'est à l'appelant (futur item) de décider de la réhabiliter aussi
-     * selon les règles choisies pour le totem.
+     * NB : si l'ÉQUIPE avait été marquée éliminée pendant l'absence du
+     * joueur, il revient quand même (règle "un mort = ressuscitable").
      *
-     * @return false si le joueur n'était pas dans le pool.
+     * @return false si le joueur est inconnu ou déjà VIVANT.
      */
     public boolean reviveByTotem(UUID playerUuid) {
-        if (!revivePending.remove(playerUuid)) {
+        var data = plugin.getPlayerManager().getData(playerUuid);
+        if (data == null || data.isAlive()) {
             return false;
         }
-        Player player = Bukkit.getPlayer(playerUuid);
-        var data = plugin.getPlayerManager().getData(playerUuid);
+        // Sort de toutes les files : le retour sera géré par ce totem.
+        revivePending.remove(playerUuid);
+        readyAt.remove(playerUuid);
+        combatPending.remove(playerUuid);
+
         data.setAlive(true);
         data.setEliminated(false);
         data.setDeathCause(null);
+        data.clearLastDamage();
 
+        Player player = Bukkit.getPlayer(playerUuid);
         if (player != null && player.isOnline()) {
             plugin.getSpectatorService().exit(player);
             com.mceteams.xii.util.PlayerUtil.heal(player);
@@ -265,9 +283,13 @@ public class RespawnManager {
             if (spawnPoint != null) {
                 player.teleport(spawnPoint);
             }
-            plugin.getClassService().applyPassives(player, data);
+            plugin.getClassService().applyPassives(player, data, true);
             com.mceteams.xii.util.MessageUtil.send(player,
                     "§d✦ §fUn §dtotem de revive§f t'a ramené dans la partie !");
+        } else {
+            // Ramené hors ligne : mêmes réserves que pour un respawn
+            // classique (état nettoyé à la reconnexion).
+            data.setSpectator(false);
         }
         return true;
     }

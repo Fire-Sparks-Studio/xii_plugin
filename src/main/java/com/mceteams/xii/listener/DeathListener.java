@@ -2,6 +2,7 @@ package com.mceteams.xii.listener;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.DeathCause;
+import com.mceteams.xii.enums.GameState;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -31,7 +32,15 @@ public class DeathListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerDeath(PlayerDeathEvent event) {
+        GameState state = plugin.getGameManager().getState();
         if (!systemEnabled()) {
+            // Lobby d'attente / countdown / fin de partie : le système de
+            // mort est inactif, mais on masque quand même le message de
+            // mort vanilla pour éviter les annonces parasites du lobby.
+            // Serveur NORMAL (NONE) : le plugin n'interfère pas.
+            if (state != GameState.NONE) {
+                event.deathMessage(null);
+            }
             return;
         }
         Player victim = event.getEntity();

@@ -64,7 +64,9 @@ public class ClassManager {
     public void select(Player player, PlayerClass playerClass) {
         var data = plugin.getPlayerManager().getData(player);
         data.setPlayerClass(playerClass);
-        plugin.getClassService().applyPassives(player, data);
+        // fillHealth=true : au choix de la classe on récupère le NOUVEAU
+        // max (ex : Robuste passe à 15 coeurs, barre remplie).
+        plugin.getClassService().applyPassives(player, data, true);
         MessageUtil.send(player,
                 "§7Classe choisie : " + playerClass.getColoredName());
     }

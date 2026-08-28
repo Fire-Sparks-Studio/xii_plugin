@@ -31,10 +31,10 @@ import java.util.UUID;
  *   Jour 4/12
  *   Prochaine : Colis dans 7:32
  *   (vide)
- *   §9Bleu ♥ 5                        <- coeur vivant + joueurs vivants
- *   §eJaune ♡ 2                       <- coeur détruit + joueurs vivants
+ *   §9Bleu ♥                            <- coeur vivant (pas de nombre)
+ *   §eJaune 2                           <- coeur détruit + vivants restants
  *   §cRouge ✘                         <- éliminée
- *   §aVert ♥ 8 §8Vous                 <- votre équipe : marqueur gris
+ *   §aVert ♥ §8Vous                     <- votre équipe : marqueur gris
  *   (vide)
  *   §7Votre classe : §aMineur
  *   §7Points équipe : §e240           <- total de VOTRE équipe uniquement
@@ -183,10 +183,11 @@ public class ScoreboardManager {
     }
 
     /**
-     * Les 4 lignes d'équipes, format "<Couleur> <symbole><vivants>" :
-     * ♥ = coeur vivant, ♡ = coeur détruit (joueurs encore en vie),
-     * ✘ = éliminée / inexistante.
-     * Votre équipe porte le marqueur gris "Vous".
+     * Les 4 lignes d'équipes, format "<Couleur> <symbole>:vivants>" :
+     * ♥ = coeur vivant (SEUL, sans nombre), nombre = coeur détruit
+     * (SEUL, sans coeur vide), ✘ = éliminée / inexistante.
+     * Votre équipe porte le marqueur gris "Vous". Les morts, spectateurs
+     * et déconnectés ne sont pas comptés comme vivants.
      */
     private void appendTeamLines(List<String> lines, Player viewer) {
         GameTeam viewerTeam =
@@ -203,10 +204,10 @@ public class ScoreboardManager {
                 // Coeur en vie => coeur plein SEUL (pas de nombre).
                 line = color.getColorCode() + color.getDisplayName() + " §a♥";
             } else {
-                // Coeur détruit mais joueurs encore debout =>
-                // coeur vide + NOMBRE de joueurs vivants.
+                // Coeur détruit => NOMBRE de joueurs vivants SEUL
+                // (plus de coeur vide : rien n'est affiché au-dessus).
                 line = color.getColorCode() + color.getDisplayName()
-                        + " §c♡ §f" + plugin.getTeamManager().aliveCount(team);
+                        + " §f" + plugin.getTeamManager().aliveCount(team);
             }
 
             // Marqueur "votre équipe" : VOUS en majuscules, gris clair, gras.

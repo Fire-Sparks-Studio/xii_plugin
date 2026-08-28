@@ -89,8 +89,48 @@ public class TabManager {
             if (plugin.getGameManager().getState() == GameState.NONE) {
                 return;
             }
+            // Un joueur qui ARRIVE (première connexion OU reconnection)
+            // est d'abord diffusé par la vanilla avec l'ordre 0 => il
+            // apparaît TOUT EN BAS du TAB chez les autres. On force sa
+            // re-publication immédiate avec le bon nom + le bon ordre
+            // (paquet au niveau de chaque spectateur, idempotent), puis
+            // updateAll recalcule le reste au tick suivant.
+            readdJoinedPlayer(player);
             updateAll();
         });
+    }
+
+    /**
+     * Re-publie le joueur qui vient de se connecter AUPRÈS DE TOUS les
+     * autres spectateurs avec sa position calculée + son nom de liste,
+     * et pose aussi son ordre global côté serveur. Corrige le bug de
+     * "joueur reco tout en bas du TAB" (ordre vanilla 0 le temps du tick).
+     */
+    private void readdJoinedPlayer(Player joined) {
+        if (joined == null || !joined.isOnline()) {
+            return;
+        }
+        List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
+        List<Player> sorted = sortPlayers(online);
+        int index = Math.max(0, sorted.indexOf(joined));
+        int order = TabLayout.PLAYER_ORDER_BASE - index;
+        String name = formattedName(joined);
+
+        for (Player viewer : online) {
+            if (viewer.equals(joined) || !viewer.isOnline()) {
+                continue;
+            }
+            PlayerInfoPackets.readd(viewer, joined,
+                    CraftChatMessage.fromStringOrNull(name), order);
+        }
+
+        // Garde l'état de diff cohérent avec le sync qui va suivre.
+        lastPlayerName.put(joined.getUniqueId(), name);
+        lastPlayerOrder.put(joined.getUniqueId(), order);
+        if (joined.isOnline()) {
+            joined.playerListName(LEGACY.deserialize(name));
+            joined.setPlayerListOrder(order);
+        }
     }
 
     /** Oublie l'état poussé à un joueur qui se déconnecte. */
@@ -359,12 +399,13 @@ public class TabManager {
             }
         }
         if (upgrades.isEmpty()) {
-            upgrades.add(" §7Aucune");
+            upgrades.add(" §7Aucun");
         }
-        // La colonne d'infos doit tenir dans 20 lignes maximum (sinon le
-        // client casse la grille en 3 colonnes) : 10 lignes fixes + 8
-        // upgrades, on coupe au-delà.
-        int maxUpgradeLines = 8;
+        // LA COLONNE D'INFOS DOIT tenir dans 20 lignes max (sinon le
+        // client casse la grille en 3 colonnes). Budget : ligne de titre,
+        // kills, points, "Upgrades :" = 4 lignes fixes + les 13 upgrades
+        // du jeu = 17 lignes <= 20 => TOUTES les upgrades s'affichent.
+        int maxUpgradeLines = PlayerUpgrade.values().length;
         if (upgrades.size() > maxUpgradeLines) {
             upgrades = new ArrayList<>(upgrades.subList(0, maxUpgradeLines));
         }

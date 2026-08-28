@@ -263,6 +263,7 @@ public class GameManager {
         MessageUtil.broadcast(" ");
         MessageUtil.broadcast("§e§lLa partie démarre dans §f§l"
                 + plugin.getConfigManager().getCountdownSeconds() + " secondes§e§l !");
+        MessageUtil.broadcast(" ");
 
         int seconds = plugin.getConfigManager().getCountdownSeconds();
         // Countdown de lancement : TITLES + pling grave chaque seconde.
@@ -348,7 +349,7 @@ public class GameManager {
             data.setEliminated(false);
             data.setSpectator(false);
             player.teleport(spawnPoint);
-            plugin.getClassService().applyPassives(player, data);
+            plugin.getClassService().applyPassives(player, data, true);
         }
 
         // Tout le monde est en jeu : le GROWL DE DRAGON retentit ICI
@@ -444,13 +445,13 @@ public class GameManager {
                         "§7Bonne collecte à tous !");
                 case PACKAGES -> {
                     startPackageTask();
-                    MessageUtil.broadcast("§e✦ §fLes premiers colis tombent du ciel§7 !");
+                    MessageUtil.broadcast("\n§e✦ §fLes premiers colis tombent du ciel§7 !\n");
                 }
                 case DUNGEONS -> plugin.getDungeonManager().unlockLoot();
                 case POINT_UPGRADES -> MessageUtil.broadcast(
-                        "§b✦ §fPOINTS x2 §7jusqu'à la fin de la sous-phase !");
+                        "\n§b✦ §fPOINTS x2 §7jusqu'à la fin de la sous-phase !\n");
                 case PACKAGE_UPGRADE -> MessageUtil.broadcast(
-                        "§e✦ Davantage de colis §7apparaissent désormais !");
+                        "\n§e✦ Davantage de colis §7apparaissent désormais !\n");
                 case DUNGEON_RESTOCK -> plugin.getDungeonManager().restockAll();
             }
             return;
@@ -465,10 +466,10 @@ public class GameManager {
                 case START -> { }
                 case METEORITES -> {
                     startMeteoriteTask();
-                    MessageUtil.broadcast("§6☄ §fDes météorites s'écrasent sur la map§7 !");
+                    MessageUtil.broadcast("\n§6☄ §fDes météorites s'écrasent sur la map§7 !\n");
                 }
                 case MORE_DAMAGE -> MessageUtil.broadcast(
-                        "§4⚔ §fDÉGÂTS x2 §7pendant toute la sous-phase !");
+                        "\n§4⚔ §fDÉGÂTS x2 §7pendant toute la sous-phase !\n");
                 case ALL_CORE_DESTRUCTION ->
                         plugin.getCoreService().destroyAllCores();
                 case MORE_METEORITES -> {
@@ -476,7 +477,7 @@ public class GameManager {
                     // automatiquement (idempotent si déjà fait au jour 10).
                     plugin.getCoreService().destroyAllCores();
                     MessageUtil.broadcast(
-                            "§6☄ Météorites x2 §7- points terrain doublés !");
+                            "\n§6☄ Météorites x2 §7- points terrain doublés !\n");
                 }
                 case SUDDEN_DEATH -> {
                     startSuddenDeathTask();
@@ -776,7 +777,7 @@ public class GameManager {
             if (spawnPoint != null) {
                 online.teleport(spawnPoint);
             }
-            plugin.getClassService().applyPassives(online, data);
+            plugin.getClassService().applyPassives(online, data, true);
         }
 
         // Les données des joueurs HORS LIGNE sont aussi remises à neuf.
