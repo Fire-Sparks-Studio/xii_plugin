@@ -13,6 +13,8 @@ import com.mceteams.xii.listener.CombatListener;
 import com.mceteams.xii.listener.ConnectionListener;
 import com.mceteams.xii.listener.CoreListener;
 import com.mceteams.xii.listener.DeathListener;
+import com.mceteams.xii.listener.DepositListener;
+import com.mceteams.xii.listener.CraftListener;
 import com.mceteams.xii.listener.ExplorationListener;
 import com.mceteams.xii.listener.InteractionListener;
 import com.mceteams.xii.listener.InventoryListener;
@@ -22,18 +24,7 @@ import com.mceteams.xii.listener.ProtectionListener;
 import com.mceteams.xii.listener.RarePickupListener;
 import com.mceteams.xii.listener.TeamListener;
 import com.mceteams.xii.listener.WorldListener;
-import com.mceteams.xii.manager.BaseManager;
-import com.mceteams.xii.manager.ClassManager;
-import com.mceteams.xii.manager.DungeonManager;
-import com.mceteams.xii.manager.GameManager;
-import com.mceteams.xii.manager.LootManager;
-import com.mceteams.xii.manager.PackageManager;
-import com.mceteams.xii.manager.PhaseManager;
-import com.mceteams.xii.manager.PlayerManager;
-import com.mceteams.xii.manager.RespawnManager;
-import com.mceteams.xii.manager.StructureManager;
-import com.mceteams.xii.manager.TeamManager;
-import com.mceteams.xii.manager.ZoneManager;
+import com.mceteams.xii.manager.*;
 import com.mceteams.xii.scoreboard.ScoreboardManager;
 import com.mceteams.xii.scoreboard.TabManager;
 import com.mceteams.xii.service.ClassService;
@@ -91,6 +82,9 @@ public class XiiPlugin extends JavaPlugin {
     private RespawnManager respawnManager;
     private PackageManager packageManager;
     private GameManager gameManager;
+    private GateManager gateManager;
+    private MarkerManager markerManager;
+    private NpcManager npcManager;
 
     // --- Système de loot -----------------------------------------------
     private LootManager lootManager;
@@ -123,34 +117,45 @@ public class XiiPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        getLogger().info("===[XII Days]=== Démarrage...");
-
+        getLogger().info("===[XII Days]===");
+        getLogger().info("│");
         // 1) Fichiers + clé PDC des items spéciaux.
+        getLogger().info("├─ Chargement des fichiers et clé PDC des items spéciaux");
         this.fileManager = new FileManager(this);
         this.fileManager.setup();
         ItemUtil.init(this);
         com.mceteams.xii.util.LocationUtil.init(this);
+        getLogger().info("│  └─ Terminé");
 
         // 2) Configuration statique + données persistantes.
+        getLogger().info("├─ Chargement de la Configuration statique et du module des Données persistantes.");
         this.configManager = new ConfigManager(this);
         this.dataManager = new DataManager(this, fileManager);
+        getLogger().info("│  └─ Terminé");
 
         // 3) État des systèmes (tout éteint au départ).
+        getLogger().info("├─ Chargement des modules d'État des systèmes (tout éteint au départ)");
         this.gameSystems = new GameSystems();
         this.gameSystems.reset();
+        getLogger().info("│  └─ Terminé");
 
         // 4) Managers "données" simples.
+        getLogger().info("├─ Chargement des Managers \"données\" simples");
         this.zoneManager = new ZoneManager(this, dataManager);
         this.playerManager = new PlayerManager();
         this.teamManager = new TeamManager(this,
                 configManager.getDefaultMaxPlayersPerTeam());
         this.phaseManager = new PhaseManager();
+        getLogger().info("│  └─ Terminé");
 
         // 5) Items de lobby + structures.
+        getLogger().info("├─ Chargement ");
         this.lobbyItemManager = new LobbyItemManager(this);
         this.structureManager = new StructureManager(this);
+        getLogger().info("│  └─ Terminé");
 
         // 6) Services (logique métier pure).
+        getLogger().info("├─ Chargement des Services (logique métier pure)");
         this.pointService = new PointService(this);
         this.combatService = new CombatService(this);
         this.miningService = new MiningService(this);
@@ -166,50 +171,71 @@ public class XiiPlugin extends JavaPlugin {
         this.upgradeService = new UpgradeService(this);
         // Barre d'action des points CUMULÉS (fenêtre courte mutualisée).
         this.pointFeedService = new PointFeedService(this);
+        getLogger().info("│  └─ Terminé");
 
         // 7bis) SYSTÈME DE LOOT : manager (tables) puis service (génération).
+        getLogger().info("├─ Chargement des modules des loots: manager (tables) puis service (génération).");
         this.lootManager = new LootManager();
         this.lootService = new LootService(this, lootManager);
+        getLogger().info("│  └─ Terminé");
 
         // 7) Managers qui s'appuient sur les services.
+        getLogger().info("├─ Chargement des Managers qui s'appuient sur les services.");
         this.respawnManager = new RespawnManager(this);
         this.baseManager = new BaseManager(this);
         this.dungeonManager = new DungeonManager(this);
         this.classManager = new ClassManager(this);
         this.packageManager = new PackageManager(this);
+        this.gateManager = new GateManager(this);
+        this.npcManager = new NpcManager();
+        this.markerManager = new MarkerManager(this);
+        getLogger().info("│  └─ Terminé");
 
         // 8) Contrôleur système + orchestrateur global.
+        getLogger().info("├─ Chargement du Contrôleur système + orchestrateur global");
         this.systemController = new SystemController(this);
         this.gameManager = new GameManager(this);
 
         // Le PhaseManager prévient le GameManager à chaque sous-phase.
         this.phaseManager.setSubPhaseStartHook(gameManager::handleSubPhaseStart);
+        getLogger().info("│  └─ Terminé");
 
         // 9) Affichage.
+        getLogger().info("├─ Chargement des modules d'affichages TAB et Scoreboard");
         this.scoreboardManager = new ScoreboardManager(this);
         this.tabManager = new TabManager(this);
+        getLogger().info("│  └─ Terminé");
 
         // 10) Enregistrement des listeners (détection) et commandes.
+        getLogger().info("├─ Enregistrement des listeners (détection) et commandes");
         registerListeners();
         registerCommands();
+        getLogger().info("│  └─ Terminé");
 
         // 11) Purge d'une éventuelle zone de session précédente.
+        getLogger().info("├─ Purge d'une éventuelle zone de session précédente ");
         restoreZoneState();
+        getLogger().info("│  └─ Terminé");
 
         // 12) Barre d'action des points : tick toutes les 200 ms (fenêtre
         // de mutualisation de 3 s, cf. PointFeedService).
+        getLogger().info("├─ Chargement des modules de la barre d'action des points");
         Bukkit.getScheduler().runTaskTimer(this,
                 () -> pointFeedService.tick(), 20L, 4L);
+        getLogger().info("│  └─ Terminé");
+        getLogger().info("");
 
         getLogger().info("===[READY]===");
     }
 
     @Override
     public void onDisable() {
+        getLogger().info("Arrêt des fonctionnalités actives en cours...");
         Bukkit.getScheduler().cancelTasks(this);
         if (gameManager != null) {
             gameManager.shutdown();
         }
+        getLogger().info("└─ Terminé");
         getLogger().info("===[DISABLED]===");
     }
 
@@ -235,6 +261,8 @@ public class XiiPlugin extends JavaPlugin {
         pm.registerEvents(new RarePickupListener(this), this);
         pm.registerEvents(new WorldListener(this), this);
         pm.registerEvents(new AchievementsListener(this), this);
+        pm.registerEvents(new DepositListener(this), this);
+        pm.registerEvents(new CraftListener(this), this);
     }
 
     /** Relie les 3 commandes officielles à leurs executors. */
@@ -252,6 +280,10 @@ public class XiiPlugin extends JavaPlugin {
         var zone = getCommand("zone");
         if (zone != null) {
             zone.setExecutor(new ZoneCommand(this));
+        }
+        var respawn = getCommand("respawn");
+        if (respawn != null) {
+            respawn.setExecutor(new com.mceteams.xii.command.RespawnCommand(this));
         }
         var admin = getCommand("admin");
         if (admin != null) {
@@ -297,6 +329,9 @@ public class XiiPlugin extends JavaPlugin {
     public RespawnManager getRespawnManager() { return respawnManager; }
     public PackageManager getPackageManager() { return packageManager; }
     public GameManager getGameManager() { return gameManager; }
+    public GateManager getGateManager() { return gateManager; }
+    public MarkerManager getMarkerManager() { return markerManager; }
+    public NpcManager getNpcManager() { return npcManager; }
 
     public PointService getPointService() { return pointService; }
     public CombatService getCombatService() { return combatService; }

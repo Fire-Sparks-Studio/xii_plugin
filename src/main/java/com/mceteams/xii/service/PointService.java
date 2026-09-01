@@ -7,6 +7,7 @@ import com.mceteams.xii.enums.PointCategory;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.PointEvent;
 import com.mceteams.xii.model.PlayerData;
+import com.mceteams.xii.util.MessageUtil;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -121,6 +122,23 @@ public class PointService {
      * La pénalité est enregistrée sur le joueur ET son équipe.
      */
     public void remove(Player player, int amount, String reason) {
+        remove(player, null, amount, reason);
+    }
+
+    /**
+     * Retire des points avec notion d'OFFENSEUR.
+     *
+     * RÈGLES UTILISATEUR (messages CIBLÉS, jamais en broadcast) :
+     * - l'ÉQUIPE TOUCHÉE voit : "§cVotre équipe a perdu X points à cause
+     *   de <offense>." ;
+     * - l'ÉQUIPE OFFENSIVE (celle qui fait perdre) voit : "Vous avez fait
+     *   perdre X points à vos adversaires." (en bleu).
+     * Les autres équipes ne voient rien.
+     *
+     * @param offender équipe responsable de la perte (null si environnemental)
+     */
+    public void remove(Player player, GameTeam offender,
+                       int amount, String reason) {
         if (player == null || amount <= 0) {
             return;
         }
@@ -132,6 +150,23 @@ public class PointService {
             team.getScore().addPenalty(amount);
         }
         recordEvent(player, team, null, -amount, reason);
+
+        // Message CIBLÉ à l'équipe touchée.
+        if (team != null) {
+            String source = offender != null
+                    ? offender.getColor().getColorCode()
+                    + offender.getColor().getDisplayName()
+                    : reason;
+            MessageUtil.broadcastToTeam(team,
+                    " §cVotre équipe a perdu §l" + amount
+                            + " §r§cpoints à cause de " + source + ".");
+        }
+        // Message CIBLÉ à l'équipe offensive ("fait perdre").
+        if (offender != null) {
+            MessageUtil.broadcastToTeam(offender,
+                    " §3Vous avez fait perdre §l" + amount
+                            + " §r§3points à vos adversaires.");
+        }
     }
 
     /**

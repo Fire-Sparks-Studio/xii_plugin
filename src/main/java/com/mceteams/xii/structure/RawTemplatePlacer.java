@@ -3,12 +3,15 @@ package com.mceteams.xii.structure;
 import com.mceteams.xii.XiiPlugin;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.Material;
 
-import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -24,9 +27,15 @@ import java.util.Set;
  * structure n'est utilisée : seulement des blocs.
  *
  * Supporte la rotation (positions transformées + propriétés facing/
- * rotation/axis remappées). Les entités du template sont ignorées.
+ * rotation/axis + connexions north/south/east/west remappées). Les
+ * entités du template sont ignorées.
  */
 public class RawTemplatePlacer {
+
+    /** Bloc "vide" du template : jamais posé, sert de gabarit. */
+    public static final String STRUCTURE_VOID = "minecraft:structure_void";
+    /** Épaisseur max du remblai herbeux sous une base (style village). */
+    private static final int GRASS_FILL_DEPTH = 4;
 
     private final XiiPlugin plugin;
 
@@ -42,10 +51,13 @@ public class RawTemplatePlacer {
      * Place le template sur le thread principal (chunks chargés async au
      * préalable).
      *
-     * @param callback reçoit la liste des blocs POSÉS dans le monde
-     *                 (liste vide = échec) - permet un éventuel "undo".
+     * @param baseGrassFill true pour remblayer de la terre/grass sous le
+     *                      plancher de la structure (style villages)
+     * @param callback      reçoit la liste des blocs POSÉS dans le monde
+     *                      (liste vide = échec) - permet un éventuel "undo".
      */
     public void placeAsync(Path nbtFile, StructureLocation location,
+                           boolean baseGrassFill,
                            java.util.function.Consumer<List<Location>> callback) {
         List<TemplateBlock> blocks = decode(nbtFile, location.getRotation());
         if (blocks.isEmpty()) {
@@ -73,7 +85,20 @@ public class RawTemplatePlacer {
                 .allOf(futures.toArray(
                         new java.util.concurrent.CompletableFuture[0]))
                 .thenRun(() -> {
-                    Runnable write = () -> callback.accept(writeBlocks(blocks, location));
+                    Runnable write = () -> {
+                        // RÈGLE UTILISATEUR : si un arbre occupe l'empreinte
+                        // de la base, on le NETTOIE (troncs + feuilles) AVANT
+                        // de poser la structure, pour que celle-ci repose sur
+                        // le sol et ne soit pas posée SUR la canopée.
+                        if (baseGrassFill) {
+                            clearTreeIntersections(location, blocks);
+                        }
+                        List<Location> written = writeBlocks(blocks, location);
+                        if (baseGrassFill) {
+                            fillGrassUnder(location, blocks);
+                        }
+                        callback.accept(written);
+                    };
                     if (Bukkit.isPrimaryThread()) {
                         write.run();
                     } else {
@@ -95,6 +120,9 @@ public class RawTemplatePlacer {
         List<Location> written = new ArrayList<>();
         int failed = 0;
         for (TemplateBlock block : blocks) {
+            if (isVoid(block.dataString())) {
+                continue; // structure_void : gabarit, jamais posé
+            }
             try {
                 Location target = new Location(location.getWorld(),
                         location.getX() + block.x(),
@@ -102,8 +130,7 @@ public class RawTemplatePlacer {
                         location.getZ() + block.z());
                 // Jamais d'écrasement d'un BEACON : les coeurs provisoires
                 // des bases peuvent être posés pendant l'application async.
-                if (target.getBlock().getType()
-                        == org.bukkit.Material.BEACON) {
+                if (target.getBlock().getType() == Material.BEACON) {
                     continue;
                 }
                 target.getBlock().setBlockData(
@@ -121,6 +148,162 @@ public class RawTemplatePlacer {
                 + " bloc(s)" + (failed > 0 ? ", " + failed + " ignoré(s)" : "")
                 + ".");
         return written;
+    }
+
+    /**
+     * Remblai sous le plancher de la structure : grass sur la couche
+     * supérieure (juste sous le sol), terre en dessous, comme les
+     * villages vanilla. Ne touche JAMAIS un bloc posé (autre qu'air ou
+     * structure_void) et ne creuse jamais sous le relief d'origine.
+     *
+     * Fourni un support solide sous les bases posées en hauteur.
+     */
+    private void fillGrassUnder(StructureLocation location,
+                                List<TemplateBlock> blocks) {
+        World world = location.getWorld();
+        if (world == null) {
+            return;
+        }
+        // Plancher par colonne : le plus bas bloc NON-void du template
+        // (un build aux sols étagés garde un remblai localisé).
+        Map<Long, Integer> floorByColumn = new HashMap<>();
+        for (TemplateBlock block : blocks) {
+            if (isVoid(block.dataString())) {
+                continue;
+            }
+            int x = location.getX() + block.x();
+            int z = location.getZ() + block.z();
+            int y = location.getY() + block.y();
+            long key = columnKey(x, z);
+            floorByColumn.merge(key, y, Math::min);
+        }
+
+        int filled = 0;
+        for (Map.Entry<Long, Integer> column : floorByColumn.entrySet()) {
+            int x = (int) (column.getKey() >> 32);
+            int z = (int) (long) column.getKey();
+            int floorY = column.getValue();
+            int groundY = world.getHighestBlockYAt(x, z);
+            int topY = floorY - 1;
+            // Jamais sous le relief d'origine, jamais plus profond que
+            // GRASS_FILL_DEPTH sous le plancher.
+            int bottomY = Math.max(groundY, topY - GRASS_FILL_DEPTH);
+            for (int y = topY; y >= bottomY; y--) {
+                Block block = world.getBlockAt(x, y, z);
+                Material type = block.getType();
+                if (type != Material.AIR && type != Material.STRUCTURE_VOID) {
+                    continue; // ne jamais écraser un bloc de structure existant
+                }
+                block.setBlockData(Bukkit.createBlockData(
+                        y == topY ? "minecraft:grass_block" : "minecraft:dirt"),
+                        false);
+                filled++;
+            }
+        }
+        if (filled > 0) {
+            plugin.getLogger().info("[Structures] Remblai herbeux sous la base : "
+                    + filled + " bloc(s).");
+        }
+    }
+
+    /** true si la chaîne BlockData représente un structure_void. */
+    private boolean isVoid(String dataString) {
+        return dataString != null
+                && dataString.startsWith(STRUCTURE_VOID);
+    }
+
+    /**
+     * RÈGLE UTILISATEUR : retire les ARBRES qui occupent l'empreinte d'une
+     * base AVANT la pose de la structure. Sans cela, une base posée où pousse
+     * un arbre se retrouvait flottant SUR la canopée au lieu de reposer au
+     * sol. On supprime troncs (logs), feuilles et souches sur toute la hauteur
+     * du template, dans la boîte X/Z qu'il recouvre.
+     *
+     * Ne touche JAMAIS aux blocs de la structure elle-même (appelée AVANT
+     * writeBlocks) ni à l'eau/lave (on ne vide pas un étang).
+     */
+    private void clearTreeIntersections(StructureLocation location,
+                                        List<TemplateBlock> blocks) {
+        World world = location.getWorld();
+        if (world == null) {
+            return;
+        }
+        // Bornes de l'empreinte du template (tous les blocs, void inclus).
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (TemplateBlock block : blocks) {
+            int x = location.getX() + block.x();
+            int z = location.getZ() + block.z();
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minZ = Math.min(minZ, z);
+            maxZ = Math.max(maxZ, z);
+        }
+        if (minX > maxX || minZ > maxZ) {
+            return;
+        }
+
+        // Hauteur scrutée : du niveau de l'ancre jusqu'au sommet du template.
+        int maxY = location.getY();
+        for (TemplateBlock block : blocks) {
+            maxY = Math.max(maxY, location.getY() + block.y());
+        }
+
+        int cleared = 0;
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                // Sol local : on peut partir du bas de la structure.
+                int minY = Math.max(1, minAnchorY(location, blocks, x, z));
+                for (int y = minY; y <= maxY; y++) {
+                    Block block = world.getBlockAt(x, y, z);
+                    if (isTreeBlock(block.getType())) {
+                        block.setType(Material.AIR, false);
+                        cleared++;
+                    }
+                }
+            }
+        }
+        if (cleared > 0) {
+            plugin.getLogger().info("[Structures] Arbres retiré(s) (" + cleared
+                    + " bloc(s)) sur l'empreinte d'une base.");
+        }
+    }
+
+    /** Plus bas Y du template pour une colonne (x,z) de l'empreinte. */
+    private int minAnchorY(StructureLocation location,
+                           List<TemplateBlock> blocks, int x, int z) {
+        int minY = location.getY() - 4; // petite marge sous l'ancre
+        for (TemplateBlock block : blocks) {
+            int bx = location.getX() + block.x();
+            int bz = location.getZ() + block.z();
+            if (bx == x && bz == z) {
+                minY = Math.min(minY, location.getY() + block.y());
+            }
+        }
+        return minY;
+    }
+
+    /** Un bloc constitutif d'un arbre ? */
+    private boolean isTreeBlock(Material type) {
+        return switch (type) {
+            case OAK_LOG, SPRUCE_LOG, BIRCH_LOG, JUNGLE_LOG,
+                    ACACIA_LOG, DARK_OAK_LOG, MANGROVE_LOG, CHERRY_LOG,
+                    CRIMSON_STEM, WARPED_STEM,
+                    OAK_LEAVES, SPRUCE_LEAVES, BIRCH_LEAVES, JUNGLE_LEAVES,
+                    ACACIA_LEAVES, DARK_OAK_LEAVES, MANGROVE_LEAVES,
+                    CHERRY_LEAVES, AZALEA_LEAVES, FLOWERING_AZALEA_LEAVES,
+                    OAK_WOOD, SPRUCE_WOOD, BIRCH_WOOD, JUNGLE_WOOD,
+                    ACACIA_WOOD, DARK_OAK_WOOD, MANGROVE_WOOD, CHERRY_WOOD,
+                    STRIPPED_OAK_LOG, STRIPPED_SPRUCE_LOG, STRIPPED_BIRCH_LOG,
+                    STRIPPED_JUNGLE_LOG, STRIPPED_ACACIA_LOG, STRIPPED_DARK_OAK_LOG
+                    -> true;
+            default -> false;
+        };
+    }
+
+    /** Clé compacte d'une colonne (x,z). */
+    private long columnKey(int x, int z) {
+        return ((long) x << 32) | (z & 0xffffffffL);
     }
 
     /**
@@ -221,7 +404,7 @@ public class RawTemplatePlacer {
                         sb.append(prop.getKey()).append('=')
                                 .append(remapProperty(prop.getKey(),
                                         String.valueOf(prop.getValue()),
-                                        rotation));
+                                        rotation, properties));
                     }
                     sb.append(']');
                 }
@@ -276,7 +459,8 @@ public class RawTemplatePlacer {
 
     /** Remappe les propriétés directionnelles selon la rotation. */
     private String remapProperty(String key, String value,
-                                 StructureRotation rotation) {
+                                 StructureRotation rotation,
+                                 SimpleNbt.Compound props) {
         if (rotation == StructureRotation.NONE || value == null) {
             return value;
         }
@@ -316,10 +500,54 @@ public class RawTemplatePlacer {
                 }
                 return value;
             }
+            // Murs, murets, barrières en fer : connexions booléennes par
+            // côté (north/east/south/west). Elles décrivent un RÉSEAU
+            // horizontal : la structure tournée doit conserver SES
+            // connexions physiques, donc on lit les propriétés SOEURS.
+            case "north", "east", "south", "west" -> {
+                return remapConnection(key, props, rotation);
+            }
             default -> {
                 return value;
             }
         }
+    }
+
+    /**
+     * Remappe une connexion booléenne en lisant le côté SOURCE qui, une
+     * fois la structure tournée, occupera la place du côté {@code side}.
+     *  CW90  : north<-west  east<-north  south<-east  west<-south
+     *  CW180 : north<-south e<-w         south<-north west<-east
+     *  CCW90 : north<-east  east<-south  south<-west  west<-north
+     */
+    private String remapConnection(String side, SimpleNbt.Compound props,
+                                   StructureRotation rotation) {
+        String source = switch (rotation) {
+            case CLOCKWISE_90 -> switch (side) {
+                case "north" -> "west";
+                case "east" -> "north";
+                case "south" -> "east";
+                case "west" -> "south";
+                default -> side;
+            };
+            case CLOCKWISE_180 -> switch (side) {
+                case "north" -> "south";
+                case "east" -> "west";
+                case "south" -> "north";
+                case "west" -> "east";
+                default -> side;
+            };
+            case COUNTERCLOCKWISE_90 -> switch (side) {
+                case "north" -> "east";
+                case "east" -> "south";
+                case "south" -> "west";
+                case "west" -> "north";
+                default -> side;
+            };
+            default -> side;
+        };
+        Object raw = props.get(source);
+        return raw == null ? "false" : String.valueOf(raw);
     }
 
     /** Cycle des directions cardinales pour chaque rotation. */

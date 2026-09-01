@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 6;
+    private static final int CONFIG_VERSION = 8;
 
     // -----------------------------------------------------------------
     // UPGRADES (items consommables)
@@ -272,6 +272,21 @@ public class ConfigManager {
 
     public int getCorePoints() {
         return config.getInt("points.core-destroyed", 50);
+    }
+
+    /** Petits points pour un cristal de tour détruit (bouclier du coeur). */
+    public int getCoreTowerPoints() {
+        return config.getInt("points.core-tower", 10);
+    }
+
+    /** Pénalité retirée à chaque AUTRE équipe par poudre de redstone déposée. */
+    public int getRedstonePenalty() {
+        return config.getInt("points.redstone-penalty", 3);
+    }
+
+    /** Facteur "double" appliqué aux minerais déposés dans le coffre de dépôt. */
+    public double getDepositMultiplier() {
+        return config.getDouble("points.deposit-multiplier", 2.0);
     }
 
     public int getDeathPenalty() {

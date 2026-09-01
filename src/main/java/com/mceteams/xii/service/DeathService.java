@@ -72,21 +72,12 @@ public class DeathService {
         plugin.getSpectatorService().enter(victim);
 
         // 5. Titre de mort + délai annoncé (texte FRANÇAIS, spec §29).
+        //    Système unique (jour 1 à jour 12) : respawn minuté classique.
         int delay = plugin.getRespawnManager().schedule(victim.getUniqueId());
-        if (delay > 0) {
-            // PRÉPARATION : respawn minuté classique.
-            MessageUtil.sendTitle(victim,
-                    "§cTU ES MORT",
-                    "§7Réapparition dans §e" + delay + " seconde(s)",
-                    10, 60, 10);
-        } else {
-            // COMBAT (jour 7+) : pas de timer, retour au début de la
-            // prochaine sous-phase.
-            MessageUtil.sendTitle(victim,
-                    "§cTU ES MORT",
-                    "§7Réapparition au début de la §eprochaine sous-phase",
-                    10, 60, 10);
-        }
+        MessageUtil.sendTitle(victim,
+                "§cTU ES MORT",
+                "§7Réapparition dans §e" + delay + " seconde(s)",
+                10, 60, 10);
         SoundUtil.playDeath(victim);
 
         // Annonce à tous + vérification victoire anticipée (style Hypixel).

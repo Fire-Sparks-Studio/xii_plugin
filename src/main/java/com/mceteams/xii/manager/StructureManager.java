@@ -1,6 +1,7 @@
 package com.mceteams.xii.manager;
 
 import com.mceteams.xii.XiiPlugin;
+import com.mceteams.xii.enums.TeamColor;
 import com.mceteams.xii.model.GameZone;
 import com.mceteams.xii.structure.StructureLocation;
 import com.mceteams.xii.structure.StructurePlacer;
@@ -9,7 +10,9 @@ import org.bukkit.Location;
 import org.bukkit.structure.Structure;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Facade de gestion des structures .nbt (spec §36).
@@ -35,18 +38,26 @@ public class StructureManager {
 
     /** Placements effectués (pour une éventuelle régénération). */
     private final List<PlacementRecord> placements = new ArrayList<>();
+    /** Clés uniques des placements (anti-croissance de l'historique). */
+    private final Set<String> placementKeys = new LinkedHashSet<>();
 
     /**
      * Positions de TOUS les blocs posés manuellement (poseur de secours) :
      * permet à /zone delete de retirer les structures du monde.
      */
-    private final List<Location> placedBlocks = new ArrayList<>();
+    private final Set<Location> placedBlocks = new LinkedHashSet<>();
 
     /**
      * Blocs du LOBBY uniquement : retirés quand la partie se lance,
      * reposés quand tout le monde est téléporté de retour (fin/stop).
      */
-    private final List<Location> lobbyBlocks = new ArrayList<>();
+    private final Set<Location> lobbyBlocks = new LinkedHashSet<>();
+
+    /**
+     * Clés "monde:x:y:z" de TOUS les blocs de structure posés : sert à la
+     * protection (blocs de structure incassables/irremplaçables, spec §18).
+     */
+    private final Set<String> structureKeys = new LinkedHashSet<>();
 
     public StructureManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -164,18 +175,34 @@ public class StructureManager {
     /**
      * Place une base d'équipe à l'ancrage donné, orientée vers le centre.
      *
-     * @param colorName couleur en minuscules ("blue", "yellow"...)
-     * @param anchor    point d'ancrage calculé par BaseManager
-     * @param target    point que la base doit regarder (centre de map)
+     * NB : le remblai herbeux (fill grass sous le plancher, style
+     * village) est appliqué par le poseur de secours, de même que
+     * l'enregistrement des blocs de structure (protection).
+     *
+     * @param color  équipe (détermine le fichier base_<couleur>.nbt)
+     * @param anchor point d'ancrage calculé par BaseManager
+     * @param target point que la base doit regarder (centre de map)
      */
-    public boolean placeBase(String colorName,
+    public boolean placeBase(TeamColor color,
                              Location anchor,
                              Location target) {
         var rotation = com.mceteams.xii.structure.StructureRotation
                 .facingToward(anchor, target);
-        return place("structures/bases/base_" + colorName + ".nbt",
-                "base_" + colorName,
-                StructureLocation.of(anchor, rotation));
+        return place("structures/bases/base_" + color.name().toLowerCase() + ".nbt",
+                "base_" + color.name().toLowerCase(),
+                StructureLocation.of(anchor, rotation),
+                true,
+                written -> {
+                    structureKeys.addAll(keys(written));
+                    // RÈGLE UTILISATEUR : applique les REPÈRES (lainages)
+                    // posés par le développeur dans l'empreinte de la base
+                    // (sol rouge → herbe, portillons bleu ciel → spruce
+                    // ouverts, PNJ vert/jaune → emplacements). On traite
+                    // APRÈS l'écriture de la structure pour ne pas être
+                    // écrasé par la pose des blocs du .nbt.
+                    plugin.getMarkerManager().processBase(color, anchor);
+                },
+                true);
     }
 
     /**
@@ -190,7 +217,10 @@ public class StructureManager {
                 .facingToward(anchor, target);
         return place("structures/dungeons/dungeon_" + dungeonNumber + ".nbt",
                 "dungeon_" + dungeonNumber,
-                StructureLocation.of(anchor, rotation));
+                StructureLocation.of(anchor, rotation),
+                true,
+                written -> structureKeys.addAll(keys(written)),
+                false);
     }
 
     /**
@@ -205,7 +235,7 @@ public class StructureManager {
      */
     private boolean place(String resourcePath, String structureName,
                           StructureLocation location) {
-        return place(resourcePath, structureName, location, true);
+        return place(resourcePath, structureName, location, true, null, false);
     }
 
     /**
@@ -215,10 +245,25 @@ public class StructureManager {
      */
     private boolean place(String resourcePath, String structureName,
                           StructureLocation location, boolean track) {
+        return place(resourcePath, structureName, location, track, null, false);
+    }
+
+    /**
+     * @param onWritten reçoit les blocs POSÉS une fois le placement
+     *                  effectif (permet d'enregistrer les blocs de
+     *                  structure pour la protection).
+     * @param baseGrassFill remblai de terre/grass sous le plancher des
+     *                  bases (style villages).
+     */
+    private boolean place(String resourcePath, String structureName,
+                          StructureLocation location, boolean track,
+                          java.util.function.Consumer<List<Location>> onWritten,
+                          boolean baseGrassFill) {
         Structure structure = loader.load(resourcePath, structureName);
         if (structure != null && placer.place(structure, location)) {
-            if (track) {
-                placements.add(new PlacementRecord(resourcePath, structureName, location));
+            trackPlacement(track, resourcePath, structureName, location);
+            if (onWritten != null) {
+                onWritten.accept(List.of());
             }
             plugin.getLogger().info("[Structures] Placée : " + structureName
                     + " -> " + location);
@@ -231,16 +276,30 @@ public class StructureManager {
         if (cached == null) {
             return false; // ressource absente : non bloquant (fournie par le dev)
         }
-        rawPlacer.placeAsync(cached.toPath(), location, written -> {
+        rawPlacer.placeAsync(cached.toPath(), location, baseGrassFill, written -> {
             placedBlocks.addAll(written);
             if (structureName.equalsIgnoreCase(LOBBY_NAME)) {
                 lobbyBlocks.addAll(written);
             }
+            if (onWritten != null) {
+                onWritten.accept(written);
+            }
         });
-        if (track) {
+        trackPlacement(track, resourcePath, structureName, location);
+        return true;
+    }
+
+    /** Enregistre un placement (dédoublonné : clé = fichier + position). */
+    private void trackPlacement(boolean track, String resourcePath,
+                                String structureName,
+                                StructureLocation location) {
+        if (!track) {
+            return;
+        }
+        String key = placementKey(resourcePath, location);
+        if (placementKeys.add(key)) {
             placements.add(new PlacementRecord(resourcePath, structureName, location));
         }
-        return true;
     }
 
     /**
@@ -282,6 +341,7 @@ public class StructureManager {
             }
         }
         placedBlocks.clear();
+        structureKeys.clear();
         if (removed > 0) {
             plugin.getLogger().info("[Structures] " + removed
                     + " bloc(s) de structure retiré(s).");
@@ -311,6 +371,43 @@ public class StructureManager {
     /** Vide l'historique des placements (après /zone delete). */
     public void clearHistory() {
         placements.clear();
+        placementKeys.clear();
+    }
+
+    // -----------------------------------------------------------------
+    // Protection des blocs de structure
+    // -----------------------------------------------------------------
+
+    /** Clé canonique "monde:x:y:z" d'un bloc. */
+    private String blockKey(Location location) {
+        return location.getWorld().getName() + ":" + location.getBlockX()
+                + ":" + location.getBlockY() + ":" + location.getBlockZ();
+    }
+
+    /** Clé canonique d'un placement (fichier + ancre + rotation). */
+    private String placementKey(String resourcePath, StructureLocation location) {
+        return resourcePath + "|" + location.getWorld().getName()
+                + "|" + location.getX() + "|" + location.getY()
+                + "|" + location.getZ() + "|" + location.getRotation();
+    }
+
+    private java.util.Collection<String> keys(List<Location> written) {
+        List<String> keys = new ArrayList<>(written.size());
+        for (Location location : written) {
+            if (location.getWorld() != null) {
+                keys.add(blockKey(location));
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * Ce bloc fait-il partie d'une STRUCTURE posée par le plugin ?
+     * (blocs inviolables : incassables, irremplaçables, spec §18).
+     */
+    public boolean isStructureBlock(Location location) {
+        return location != null && location.getWorld() != null
+                && structureKeys.contains(blockKey(location));
     }
 
     /** Trace interne d'un placement effectué. */

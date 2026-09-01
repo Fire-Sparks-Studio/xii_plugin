@@ -38,6 +38,15 @@ public class BlockPlaceListener implements Listener {
             return; // un spectateur ne devrait jamais poser
         }
 
+        // Bloc posé dans l'empreinte d'une base : l'équipe propriétaire
+        // pourra le casser (pose/casse "propres dès le début"), la
+        // structure/les champs restant inviolables.
+        var base = plugin.getBaseManager()
+                .baseContainingBlock(event.getBlockPlaced().getLocation());
+        if (base != null) {
+            base.addOwnedBlock(event.getBlockPlaced().getLocation());
+        }
+
         // Seuls les minerais suivis intéressent l'anti-duplication.
         if (plugin.getConfigManager().isTrackedOre(event.getBlock().getType())) {
             plugin.getMiningService().trackPlacedOre(event.getBlock());

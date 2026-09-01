@@ -3,11 +3,23 @@ package com.mceteams.xii.model;
 import com.mceteams.xii.enums.TeamColor;
 import org.bukkit.Location;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 /**
  * Une base effectivement placée dans le monde (spec §7).
  * Le BaseManager calcule position + rotation, puis crée ce model.
  */
 public class GameBase {
+
+    /**
+     * Empreinte carrée de la structure de base (35x35, cf. bases.nbt).
+     * La structure est centrée autour du centre de zone : après rotation
+     * la boîte occupe toujours [anchor .. anchor+34] sur X ET Z.
+     */
+    public static final int SIZE = 35;
+    /** Demi-largeur de la boîte (le centre = un bloc entier). */
+    public static final int HALF = (SIZE - 1) / 2;
 
     /** Couleur de l'équipe propriétaire de la base. */
     private final TeamColor color;
@@ -21,6 +33,14 @@ public class GameBase {
     private final Location spawn;
     /** Position exacte du bloc coeur (géré par CoreService). */
     private final Location coreLocation;
+
+    /**
+     * Positions (coordonnées de bloc) posées PAR L'ÉQUIPE pendant la
+     * partie : seuls ces blocs sont cassables par l'équipe propriétaire
+     * (pose/casse "propres dès le début"). Les blocs de la structure
+     * restent, eux, inviolables.
+     */
+    private final Set<Location> ownedBlocks = new LinkedHashSet<>();
 
     public GameBase(TeamColor color,
                     Location anchor,
@@ -60,6 +80,10 @@ public class GameBase {
         return coreLocation.clone();
     }
 
+    // -----------------------------------------------------------------
+    // Zones (PvP + empreinte des blocs)
+    // -----------------------------------------------------------------
+
     /**
      * La location est-elle à l'intérieur de la zone protégée de cette
      * base ? Utilisé par ProtectionService (PvP interdit/autorisé).
@@ -74,5 +98,59 @@ public class GameBase {
         double dx = location.getX() - center.getX();
         double dz = location.getZ() - center.getZ();
         return Math.sqrt(dx * dx + dz * dz) <= radius;
+    }
+
+    /**
+     * La location est-elle dans l'EMPREINTE (rectangle) de la structure,
+     * marge +1 ? C'est cette zone qui subit les règles de protection des
+     * blocs (structure incassable, champs protégés, blocs de l'équipe).
+     */
+    public boolean containsBlock(Location location) {
+        if (location == null) {
+            return false;
+        }
+        if (!location.getWorld().equals(anchor.getWorld())) {
+            return false;
+        }
+        int x = location.getBlockX();
+        int z = location.getBlockZ();
+        int ax = anchor.getBlockX();
+        int az = anchor.getBlockZ();
+        return x >= ax - 1 && x <= ax + SIZE
+                && z >= az - 1 && z <= az + SIZE;
+    }
+
+    // -----------------------------------------------------------------
+    // Blocs posés par l'équipe (cassables par les propriétaires)
+    // -----------------------------------------------------------------
+
+    /** Enregistre un bloc posé par l'équipe pendant la partie. */
+    public void addOwnedBlock(Location location) {
+        if (location != null && location.getWorld() != null) {
+            ownedBlocks.add(blockLocation(location));
+        }
+    }
+
+    /** Oublie un bloc posé (il a été cassé). */
+    public void removeOwnedBlock(Location location) {
+        if (location != null) {
+            ownedBlocks.remove(blockLocation(location));
+        }
+    }
+
+    /** Ce bloc a-t-il été posé par l'équipe propriétaire ? */
+    public boolean isOwnedBlock(Location location) {
+        return location != null && ownedBlocks.contains(blockLocation(location));
+    }
+
+    /** Vide la liste des blocs posés (début d'une nouvelle partie). */
+    public void clearOwnedBlocks() {
+        ownedBlocks.clear();
+    }
+
+    /** Normalise une position en coordonnées de bloc (sans yaw/pitch). */
+    private Location blockLocation(Location location) {
+        return new Location(location.getWorld(),
+                location.getBlockX(), location.getBlockY(), location.getBlockZ());
     }
 }

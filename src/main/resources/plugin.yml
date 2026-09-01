@@ -18,6 +18,9 @@ commands:
   zone:
     description: Configuration de la zone de jeu (set, delete)
     usage: /zone <set|delete>
+  respawn:
+    description: Forcer le retour à la vie d'un joueur mort
+    usage: /respawn [joueur]
   admin:
     description: Ouvrir le menu d'administration
     usage: /admin

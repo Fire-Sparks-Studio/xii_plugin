@@ -93,8 +93,9 @@ public class WorldListener implements Listener {
                     event.getLocation(), event.getEntity());
         }
 
-        // 3. Cœurs touchés par l'explosion : destruction contrôlée.
+        // 3. Cœurs/cristaux touchés par l'explosion : destruction contrôlée.
         handleCoresInExplosion(event.blockList());
+        protectDepositChests(event.blockList());
     }
 
     /** Explosion de blocs (lit, réservoir...) : mêmes protections. */
@@ -102,6 +103,7 @@ public class WorldListener implements Listener {
     public void onBlockExplode(BlockExplodeEvent event) {
         protectWaitingLobby(event.blockList());
         handleCoresInExplosion(event.blockList());
+        protectDepositChests(event.blockList());
     }
 
     /**
@@ -128,21 +130,42 @@ public class WorldListener implements Listener {
     }
 
     /**
-     * Si l'explosion détruirait un coeur : on retire le bloc de la liste
-     * et on applique la logique métier CoreService (sans attributaire).
+     * Si l'explosion détruirait un cristal : on retire le bloc de la
+     * liste et on applique la logique métier CoreService.
+     * - cristal de TOUR => breakTowerCrystal (petits points) ;
+     * - cristal CENTRAL => breakCore UNIQUEMENT si les tours sont
+     *   détruites (sinon il est simplement retiré de l'explosion).
      */
     private void handleCoresInExplosion(java.util.List<org.bukkit.block.Block> blocks) {
         if (!plugin.getGameSystems().isCoreListenerEnabled()) {
             return;
         }
+        var coreService = plugin.getCoreService();
         for (var iterator = blocks.iterator(); iterator.hasNext(); ) {
             var block = iterator.next();
-            var team = plugin.getCoreService().getTeamByCoreBlock(block);
-            if (team != null) {
-                iterator.remove();          // pas de drop vanilla du beacon
-                plugin.getCoreService().breakCore(team, null, false, false);
+            var team = coreService.getTeamByCrystalBlock(block);
+            if (team == null) {
+                continue;
             }
+            iterator.remove();          // pas de drop vanilla du cristal
+            if (coreService.isTowerCrystal(block)) {
+                coreService.breakTowerCrystal(team, block, null);
+            } else if (!coreService.isHeartShielded(team.getColor())) {
+                coreService.breakCore(team, null, false, false);
+            }
+            // coeur encore protégé par des tours : rien ne se passe.
         }
+    }
+
+    /**
+     * Les coffres de DÉPÔT sont intouchables : retirés des explosions.
+     */
+    private void protectDepositChests(java.util.List<org.bukkit.block.Block> blocks) {
+        if (!plugin.getGameSystems().isCoreListenerEnabled()) {
+            return;
+        }
+        blocks.removeIf(block ->
+                plugin.getCoreService().isDepositChest(block));
     }
 
     // -----------------------------------------------------------------

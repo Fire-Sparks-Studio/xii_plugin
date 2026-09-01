@@ -6,7 +6,7 @@
 
 # Version du schéma : si le fichier installé est plus ancien, il est
 # automatiquement remplacé (l'ancien est sauvegardé en .bak).
-config-version: 7
+config-version: 8
 
 # -----------------------------------------------------------------
 # Items d'UPGRADE et TOTEM (consommés par clic droit)
@@ -92,6 +92,9 @@ points:
   package-open: 10        # ouverture d'un colis (package)
   rare-item: 20           # objet rare trouvé dans un colis
   core-destroyed: 50      # destruction du coeur d'une équipe
+  core-tower: 10          # cristal d'une tour détruit (les 4 tours protègent le coeur)
+  redstone-penalty: 3     # pts retirés à CHAQUE autre équipe par poudre de redstone déposée
+  deposit-multiplier: 2.0 # minerais déposés dans le coffre de dépôt => pts x ce facteur
   death-penalty: 10       # points retirés lors d'une mort
   rare-item-chance: 0.15  # probabilité qu'un colis contienne un objet rare
 

@@ -44,6 +44,22 @@ public final class MessageUtil {
     }
 
     /**
+     * Diffuse un message aux SEULS MEMBRES EN LIGNE d'une équipe
+     * (messages de points ciblés : l'équipe concernée voit, les autres
+     * équipes ne voient rien).
+     */
+    public static void broadcastToTeam(com.mceteams.xii.model.GameTeam team,
+                                       String message) {
+        if (team == null || message == null) {
+            return;
+        }
+        team.getPlayers().stream()
+                .map(Bukkit::getPlayer)
+                .filter(player -> player != null && player.isOnline())
+                .forEach(player -> player.sendMessage(message));
+    }
+
+    /**
      * Affiche un titre + sous-titre à un joueur (utilisé notamment
      * pour "TU ES MORT / Réapparition dans X secondes", spec §29).
      *

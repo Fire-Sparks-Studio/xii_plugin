@@ -9,20 +9,22 @@ import org.bukkit.entity.Player;
 
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * Gère le calendrier des respawn (spec §19/§29).
  *
- * Règle du délai :
- *   1ère mort = 5 s, chaque mort ajoute +5 s, maximum 30 s.
+ * SYSTÈME UNIQUE de mort, identique du jour 1 au jour 12 :
+ *   respawn minuté = 1ère mort 5 s, chaque mort suivante +5 s, max 30 s.
  *   (valeurs configurables : respawn.step-seconds / max-seconds)
+ *
+ * Exception : si le COEUR d'équipe est détruit, le respawn d'un membre
+ * mort est BLOQUÉ - seul un totem de revive ou /respawn admin le ramène.
  *
  * Le détail exact du calendrier est centralisé ICI (spec §29) :
  * la RespawnTask appelle processDue() chaque seconde et ce manager
- * décide qui revient, où, ou qui est éliminé définitivement.
+ * décide qui revient, où, ou qui est bloqué définitivement.
  */
 public class RespawnManager {
 
@@ -30,13 +32,8 @@ public class RespawnManager {
 
     /** Nombre de morts par joueur (alimente le délai croissant). */
     private final Map<UUID, Integer> deathCounts = new HashMap<>();
-    /** Timestamp (ms) auquel le respawn sera effectif (PRÉPARATION). */
+    /** Timestamp (ms) auquel le respawn sera effectif. */
     private final Map<UUID, Long> readyAt = new HashMap<>();
-    /**
-     * Joueurs morts en attente de respawn en COMBAT : pas de timer,
-     * ils reviennent tous AU DÉBUT DE LA PROCHAINE SOUS-PHASE.
-     */
-    private final Map<UUID, Boolean> combatPending = new HashMap<>();
 
     public RespawnManager(XiiPlugin plugin) {
         this.plugin = plugin;
@@ -58,22 +55,15 @@ public class RespawnManager {
     /**
      * Enregistre une mort et programme son retour.
      *
-     * - PRÉPARATION : délai croissant 5s..30s (timer classique).
-     * - COMBAT (jour 7+) : PAS de timer ; le joueur attendra le début
-     *   de la prochaine sous-phase ({@link #processSubPhaseStart()}).
+     * SYSTÈME UNIFIÉ (unique, identique du jour 1 au jour 12) : délai de
+     * respawn croissant 5s..30s (timer classique), en PRÉPARATION comme en
+     * COMBAT. Plus aucun report à la prochaine sous-phase. La seule
+     * exception est gérée à l'échéance du délai ({@link #handleRespawn}) :
+     * un joueur dont le COEUR d'équipe a été détruit ne revient pas.
      *
-     * @return le délai appliqué en secondes, ou -1 si reporté à la
-     *         prochaine sous-phase (pour les messages).
+     * @return le délai appliqué en secondes (toujours > 0 désormais).
      */
     public int schedule(UUID playerUuid) {
-        boolean combatActive =
-                plugin.getGameManager().getState()
-                        == com.mceteams.xii.enums.GameState.COMBAT;
-        if (combatActive) {
-            combatPending.put(playerUuid, true);
-            return -1;
-        }
-
         int deaths = deathCounts.merge(playerUuid, 1, Integer::sum);
         int delay = computeDelaySeconds(
                 deaths,
@@ -96,7 +86,7 @@ public class RespawnManager {
                 continue; // pas encore à échéance
             }
             // handleRespawn traite le respawn MÊME si le joueur est hors
-            // ligne (la décoche = une vraie mort, timers réels) : il
+            // ligne (la déconnexion = une vraie mort, timers réels) : il
             // reviendra vivant à sa reconnexion, après l'échéance.
             if (handleRespawn(entry.getKey())) {
                 iterator.remove();
@@ -105,36 +95,17 @@ public class RespawnManager {
     }
 
     /**
-     * Joueurs morts dont le coeur a été détruit APRÈS leur mort : ils ne
-     * peuvent PAS réapparaître normalement - uniquement via un futur
-     * TOTEM DE REVIVE utilisé par leur équipe. En attente ici.
+     * Joueurs morts dont le coeur d'équipe a été détruit : respawn normal
+     * BLOQUÉ. Seul un TOTEM DE REVIVE utilisé par leur équipe (ou la
+     * commande /respawn d'un admin) pourra les ramener. En attente ici.
      */
     private final java.util.Set<UUID> revivePending =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /**
-     * COMBAT : appelé À CHAQUE DÉBUT DE SOUS-PHASE. Tous les joueurs
-     * morts en attente reviennent dans leur base - SAUF si leur équipe
-     * n'a plus de coeur (=> pool "totem de revive").
-     */
-    public void processSubPhaseStart() {
-        // Les joueurs du pool totem n'y touchent pas (revive manuel seul).
-        for (UUID uuid : List.copyOf(combatPending.keySet())) {
-            if (revivePending.contains(uuid)) {
-                combatPending.remove(uuid); // déjà géré, pas de timer
-                continue;
-            }
-            // Même HORS LIGNE le respawn est consommé (ramené vivant à sa
-            // reconnexion) : la mort d'une déconnexion est une vraie mort.
-            if (handleRespawn(uuid)) {
-                combatPending.remove(uuid);
-            }
-        }
-    }
-
-    /**
      * Affiche le COMPTE À REBOURS DANS LE TITRE chaque seconde pour les
-     * joueurs morts en attente (préparation). Appelé par RespawnTask.
+     * joueurs morts en attente (système unique, tout le jeu).
+     * Appelé par RespawnTask.
      */
     public void updateWaitingTitles() {
         long now = System.currentTimeMillis();
@@ -162,8 +133,11 @@ public class RespawnManager {
 
     /**
      * Exécute le respawn d'un joueur :
-     * - COMBAT + coeur détruit => élimination DÉFINITIVE ;
+     * - COEUR d'équipe détruit => respawn BLOQUÉ (élimination définitive
+     *   tant que l'équipe n'utilise pas de totem de revive) ;
      * - sinon => retour dans sa base (spec §19 dernier point).
+     *
+     * C'est le SYSTÈME UNIQUE, identique du jour 1 au jour 12.
      *
      * Traite le respawn MÊME SI LE JOUEUR EST HORS LIGNE : la mort est
      * une vraie mort (même punition/timing que les morts en ligne), seuls
@@ -179,13 +153,10 @@ public class RespawnManager {
         boolean online = player != null && player.isOnline();
 
         var team = plugin.getTeamManager().getTeamOf(uuid);
-        // Équipe sans coeur en COMBAT : PAS de respawn automatique.
-        // Le joueur rejoint le pool "totem de revive" : seul un totem
-        // utilisé par son équipe pourra le ramener.
-        boolean combatActive =
-                plugin.getGameManager().getState()
-                        == com.mceteams.xii.enums.GameState.COMBAT;
-        if (combatActive && team != null && !team.isHeartAlive()) {
+        // Équipe sans coeur : PAS de respawn automatique. Le joueur
+        // rejoint le pool "totem de revive" : seul un totem utilisé par
+        // son équipe (ou /respawn admin) pourra le ramener.
+        if (team != null && !team.isHeartAlive()) {
             data.setAlive(false);
             revivePending.add(uuid);
             if (online) {
@@ -232,9 +203,38 @@ public class RespawnManager {
         return true;
     }
 
+    /**
+     * FORCE le respawn d'un joueur (commande /respawn admin) : le sort de
+     * toutes les files (timers + pool totem) et le ramène vivant dans sa
+     * base, quel que soit son état.
+     *
+     * @return true si le joueur a été ramené.
+     */
+    public boolean forceRespawn(UUID playerUuid) {
+        var data = plugin.getPlayerManager().getData(playerUuid);
+        if (data == null) {
+            return false;
+        }
+        // Purge l'éventuel respawn minuté pour éviter le double retour.
+        readyAt.remove(playerUuid);
+
+        // Délégation au chemin classique (coeur non détruit => retour,
+        // mais /respawn admin force même si le coeur est tombé).
+        // On contourne le blocage "coeur détruit" en traitant directement.
+        if (data.isAlive()) {
+            return false; // déjà vivant : rien à faire
+        }
+        var team = plugin.getTeamManager().getTeamOf(playerUuid);
+        if (team != null && !team.isHeartAlive()) {
+            // Admin force malgré le coeur détruit : sort du pool totem.
+            revivePending.remove(playerUuid);
+        }
+        return reviveByTotem(playerUuid);
+    }
+
     /** Un respawn est-il programmé pour ce joueur ? */
     public boolean isPending(UUID uuid) {
-        return readyAt.containsKey(uuid) || combatPending.containsKey(uuid);
+        return readyAt.containsKey(uuid);
     }
 
     /**
@@ -265,7 +265,6 @@ public class RespawnManager {
         // Sort de toutes les files : le retour sera géré par ce totem.
         revivePending.remove(playerUuid);
         readyAt.remove(playerUuid);
-        combatPending.remove(playerUuid);
 
         data.setAlive(true);
         data.setEliminated(false);
@@ -298,17 +297,15 @@ public class RespawnManager {
     public void clearAll() {
         deathCounts.clear();
         readyAt.clear();
-        combatPending.clear();
         revivePending.clear();
     }
 
     /**
-     * Purge uniquement les FILES D'ATTENTE (timers + combat + totem), en
+     * Purge uniquement les FILES D'ATTENTE (timers + totem), en
      * conservant les compteurs de morts. Utilisé par /party set.
      */
     public void clearPending() {
         readyAt.clear();
-        combatPending.clear();
         revivePending.clear();
     }
 }

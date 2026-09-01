@@ -321,6 +321,19 @@ public class GameManager {
             plugin.getLobbyItemManager().removeAll(player);
         }
 
+        // RÈGLE UTILISATEUR : toute équipe SANS MEMBRE au lancement est
+        // éliminée automatiquement (aucune base active, aucun spawn). C'est
+        // la garantie "dès le début" même si les équipes sont créées APRÈS
+        // /zone set (le check de BaseManager n'a lieu qu'à la génération).
+        for (var team : plugin.getTeamManager().all()) {
+            if (team.getPlayerCount() == 0 && !team.isEliminated()) {
+                team.setEliminated(true);
+                plugin.getLogger().info("[Partie] Équipe "
+                        + team.getColor().getColoredName()
+                        + " §7sans membre au lancement : éliminée automatiquement.");
+            }
+        }
+
         // 4 : téléportation à la base de chaque équipe.
         for (Player player : Bukkit.getOnlinePlayers()) {
             var data = plugin.getPlayerManager().getData(player);
@@ -364,6 +377,9 @@ public class GameManager {
         state = GameState.PREPARATION;
         plugin.getPhaseManager().startPreparation();
         setState(state); // déclenche refresh + scoreboards
+
+        // Portillons de bases actifs (s'ouvrent aux propriétaires).
+        plugin.getGateManager().start();
 
         startGameplayTasks();
 
@@ -427,7 +443,9 @@ public class GameManager {
         // (impossible d'attaquer, flags météorites/coeurs éteints...).
         state = GameState.COMBAT;
         setState(state);
-        plugin.getRespawnManager().processSubPhaseStart();
+        // RÈGLE UTILISATEUR : au début du COMBAT (jour 7+), les 3
+        // portillons de chaque base sont DÉTRUITS (accès libre partout).
+        plugin.getGateManager().removeAllGates();
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
         MessageUtil.broadcast(" §4§lPHASE DE COMBAT");
         MessageUtil.broadcast(" §cLe PvP est désormais autorisé §4partout§c. Bonne chance.");
@@ -449,7 +467,7 @@ public class GameManager {
                 }
                 case DUNGEONS -> plugin.getDungeonManager().unlockLoot();
                 case POINT_UPGRADES -> MessageUtil.broadcast(
-                        "\n§b✦ §fPOINTS x2 §7jusqu'à la fin de la sous-phase !\n");
+                        "\n§b✦ §fPOINTS x2 §7jusqu'à la fin de ce jour !\n");
                 case PACKAGE_UPGRADE -> MessageUtil.broadcast(
                         "\n§e✦ Davantage de colis §7apparaissent désormais !\n");
                 case DUNGEON_RESTOCK -> plugin.getDungeonManager().restockAll();
@@ -457,10 +475,6 @@ public class GameManager {
             return;
         }
         if (subPhase instanceof com.mceteams.xii.enums.CombatSubPhase combat) {
-            // COMBAT (jour 7+) : tous les morts en attente reviennent au
-            // début de CHAQUE sous-phase (sauf équipe sans coeur).
-            plugin.getRespawnManager().processSubPhaseStart();
-
             switch (combat) {
                 // Le PvP global est déjà annoncé par le bandeau de phase.
                 case START -> { }
@@ -469,7 +483,7 @@ public class GameManager {
                     MessageUtil.broadcast("\n§6☄ §fDes météorites s'écrasent sur la map§7 !\n");
                 }
                 case MORE_DAMAGE -> MessageUtil.broadcast(
-                        "\n§4⚔ §fDÉGÂTS x2 §7pendant toute la sous-phase !\n");
+                        "\n§4⚔ §fDÉGÂTS x2 §7pendant toute la journée !\n");
                 case ALL_CORE_DESTRUCTION ->
                         plugin.getCoreService().destroyAllCores();
                 case MORE_METEORITES -> {
@@ -602,6 +616,7 @@ public class GameManager {
      */
     public void stopParty() {
         cancelAllTasks();
+        plugin.getGateManager().stop();
 
         // Nettoyage du monde : colis retirés, structures reposées.
         plugin.getPackageManager().removeAllBlocks();
@@ -738,9 +753,6 @@ public class GameManager {
         if (day == 12) {
             startSuddenDeathTask();
         }
-
-        // Libère les joueurs morts en attente (nouvelle sous-phase).
-        plugin.getRespawnManager().processSubPhaseStart();
 
         restartPeriodicTasksForCurrentSubPhase();
         setState(this.state); // refresh systèmes + scoreboards + tab
