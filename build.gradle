@@ -85,11 +85,31 @@ jar {
     finalizedBy incrementBuildNumber
 }
 
-// Paper 26.1+ : le jar "java" IS le jar de production Mojang-mapped.
-// prepareDeployJar copie son résultat vers le nom de déploiement
-// (retire les suffixes de dev/all si présents).
+// ------------------------------------------------------------------
+// Archiver automatiquement chaque build :
+// copie le jar de production unique (output de la tâche jar) vers
+// l'archive partagée. On copie DIRECTEMENT le fichier produit par
+// prepareDeployJar (dossier dédié build/deploy, distinct de libs pour
+// ne pas écraser l'archive de la tâche jar).
+// ------------------------------------------------------------------
+def archiveDir = 'T:/dev/minecraft/1.21.11/xiidays/archive/jars/Plugin'
+
 tasks.register('prepareDeployJar', Copy) {
     from tasks.jar
-    into layout.buildDirectory.dir('libs')
+    into layout.buildDirectory.dir('deploy')
     rename { it.replaceAll(/-dev-|-dev\\.|-all-|-all\\./, '-') }
 }
+
+tasks.register('archiveDeployJar', Copy) {
+    dependsOn tasks.prepareDeployJar
+    from tasks.jar
+    into archiveDir
+    rename { it.replaceAll(/-dev-|-dev\\.|-all-|-all\\./, '-') }
+    shouldRunAfter tasks.jar
+}
+
+jar {
+    finalizedBy incrementBuildNumber
+}
+
+println "Archive du plugin vers : ${archiveDir}"
