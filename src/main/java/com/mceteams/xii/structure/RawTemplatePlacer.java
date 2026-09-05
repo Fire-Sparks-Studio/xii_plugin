@@ -153,10 +153,19 @@ public class RawTemplatePlacer {
     /**
      * Remblai sous le plancher de la structure : grass sur la couche
      * supérieure (juste sous le sol), terre en dessous, comme les
-     * villages vanilla. Ne touche JAMAIS un bloc posé (autre qu'air ou
-     * structure_void) et ne creuse jamais sous le relief d'origine.
+     * villages vanilla.
      *
-     * Fourni un support solide sous les bases posées en hauteur.
+     * RÈGLE UTILISATEUR (anti "herbe dans la base") :
+     * - Seuls les blocs {@code structure_void} du gabarit AUTORISENT le
+     *   remblai : une colonne n'est remplie QUE si le template a un bloc
+     *   structure_void directement SOUS son plancher (y < plancher).
+     * - Les colonnes dont le template a une structure pleine (sol/mur)
+     *   ne sont PAS remblayées => plus d'herbe/terre dans l'intérieur.
+     * - Les colonnes du COULOIR d'entrée (structure_void au niveau du
+     *   sol d'accès, PAS sous un plancher) ne sont PAS remblayées : on
+     *   laisse le monde tel quel, rien ne pousse devant les portillons.
+     * - On ne touche JAMAIS un bloc posé (autre qu'air ou structure_void)
+     *   et on ne creuse jamais sous le relief d'origine.
      */
     private void fillGrassUnder(StructureLocation location,
                                 List<TemplateBlock> blocks) {
@@ -167,25 +176,33 @@ public class RawTemplatePlacer {
         // Plancher par colonne : le plus bas bloc NON-void du template
         // (un build aux sols étagés garde un remblai localisé).
         Map<Long, Integer> floorByColumn = new HashMap<>();
+        // Colonnes contenant au moins un structure_void dans le template.
+        Set<Long> voidColumns = new java.util.HashSet<>();
         for (TemplateBlock block : blocks) {
-            if (isVoid(block.dataString())) {
-                continue;
-            }
             int x = location.getX() + block.x();
             int z = location.getZ() + block.z();
             int y = location.getY() + block.y();
             long key = columnKey(x, z);
-            floorByColumn.merge(key, y, Math::min);
+            if (isVoid(block.dataString())) {
+                voidColumns.add(key);
+            } else {
+                floorByColumn.merge(key, y, Math::min);
+            }
         }
 
         int filled = 0;
-        for (Map.Entry<Long, Integer> column : floorByColumn.entrySet()) {
-            int x = (int) (column.getKey() >> 32);
-            int z = (int) (long) column.getKey();
-            int floorY = column.getValue();
+        for (long key : voidColumns) {
+            // Un void n'autorise le remblai QUE s'il se trouve sous le
+            // plancher de la colonne (sinon : couloir / vide au sol → rien).
+            if (!floorByColumn.containsKey(key)) {
+                continue; // colonne sans plancher (ex. couloir) : rien
+            }
+            int x = (int) (key >> 32);
+            int z = (int) (long) key;
+            int floorY = floorByColumn.get(key);
             int groundY = world.getHighestBlockYAt(x, z);
             int topY = floorY - 1;
-            // Jamais sous le relief d'origine, jamais plus profond que
+            // Jamais au-dessus du sol réel, jamais plus profond que
             // GRASS_FILL_DEPTH sous le plancher.
             int bottomY = Math.max(groundY, topY - GRASS_FILL_DEPTH);
             for (int y = topY; y >= bottomY; y--) {

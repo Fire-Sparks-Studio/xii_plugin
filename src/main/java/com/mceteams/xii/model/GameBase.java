@@ -42,6 +42,14 @@ public class GameBase {
      */
     private final Set<Location> ownedBlocks = new LinkedHashSet<>();
 
+    /**
+     * Emplacements de {@code structure_void} du gabarit : les SEULS blocs
+     * où l'équipe propriétaire est autorisée à POSER quelque chose dans
+     * sa base (RÈGLE UTILISATEUR). Enregistrés pendant le processing des
+     * repères (MarkerManager), avant leur conversion en air.
+     */
+    private final Set<Location> voidSlots = new LinkedHashSet<>();
+
     public GameBase(TeamColor color,
                     Location anchor,
                     Location center,
@@ -146,6 +154,27 @@ public class GameBase {
     /** Vide la liste des blocs posés (début d'une nouvelle partie). */
     public void clearOwnedBlocks() {
         ownedBlocks.clear();
+    }
+
+    // -----------------------------------------------------------------
+    // Emplacements de pose autorisés (structure_void du gabarit)
+    // -----------------------------------------------------------------
+
+    /** Enregistre un emplacement void (structure_void) posable par l'équipe. */
+    public void addVoidSlot(Location location) {
+        if (location != null && location.getWorld() != null) {
+            voidSlots.add(blockLocation(location));
+        }
+    }
+
+    /** Le joueur peut-il poser à cet emplacement (void du gabarit) ? */
+    public boolean isVoidSlot(Location location) {
+        return location != null && voidSlots.contains(blockLocation(location));
+    }
+
+    /** Vide les emplacements void (début d'une nouvelle partie). */
+    public void clearVoidSlots() {
+        voidSlots.clear();
     }
 
     /** Normalise une position en coordonnées de bloc (sans yaw/pitch). */

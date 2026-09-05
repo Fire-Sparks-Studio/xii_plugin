@@ -84,20 +84,20 @@ public class ProtectionService {
     }
 
     /**
-     * Droits de MODIFICATION de bloc (casser/poser) pendant le gameplay.
+     * Droits de BREAK (casser) sur un bloc pendant le gameplay.
      *
-     * RÈGLES DES BASES (pose/casse "propres dès le début", cf. retour
-     * utilisateur) :
+     * RÈGLES DES BASES (casse "propres dès le début") :
      * - les blocs de STRUCTURE (posés par le .nbt) sont INVIOLABLES par
-     *   tous (incassables + irremplaçables) ;
+     *   tous (incassables) ;
      * - les CHAMPS (crops, farmland) sont toujours protégés ;
-     * - chaque équipe peut poser des blocs dans SA base et casser les
-     *   blocs QU'ELLE a posés (les autres blocs y sont intouchables) ;
-     * - les CRISTAUX (sea_lantern) sont laissés à CoreListener (ordre
-     *   HIGH), qui gère leur destruction de façon contrôlée ;
-     * - hors base : modification libre (PRÉPARATION et COMBAT).
+     * - chaque équipe peut casser les blocs QU'ELLE a posés (les autres
+     *   blocs y sont intouchables) ;
+     * - le VERRE VIOLET est destructible à partir du jour 7 (COMBAT) et
+     *   uniquement par les AUTRES équipes (voir règles ci-dessous) ;
+     * - les CRISTAUX (sea_lantern) sont laissés à CoreListener/WorldListener ;
+     * - hors base : casse libre (PRÉPARATION et COMBAT).
      */
-    public boolean canModifyBlock(Player player, Block block) {
+    public boolean canBreakBlock(Player player, Block block) {
         GameState state = plugin.getGameManager().getState();
         if (state != GameState.PREPARATION && state != GameState.COMBAT) {
             return false;
@@ -147,19 +147,77 @@ public class ProtectionService {
             return !owner;
         }
 
-        // 2. Champs : toujours protégés.
+        // 3. Champs : toujours protégés.
         if (isProtectedTerrain(block.getType())) {
             return false;
         }
 
-        // 3. Bloc posé par l'équipe : cassable par l'équipe seule.
+        // 4. Bloc posé par l'équipe : cassable par l'équipe seule.
         if (base.isOwnedBlock(block.getLocation())) {
             return owner;
         }
 
-        // 4. Tout autre bloc de la base : l'équipe propriétaire seule
+        // 5. Tout autre bloc de la base : l'équipe propriétaire seule
         //    (le terrain naturel reste modifiable par ses propriétaires).
         return owner;
+    }
+
+    /**
+     * Droits de PLACE (poser) sur un bloc pendant le gameplay.
+     *
+     * RÈGLE UTILISATEUR : À L'INTÉRIEUR d'une base, l'équipe propriétaire
+     * peut poser PARTOUT, SAUF à la place d'un {@code structure_void} du
+     * gabarit (l'espace vide prévu du template doit rester vide). Poser là
+     * où le template a un structure_void est INTERDIT.
+     * Hors base : pose libre (PRÉPARATION et COMBAT).
+     */
+    public boolean canPlaceBlock(Player player, Block block) {
+        GameState state = plugin.getGameManager().getState();
+        if (state != GameState.PREPARATION && state != GameState.COMBAT) {
+            return false;
+        }
+        if (isSpectator(player)) {
+            return false; // un spectateur ne modifie jamais le monde
+        }
+
+        GameBase base = plugin.getBaseManager()
+                .baseContainingBlock(block.getLocation());
+        if (base == null) {
+            return true; // hors base : libre
+        }
+
+        // Dans une base : SEUL LE PROPRIÉTAIRE pose, et JAMAIS à la place
+        // d'un structure_void du gabarit (l'espace vide reste vide).
+        if (playerTeamOf(player) != base.getColor()) {
+            return false;
+        }
+        return !base.isVoidSlot(block.getLocation());
+    }
+
+    /**
+     * Droits de MODIFICATION de bloc (casser/poser) pendant le gameplay.
+     * Le flag {@code place} distingue la POSE (interdite à la place des
+     * structure_void d'une base) de la CASSE.
+     *
+     * RÈGLES DES BASES (pose/casse "propres dès le début", cf. retour
+     * utilisateur) :
+     * - les blocs de STRUCTURE (posés par le .nbt) sont INVIOLABLES par
+     *   tous (incassables + irremplaçables) ;
+     * - les CHAMPS (crops, farmland) sont toujours protégés ;
+     * - chaque équipe peut poser des blocs dans SA base et casser les
+     *   blocs QU'ELLE a posés (les autres blocs y sont intouchables) ;
+* - la POSE dans une base est interdite à la place d'un structure_void
+ *   du gabarit (l'espace vide reste vide), libre ailleurs pour le
+ *   propriétaire (voir canPlaceBlock) ;
+     * - les CRISTAUX (sea_lantern) sont laissés à CoreListener (ordre
+     *   HIGH), qui gère leur destruction de façon contrôlée ;
+     * - hors base : modification libre (PRÉPARATION et COMBAT).
+     */
+    public boolean canModifyBlock(Player player, Block block, boolean place) {
+        if (place) {
+            return canPlaceBlock(player, block);
+        }
+        return canBreakBlock(player, block);
     }
 
     /** @return la couleur de l'équipe du joueur, ou null s'il n'en a pas. */

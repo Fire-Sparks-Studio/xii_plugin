@@ -59,6 +59,7 @@ public class MarkerManager {
         int gates = 0;
         int npcUpgrade = 0;
         int npcItem = 0;
+        int voidCleared = 0;
 
         // Boîte identique à l'empreinte contenue par GameBase (+1 de marge).
         for (int x = ax - 1; x <= ax + GameBase.SIZE; x++) {
@@ -86,6 +87,21 @@ public class MarkerManager {
                                     .setItemNpc(color, block.getLocation());
                             npcItem++;
                         }
+                        // RÈGLE UTILISATEUR : les structure_void posés par la
+                        // structure (voie du poseur d'API) ne doivent JAMAIS
+                        // remplacer le monde. On les remet à AIR ici (dans le
+                        // couloir devant la base, l'empreinte reste vide).
+                        // C'est AUSSI le moment d'enregistrer cet emplacement :
+                        // le ProtectionService INTERDIT d'y poser (l'espace
+                        // vide du gabarit doit rester vide).
+                        case STRUCTURE_VOID -> {
+                            var base = plugin.getBaseManager().getBase(color);
+                            if (base != null) {
+                                base.addVoidSlot(block.getLocation());
+                            }
+                            block.setType(Material.AIR, false);
+                            voidCleared++;
+                        }
                         default -> {
                             // aucun repère
                         }
@@ -94,11 +110,12 @@ public class MarkerManager {
             }
         }
 
-        if (grass + gates + npcUpgrade + npcItem > 0) {
+        if (grass + gates + npcUpgrade + npcItem + voidCleared > 0) {
             plugin.getLogger().info("[Repères] " + color.getColoredName()
                     + " : " + grass + " sol(s) (→herbe), " + gates
                     + " portillon(s) (→spruce, ouverts), " + npcUpgrade
-                    + " PNJ upgrade(s), " + npcItem + " PNJ objets.");
+                    + " PNJ upgrade(s), " + npcItem + " PNJ objets, "
+                    + voidCleared + " structure_void nettoyé(s).");
         }
     }
 }

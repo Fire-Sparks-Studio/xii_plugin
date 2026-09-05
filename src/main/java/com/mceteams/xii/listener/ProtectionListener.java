@@ -71,7 +71,7 @@ public class ProtectionListener implements Listener {
         if (state == com.mceteams.xii.enums.GameState.PREPARATION
                 || state == com.mceteams.xii.enums.GameState.COMBAT) {
             var block = event.getBlock();
-            if (!plugin.getProtectionService().canModifyBlock(player, block)) {
+            if (!plugin.getProtectionService().canBreakBlock(player, block)) {
                 event.setCancelled(true);
                 com.mceteams.xii.util.MessageUtil.sendActionBar(player,
                         reasonMessage(block));
@@ -106,10 +106,10 @@ public class ProtectionListener implements Listener {
         if ((state == com.mceteams.xii.enums.GameState.PREPARATION
                 || state == com.mceteams.xii.enums.GameState.COMBAT)
                 && !plugin.getProtectionService()
-                        .canModifyBlock(player, event.getBlockPlaced())) {
+                        .canPlaceBlock(player, event.getBlockPlaced())) {
             event.setCancelled(true);
             com.mceteams.xii.util.MessageUtil.sendActionBar(player,
-                    "§c✘ Vous ne pouvez rien poser dans cette base.");
+                    "§c✘ Vous ne pouvez poser que sur un espace vide (structure_void) de cette base.");
         }
     }
 

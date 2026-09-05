@@ -35,8 +35,13 @@ import java.util.Map;
  */
 public class GateManager {
 
-    /** Distance (blocs) d'un propriétaire déclenchant l'ouverture. */
-    private static final double OPEN_RANGE = 3.0;
+    /** Distance HORIZONTALE (blocs XZ) d'un propriétaire déclenchant
+     *  l'ouverture. En 2D pour que le portillon s'ouvre dès qu'on
+     *  l'approche (peu importe la différence de hauteur, ex. sur un
+     *  escalier) et se ferme dès qu'on s'éloigne. */
+    private static final double OPEN_RANGE_XZ = 7.0;
+    /** Tolérance verticale (blocs) entre le joueur et le portillon. */
+    private static final double OPEN_RANGE_Y = 6.0;
 
     private final XiiPlugin plugin;
 
@@ -152,10 +157,14 @@ public class GateManager {
             if (!p.getWorld().equals(gate.getWorld())) {
                 continue;
             }
+            // Distance HORIZONTALE (XZ) : c'est l'essentiel pour ouvrir
+            // une porte devant laquelle on avance. La hauteur n'est
+            // vérifiée qu'en tolérance pour ignorer les étages.
             double dx = p.getX() - gate.getX();
-            double dy = p.getY() - gate.getY();
             double dz = p.getZ() - gate.getZ();
-            if (dx * dx + dy * dy + dz * dz <= OPEN_RANGE * OPEN_RANGE) {
+            double dy = Math.abs(p.getY() - gate.getY());
+            if (dx * dx + dz * dz <= OPEN_RANGE_XZ * OPEN_RANGE_XZ
+                    && dy <= OPEN_RANGE_Y) {
                 return true;
             }
         }
