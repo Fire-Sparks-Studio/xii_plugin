@@ -103,13 +103,24 @@ public class ProtectionListener implements Listener {
             return;
         }
         var state = plugin.getGameManager().getState();
-        if ((state == com.mceteams.xii.enums.GameState.PREPARATION
-                || state == com.mceteams.xii.enums.GameState.COMBAT)
-                && !plugin.getProtectionService()
-                        .canPlaceBlock(player, event.getBlockPlaced())) {
-            event.setCancelled(true);
-            com.mceteams.xii.util.MessageUtil.sendActionBar(player,
-                    "§c✘ Vous ne pouvez poser que sur un espace vide (structure_void) de cette base.");
+        if (state == com.mceteams.xii.enums.GameState.PREPARATION
+                || state == com.mceteams.xii.enums.GameState.COMBAT) {
+            var blockPlaced = event.getBlockPlaced();
+            if (!plugin.getProtectionService()
+                    .canPlaceBlock(player, blockPlaced)) {
+                event.setCancelled(true);
+                // Message CONTEXTUEL : deux motifs de refus distincts -
+                // un structure_void du gabarit (espace à laisser vide) vs
+                // un refus général de pose dans la base (adversaire avant
+                // le jour 7...).
+                var base = plugin.getBaseManager()
+                        .baseContainingBlock(blockPlaced.getLocation());
+                com.mceteams.xii.util.MessageUtil.sendActionBar(player,
+                        base != null
+                                && base.isVoidSlot(blockPlaced.getLocation())
+                                ? "§c✘ Cet espace vide du gabarit doit rester vide."
+                                : "§c✘ Vous ne pouvez pas poser ce bloc ici.");
+            }
         }
     }
 

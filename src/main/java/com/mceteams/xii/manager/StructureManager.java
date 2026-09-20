@@ -30,6 +30,10 @@ public class StructureManager {
     private static final String LOBBY_PATH = "structures/waiting/waiting_lobby.nbt";
     private static final String LOBBY_NAME = "waiting_lobby";
 
+    /** Template UNIQUE partagé par les 4 bases d'équipe (bases.nbt). */
+    private static final String BASES_PATH = "structures/bases/bases.nbt";
+    private static final String BASES_NAME = "bases";
+
     private final XiiPlugin plugin;
     private final StructureLoader loader;
     private final StructurePlacer placer;
@@ -175,25 +179,36 @@ public class StructureManager {
     /**
      * Place une base d'équipe à l'ancrage donné, orientée vers le centre.
      *
+     * Les 4 équipes partagent LE MÊME template (bases.nbt) : seule la
+     * rotation diffère (la base regarde vers le centre de map).
+     *
      * NB : le remblai herbeux (fill grass sous le plancher, style
      * village) est appliqué par le poseur de secours, de même que
      * l'enregistrement des blocs de structure (protection).
      *
-     * @param color  équipe (détermine le fichier base_<couleur>.nbt)
+     * @param color  équipe propriétaire de la base
      * @param anchor point d'ancrage calculé par BaseManager
      * @param target point que la base doit regarder (centre de map)
      */
     public boolean placeBase(TeamColor color,
                              Location anchor,
                              Location target) {
-        var rotation = com.mceteams.xii.structure.StructureRotation
-                .facingToward(anchor, target);
-        return place("structures/bases/base_" + color.name().toLowerCase() + ".nbt",
-                "base_" + color.name().toLowerCase(),
-                StructureLocation.of(anchor, rotation),
-                true,
-                written -> {
+        var location = StructureLocation.of(anchor,
+                com.mceteams.xii.structure.StructureRotation
+                        .facingToward(anchor, target));
+        java.io.File cached = loader.ensureCached(BASES_PATH, BASES_NAME);
+        return place(BASES_PATH, BASES_NAME, location, true, written -> {
                     structureKeys.addAll(keys(written));
+                    // RÈGLE UTILISATEUR : les cellules VIDES du gabarit
+                    // (AIR du template) sont remises à AIR dans le monde,
+                    // pour que rien (arbre, butte) ne dépasse à l'intérieur
+                    // de la base. Les structure_void posés par la structure
+                    // sont ensuite convertis en air + mémorisés par
+                    // MarkerManager (l'espace vide du gabarit reste vide).
+                    if (cached != null) {
+                        rawPlacer.clearTemplateEmptyCells(cached.toPath(),
+                                location);
+                    }
                     // RÈGLE UTILISATEUR : applique les REPÈRES (lainages)
                     // posés par le développeur dans l'empreinte de la base
                     // (sol rouge → herbe, portillons bleu ciel → spruce

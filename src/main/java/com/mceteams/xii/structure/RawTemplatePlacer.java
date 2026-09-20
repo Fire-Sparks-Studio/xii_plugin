@@ -32,7 +32,9 @@ import java.util.Set;
  */
 public class RawTemplatePlacer {
 
-    /** Bloc "vide" du template : jamais posé, sert de gabarit. */
+    /** Bloc "vide" du template : gabarit (posé pour les bases, voir
+     * writeBlocks / MarkerManager : converti en air + "espace à laisser
+     * vide"). */
     public static final String STRUCTURE_VOID = "minecraft:structure_void";
     /** Épaisseur max du remblai herbeux sous une base (style village). */
     private static final int GRASS_FILL_DEPTH = 4;
@@ -93,7 +95,8 @@ public class RawTemplatePlacer {
                         if (baseGrassFill) {
                             clearTreeIntersections(location, blocks);
                         }
-                        List<Location> written = writeBlocks(blocks, location);
+                        List<Location> written = writeBlocks(blocks, location,
+                                baseGrassFill);
                         if (baseGrassFill) {
                             fillGrassUnder(location, blocks);
                         }
@@ -116,12 +119,28 @@ public class RawTemplatePlacer {
 
     /** Pose effective des blocs (thread principal, chunks chargés). */
     private List<Location> writeBlocks(List<TemplateBlock> blocks,
-                                       StructureLocation location) {
+                                       StructureLocation location,
+                                       boolean baseGrassFill) {
         List<Location> written = new ArrayList<>();
         int failed = 0;
         for (TemplateBlock block : blocks) {
             if (isVoid(block.dataString())) {
-                continue; // structure_void : gabarit, jamais posé
+                // structure_void : gabarit, jamais "posé" comme un bloc
+                // de structure... SAUF pour une BASE (baseGrassFill) : on
+                // pose tout de même le bloc pour que MarkerManager le
+                // convertisse en air et mémorise l'emplacement ("l'espace
+                // vide du gabarit doit rester vide", pose interdite).
+                if (baseGrassFill) {
+                    Location target = new Location(location.getWorld(),
+                            location.getX() + block.x(),
+                            location.getY() + block.y(),
+                            location.getZ() + block.z());
+                    if (target.getBlock().getType() != Material.BEACON) {
+                        target.getBlock().setType(
+                                Material.STRUCTURE_VOID, false);
+                    }
+                }
+                continue;
             }
             try {
                 Location target = new Location(location.getWorld(),
@@ -220,6 +239,79 @@ public class RawTemplatePlacer {
         if (filled > 0) {
             plugin.getLogger().info("[Structures] Remblai herbeux sous la base : "
                     + filled + " bloc(s).");
+        }
+    }
+
+    /**
+     * RÈGLE UTILISATEUR : remet à AIR les cellules VIDES du gabarit
+     * (template AIR) d'une BASE, pour que l'intérieur soit dégagé :
+     * aucun arbre, aucune butte, aucun vestige de terrain ne doit
+     * dépasser "dedans".
+     *
+     * writeBlocks IGNORE l'air du gabarit (l'air n'écrase pas le
+     * terrain, pour le lobby/donjons) ; pour les bases, on vide donc
+     * EXPLICITEMENT ces cellules. Seule la portion AU-DESSUS du sol de
+     * leur colonne est vidée : on ne creuse jamais sous la structure
+     * (le relief enterré reste intact).
+     *
+     * Les {@code structure_void}, eux, sont posés par writeBlocks
+     * (baseGrassFill) : MarkerManager les convertit en air et mémorise
+     * l'emplacement comme "à laisser vide" (pose interdite).
+     *
+     * Appelé par StructureManager.placeBase pour les DEUX voies de pose
+     * (API et poseur de secours), après l'écriture de la structure.
+     */
+    public void clearTemplateEmptyCells(Path nbtFile,
+                                        StructureLocation location) {
+        List<TemplateBlock> blocks = decode(nbtFile,
+                location.getRotation(), true);
+        if (blocks.isEmpty()) {
+            return;
+        }
+        World world = location.getWorld();
+        if (world == null) {
+            return;
+        }
+
+        // Sol par colonne = plus bas bloc NI vide du gabarit (plancher) ;
+        // repli : sol global du gabarit (borné à l'ancre pour ne jamais
+        // creuser de sous-sol sur une colonne entièrement vide).
+        Map<Long, Integer> floorByColumn = new HashMap<>();
+        int globalFloor = location.getY();
+        for (TemplateBlock block : blocks) {
+            String data = block.dataString();
+            if (isVoid(data) || data.equals("minecraft:air")) {
+                continue;
+            }
+            int x = location.getX() + block.x();
+            int z = location.getZ() + block.z();
+            int y = location.getY() + block.y();
+            floorByColumn.merge(columnKey(x, z), y, Math::min);
+            globalFloor = Math.min(globalFloor, y);
+        }
+
+        int cleared = 0;
+        for (TemplateBlock block : blocks) {
+            if (!block.dataString().equals("minecraft:air")) {
+                continue;
+            }
+            int x = location.getX() + block.x();
+            int y = location.getY() + block.y();
+            int z = location.getZ() + block.z();
+            int floor = floorByColumn.getOrDefault(columnKey(x, z),
+                    globalFloor);
+            if (y < floor) {
+                continue; // sous le plancher de la colonne : on ne creuse pas
+            }
+            Block target = world.getBlockAt(x, y, z);
+            if (!target.getType().isAir()) {
+                target.setType(Material.AIR, false);
+                cleared++;
+            }
+        }
+        if (cleared > 0) {
+            plugin.getLogger().info("[Structures] Intérieur de base dégagé : "
+                    + cleared + " cellule(s) vide(s) du gabarit en AIR.");
         }
     }
 
@@ -386,6 +478,17 @@ public class RawTemplatePlacer {
      */
     private List<TemplateBlock> decode(Path nbtFile,
                                        StructureRotation rotation) {
+        return decode(nbtFile, rotation, false);
+    }
+
+    /**
+     * @param includeAir true pour inclure les cellules AIR du gabarit
+     *                   dans la liste (elles ne le sont PAS par défaut :
+     *                   l'air du template n'écrase pas le terrain).
+     */
+    private List<TemplateBlock> decode(Path nbtFile,
+                                       StructureRotation rotation,
+                                       boolean includeAir) {
         try {
             SimpleNbt.Compound root = SimpleNbt.read(
                     Files.readAllBytes(nbtFile));
@@ -443,7 +546,7 @@ public class RawTemplatePlacer {
                     continue;
                 }
                 String dataString = palette.get(index);
-                if (dataString.equals("minecraft:air")) {
+                if (dataString.equals("minecraft:air") && !includeAir) {
                     continue; // l'air du template n'écrase pas le terrain
                 }
                 int[] transformed = transform(pos[0], pos[1], pos[2],

@@ -165,10 +165,12 @@ public class ProtectionService {
     /**
      * Droits de PLACE (poser) sur un bloc pendant le gameplay.
      *
-     * RÈGLE UTILISATEUR : À L'INTÉRIEUR d'une base, l'équipe propriétaire
-     * peut poser PARTOUT, SAUF à la place d'un {@code structure_void} du
-     * gabarit (l'espace vide prévu du template doit rester vide). Poser là
-     * où le template a un structure_void est INTERDIT.
+     * RÈGLE UTILISATEUR : À L'INTÉRIEUR d'une base -
+     * - l'équipe PROPRIÉTAIRE peut poser PARTOUT, SAUF à la place d'un
+     *   {@code structure_void} du gabarit (l'espace vide du template doit
+     *   rester vide) ;
+     * - les joueurs ADVERSES ne peuvent poser QU'À PARTIR DU JOUR 7
+     *   (début du COMBAT ; le jour = sous-phase courante, 1..12).
      * Hors base : pose libre (PRÉPARATION et COMBAT).
      */
     public boolean canPlaceBlock(Player player, Block block) {
@@ -186,9 +188,12 @@ public class ProtectionService {
             return true; // hors base : libre
         }
 
-        // Dans une base : SEUL LE PROPRIÉTAIRE pose, et JAMAIS à la place
-        // d'un structure_void du gabarit (l'espace vide reste vide).
-        if (playerTeamOf(player) != base.getColor()) {
+        // Dans une base : le PROPRIÉTAIRE pose librement (jamais à la
+        // place d'un structure_void) ; les ADVERSES seulement à partir
+        // du jour 7 (COMBAT). L'espace vide prévu du gabarit reste vide
+        // pour tout le monde.
+        if (playerTeamOf(player) != base.getColor()
+                && plugin.getPhaseManager().currentDay() < 7) {
             return false;
         }
         return !base.isVoidSlot(block.getLocation());
@@ -206,9 +211,9 @@ public class ProtectionService {
      * - les CHAMPS (crops, farmland) sont toujours protégés ;
      * - chaque équipe peut poser des blocs dans SA base et casser les
      *   blocs QU'ELLE a posés (les autres blocs y sont intouchables) ;
-* - la POSE dans une base est interdite à la place d'un structure_void
- *   du gabarit (l'espace vide reste vide), libre ailleurs pour le
- *   propriétaire (voir canPlaceBlock) ;
+* - la POSE dans une base est libre pour le propriétaire (hors
+ *   structure_void), réservée aux adversaires à partir du jour 7
+ *   (COMBAT) - voir canPlaceBlock ;
      * - les CRISTAUX (sea_lantern) sont laissés à CoreListener (ordre
      *   HIGH), qui gère leur destruction de façon contrôlée ;
      * - hors base : modification libre (PRÉPARATION et COMBAT).

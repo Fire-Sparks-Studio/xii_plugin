@@ -43,10 +43,11 @@ public class GameBase {
     private final Set<Location> ownedBlocks = new LinkedHashSet<>();
 
     /**
-     * Emplacements de {@code structure_void} du gabarit : les SEULS blocs
-     * où l'équipe propriétaire est autorisée à POSER quelque chose dans
-     * sa base (RÈGLE UTILISATEUR). Enregistrés pendant le processing des
-     * repères (MarkerManager), avant leur conversion en air.
+     * Emplacements de {@code structure_void} du gabarit : des emplacements
+     * que l'équipe DOIT LAISSER VIDES (la pose y est INTERDITE) - l'espace
+     * vide du template reste vide (RÈGLE UTILISATEUR). Enregistrés pendant
+     * le processing des repères (MarkerManager), avant leur conversion en
+     * air. La pose ailleurs dans la base est libre pour le propriétaire.
      */
     private final Set<Location> voidSlots = new LinkedHashSet<>();
 

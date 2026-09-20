@@ -172,7 +172,6 @@ public class BaseManager {
      */
     private void putBase(TeamColor color, int unitX, int unitZ, Location center) {
         World world = center.getWorld();
-        String colorName = color.name().toLowerCase();
 
         // ÉQUIPE SANS MEMBRE dès le lancement : AUCUNE base, et élimination
         // automatique. Le joueur qui le rejoindrait plus tard rejoindrait
@@ -209,7 +208,7 @@ public class BaseManager {
         // pour que le reste du jeu fonctionne pendant le développement.
         if (!placed) {
             plugin.getLogger().warning("[Bases] Structure manquante pour "
-                    + color.getColoredName() + " §7(base_" + colorName + ".nbt)");
+                    + color.getColoredName() + " §7(bases.nbt)");
         }
 
         int protectionRadius = 27; // rayon de la zone protégée autour du centre
@@ -239,9 +238,10 @@ public class BaseManager {
             team.setSpawn(spawn);
         }
 
-        // Les cristaux (5 sea_lantern) et le coffre de dépôt sont fournis
-        // PAR LA STRUCTURE .nbt : on les localise dans le monde puis on
-        // les enregistre auprès du CoreService.
+        // Les cristaux (5 sea_lantern, ou laines noire/marron des nouveaux
+        // gabarits) et le coffre de dépôt sont fournis PAR LA STRUCTURE
+        // .nbt : on les localise dans le monde puis on les enregistre
+        // auprès du CoreService.
         locateAndRegisterCrystals(color, anchor);
     }
 
@@ -571,10 +571,28 @@ public class BaseManager {
             }
         }
 
+        // RÈGLE UTILISATEUR : le cœur et les tours repérés par des laines
+        // (laine NOIRE = cœur, laines MARRON = tours) sont PHYSIQUEMENT
+        // convertis en sea_lantern, pour qu'on les reconnaisse au premier
+        // coup d'œil (même rendu que les cristaux des anciens gabarits).
+        setCrystalBlock(center);
+        for (Location tower : towers) {
+            setCrystalBlock(tower);
+        }
+
         plugin.getCoreService()
                 .registerBaseCrystals(color, center, towers, chest);
         plugin.getLogger().info("[Bases] " + color.name().toLowerCase()
                 + " : 5 cristaux + coffre de dépôt enregistrés.");
+    }
+
+    /** Pose un bloc cristal (sea_lantern) dans le monde, à cette position. */
+    private void setCrystalBlock(Location location) {
+        if (location != null && location.getWorld() != null) {
+            location.getBlock().setType(
+                    com.mceteams.xii.service.CoreService.CRYSTAL_MATERIAL,
+                    false);
+        }
     }
 
     private double squaredXZ(Location location, double x, double z) {
@@ -612,7 +630,13 @@ public class BaseManager {
                 for (int y = minY; y <= maxY; y++) {
                     Block block = world.getBlockAt(ax + dx, y, az + dz);
                     Material type = block.getType();
-                    if (type == com.mceteams.xii.service.CoreService.CRYSTAL_MATERIAL) {
+                    // Candidats cristaux : le sea_lantern posé directement
+                    // dans le .nbt OU les laines NOIRE (cœur) / MARRON
+                    // (tours) des nouveaux gabarits - converties en
+                    // sea_lantern par registerCrystals.
+                    if (type == com.mceteams.xii.service.CoreService.CRYSTAL_MATERIAL
+                            || type == Material.BLACK_WOOL
+                            || type == Material.BROWN_WOOL) {
                         lanterns.add(block.getLocation());
                     } else if (type == Material.CHEST) {
                         chests.add(block.getLocation());

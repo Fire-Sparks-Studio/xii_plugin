@@ -44,8 +44,8 @@ public class StructureLoader {
     /**
      * Charge une structure depuis les ressources du jar.
      *
-     * @param resourcePath chemin interne, ex : "structures/bases/base_blue.nbt"
-     * @param structureName nom d'enregistrement, ex : "base_blue"
+     * @param resourcePath chemin interne, ex : "structures/bases/bases.nbt"
+     * @param structureName nom d'enregistrement, ex : "bases"
      * @return la structure chargée, ou null si absente/invalide
      *         (les .nbt sont fournies par le développeur : une absence
      *         ne doit jamais faire planter le serveur).

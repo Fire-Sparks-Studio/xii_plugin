@@ -18,8 +18,9 @@ import org.bukkit.block.Block;
  *                      d'un joueur de l'équipe (fermé pour les adversaires)
  *                      → le bloc est transformé en spruce_fence_gate et
  *                      enregistré dans le GateManager.
- * - Laine VERTE      : emplacement du PNJ "Upgrades d'équipe" (stoké par
- *                      NpcManager, config PNJ plus tard).
+ * - Laine VERTE (ou VERT CLAIR/laine lime) : emplacement du PNJ
+ *                      "Upgrades d'équipe" (stoké par NpcManager, config
+ *                      PNJ plus tard).
  * - Laine JAUNE      : emplacement du PNJ "Objets/items" (idem).
  *
  * NB : les repères sont appliqués APRÈS l'écriture de la structure,
@@ -77,7 +78,10 @@ public class MarkerManager {
                                     block.getLocation());
                             gates++;
                         }
-                        case GREEN_WOOL -> {
+                        // Le gabarit actuel repère le PNJ upgrade avec une
+                        // laine VERT CLAIR (lime) ; on accepte aussi la
+                        // laine verte historique.
+                        case GREEN_WOOL, LIME_WOOL -> {
                             plugin.getNpcManager()
                                     .setUpgradeNpc(color, block.getLocation());
                             npcUpgrade++;

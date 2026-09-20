@@ -8,7 +8,7 @@ package com.mceteams.xii.enums;
 public enum StructureType {
     /** resources/structures/waiting/waiting_lobby.nbt */
     WAITING_LOBBY,
-    /** resources/structures/bases/base_<couleur>.nbt */
+    /** resources/structures/bases/bases.nbt (template unique des 4 équipes) */
     BASE,
     /** resources/structures/dungeons/dungeon_<1..4>.nbt */
     DUNGEON
