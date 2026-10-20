@@ -67,6 +67,11 @@ public class TabManager {
 
     /** Met à jour la liste (noms, ordre, infos, header/footer) de tous. */
     public void updateAll() {
+        // Aucune zone définie (/zone set) : le plugin ne touche PAS au
+        // TAB, qui doit rester le TAB vanilla du serveur.
+        if (!plugin.getZoneManager().hasZone()) {
+            return;
+        }
         List<Player> online = new ArrayList<>(Bukkit.getOnlinePlayers());
         if (online.isEmpty()) {
             return;
@@ -139,6 +144,12 @@ public class TabManager {
         lastPlayerName.remove(uuid);
         lastPlayerOrder.remove(uuid);
         lastHeaderFooter.remove(uuid);
+        // Aucune zone définie : le TAB reste vanilla, on ne recalcule rien
+        // (sinon un header/footer "XII DAYS" réapparaîtrait sur un serveur
+        // simplement configuré).
+        if (!plugin.getZoneManager().hasZone()) {
+            return;
+        }
         // Les ordres des joueurs restants changent : on recalcule au tick
         // suivant (les envois restent différentiels, donc légers).
         Bukkit.getScheduler().runTask(plugin, this::updateAll);
@@ -347,6 +358,12 @@ public class TabManager {
     private TabLayout buildLayout(Player viewer, int playerSlots) {
         GameState state = plugin.getGameManager().getState();
         TabLayout layout = new TabLayout();
+
+        // Sans zone : AUCUN élément de mode de jeu (ni header, ni footer,
+        // ni colonne d'infos) - le TAB doit rester vanilla.
+        if (!plugin.getZoneManager().hasZone()) {
+            return layout.withPlayerSlots(playerSlots);
+        }
 
         layout.header("§b§lXII DAYS");
 

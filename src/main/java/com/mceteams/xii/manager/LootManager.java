@@ -63,18 +63,26 @@ public class LootManager {
     private void registerDefaultTables() {
         // ---------------- PACKAGE NORMAL : progression -----------------
         // (poids rares/légendaires volontairement relevés)
+        // REBALANCE : diamants/émeraudes remontés (quantités utiles) et
+        // ajout d'une pincée de netherite (scrap/débris antique) + très
+        // rares pièces d'équipement en diamant. La netherite garde un
+        // poids FAIBLE pour ne pas rendre les colis trop rentables.
         tables.put(LootTableId.PACKAGE_NORMAL, List.of(
                 LootEntry.resource(Material.COAL, 10, 4, 12),
-                LootEntry.resource(Material.IRON_INGOT, 10, 3, 8),
+                LootEntry.resource(Material.IRON_INGOT, 10, 4, 10),
                 LootEntry.resource(Material.COPPER_INGOT, 8, 4, 12),
                 LootEntry.resource(Material.GOLD_INGOT, 8, 2, 6),
                 LootEntry.resource(Material.LAPIS_LAZULI, 7, 4, 12),
                 LootEntry.resource(Material.REDSTONE, 7, 4, 12),
-                LootEntry.resource(Material.DIAMOND, 6, 1, 2),
-                LootEntry.resource(Material.EMERALD, 6, 1, 2),
+                LootEntry.resource(Material.DIAMOND, 8, 2, 4),
+                LootEntry.resource(Material.EMERALD, 7, 2, 4),
                 LootEntry.resource(Material.QUARTZ, 6, 3, 8),
                 LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 1, 3),
                 LootEntry.resource(Material.ARROW, 6, 8, 24),
+                // Netherite : précieuse mais jamais garantie (1 seul scrap,
+                // ou très rarement 1 débris antique).
+                LootEntry.resource(Material.NETHERITE_SCRAP, 3, 1, 1),
+                LootEntry.resource(Material.ANCIENT_DEBRIS, 1, 1, 1),
                 LootEntry.equipment("iron_sword", 2),
                 LootEntry.equipment("iron_pickaxe", 2),
                 LootEntry.equipment("bow", 2),
@@ -82,6 +90,8 @@ public class LootManager {
                 LootEntry.equipment("iron_chestplate", 1),
                 LootEntry.equipment("iron_leggings", 1),
                 LootEntry.equipment("iron_boots", 1),
+                LootEntry.equipment("diamond_sword", 1),
+                LootEntry.equipment("diamond_pickaxe", 1),
                 LootEntry.upgrade(ItemRarity.COMMON, 3),
                 LootEntry.upgrade(ItemRarity.RARE, 1),
                 LootEntry.upgrade(ItemRarity.EPIC, 3),
@@ -95,8 +105,9 @@ public class LootManager {
                 LootEntry.upgrade(ItemRarity.RARE, 22),
                 LootEntry.upgrade(ItemRarity.EPIC, 28),
                 LootEntry.totem(6),
-                LootEntry.resource(Material.DIAMOND, 5, 1, 2),
-                LootEntry.resource(Material.EMERALD, 5, 1, 2),
+                LootEntry.resource(Material.DIAMOND, 6, 2, 4),
+                LootEntry.resource(Material.EMERALD, 6, 2, 4),
+                LootEntry.resource(Material.NETHERITE_SCRAP, 3, 1, 2),
                 LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 2, 4)
         ));
 
@@ -110,6 +121,9 @@ public class LootManager {
                 LootEntry.resource(Material.GRAVEL, 8, 8, 24),
                 LootEntry.resource(Material.DIRT, 8, 8, 24),
                 // Jackpot exceptionnel (risque/récompense) :
+                LootEntry.resource(Material.DIAMOND, 3, 2, 5),
+                LootEntry.resource(Material.EMERALD, 3, 2, 5),
+                LootEntry.resource(Material.NETHERITE_SCRAP, 2, 1, 2),
                 LootEntry.upgrade(ItemRarity.COMMON, 2),
                 LootEntry.upgrade(ItemRarity.RARE, 1),
                 LootEntry.upgrade(ItemRarity.EPIC, 4),

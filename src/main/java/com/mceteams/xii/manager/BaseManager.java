@@ -61,6 +61,20 @@ public class BaseManager {
     /** Bases placées, par couleur. */
     private final Map<TeamColor, GameBase> bases = new EnumMap<>(TeamColor.class);
 
+    /**
+     * Instantané du TERRAIN AVANT la pose de chaque base : permet de
+     * "régénérer" l'empreinte si la base doit être déspawn (équipe
+     * inexistante au lancement). Paper 26.2 ne permet pas de régénérer un
+     * chunk ({@code World#regenerateChunk} lève
+     * {@code UnsupportedOperationException}), on restaure donc les blocs
+     * d'origine mémorisés ici.
+     *
+     * Clé = position de bloc empaquetée (x,y,z) ; valeur = BlockData
+     * sérialisée ("minecraft:grass_block[snowy=false]") ou null pour l'air.
+     */
+    private final Map<TeamColor, Map<Long, String>> terrainSnapshots =
+            new EnumMap<>(TeamColor.class);
+
     public BaseManager(XiiPlugin plugin) {
         this.plugin = plugin;
     }
@@ -201,6 +215,13 @@ public class BaseManager {
             anchor = resolveDryAnchor(color, world, center, unitX, unitZ);
         }
 
+        // Instantané du terrain AVANT la pose : permet de restaurer
+        // l'empreinte si la base doit être déspawn (équipe inexistante au
+        // lancement). On capture l'empreinte 35x35 (marge +1) sur une
+        // hauteur couvrant la structure (l'ancre est abaissée de 9 sous le
+        // sol, la structure peut monter de ~40 blocs).
+        captureTerrainSnapshot(color, anchor);
+
         boolean placed = plugin.getStructureManager()
                 .placeBase(color, anchor, center);
 
@@ -247,8 +268,143 @@ public class BaseManager {
 
     /** Retire la base (et ses cristaux enregistrés) d'une équipe. */
     private void removeBase(TeamColor color) {
-        bases.remove(color);
+        GameBase base = bases.remove(color);
         plugin.getCoreService().unregisterBase(color);
+        // DÉSPAWN de la structure : on restaure le terrain d'origine de
+        // l'empreinte (instantané pris avant la pose) et on oublie le
+        // placement pour qu'une régénération de fin de partie ne repose
+        // pas la base.
+        if (base != null && base.getAnchor() != null) {
+            plugin.getStructureManager().removeBasePlacement(base);
+            restoreTerrainSnapshot(color, base.getAnchor());
+        }
+        terrainSnapshots.remove(color);
+    }
+
+    /**
+     * DÉSPAWN des bases dont l'équipe n'existe pas au lancement de la
+     * partie : retirer la structure, régénérer la zone joueurs et purger
+     * les modèles. Appelé par GameManager au début de la PRÉPARATION,
+     * après l'élimination automatique des équipes vides.
+     *
+     * @return nombre de bases effectivement retirées
+     */
+    public int despawnBasesWithoutPlayers() {
+        int removed = 0;
+        for (TeamColor color : TeamColor.values()) {
+            GameTeam team = plugin.getTeamManager().getTeam(color);
+            boolean absent = team == null || team.getPlayerCount() == 0;
+            if (!absent) {
+                continue;
+            }
+            boolean hadModel = bases.containsKey(color);
+            if (!hadModel) {
+                // Aucune structure posée pour cette couleur : rien à faire
+                // (cas d'une équipe inexistante depuis /zone set).
+                continue;
+            }
+            removeBase(color);
+            removed++;
+            plugin.getLogger().info("[Bases] Base " + color.getColoredName()
+                    + " §7retirée (équipe inexistante au lancement) : zone régénérée.");
+        }
+        return removed;
+    }
+
+    // -----------------------------------------------------------------
+    // Instantané de terrain (déspawn / "régénération" de l'empreinte)
+    // -----------------------------------------------------------------
+
+    /**
+     * Mémorise l'état de TOUS les blocs de l'empreinte de la base (35x35,
+     * marge +1) avant sa pose : c'est ce qui permet de rendre le terrain
+     * d'origine si la base doit être retirée.
+     *
+     * Hauteur capturée : de {@code anchor.y - 8} (sous-sol proche) à
+     * {@code anchor.y + 48} (au-dessus du toit de la structure).
+     */
+    private void captureTerrainSnapshot(TeamColor color, Location anchor) {
+        if (anchor == null || anchor.getWorld() == null) {
+            return;
+        }
+        World world = anchor.getWorld();
+        int ax = anchor.getBlockX();
+        int ay = anchor.getBlockY();
+        int az = anchor.getBlockZ();
+        int minY = Math.max(world.getMinHeight(), ay - 8);
+        int maxY = Math.min(world.getMaxHeight() - 1, ay + 48);
+
+        Map<Long, String> snapshot = new HashMap<>();
+        for (int x = ax - 1; x <= ax + GameBase.SIZE; x++) {
+            for (int z = az - 1; z <= az + GameBase.SIZE; z++) {
+                for (int y = minY; y <= maxY; y++) {
+                    Block block = world.getBlockAt(x, y, z);
+                    snapshot.put(packBlockKey(x, y, z),
+                            block.getBlockData().getAsString());
+                }
+            }
+        }
+        terrainSnapshots.put(color, snapshot);
+        plugin.getLogger().info("[Bases] Instantané terrain "
+                + color.getColoredName() + " §7: " + snapshot.size()
+                + " bloc(s) mémorisé(s).");
+    }
+
+    /**
+     * Restaure le terrain d'origine de l'empreinte à partir de l'instantané
+     * (remet chaque bloc mémorisé dans son état initial). Sans instantané
+     * (base posée avant une mise à jour, ou serveur redémarré), on se
+     * contente d'un nettoyage best-effort des blocs au-dessus du sol.
+     */
+    private void restoreTerrainSnapshot(TeamColor color, Location anchor) {
+        if (anchor == null || anchor.getWorld() == null) {
+            return;
+        }
+        Map<Long, String> snapshot = terrainSnapshots.get(color);
+        int restored = 0;
+        if (snapshot != null && !snapshot.isEmpty()) {
+            for (Map.Entry<Long, String> entry : snapshot.entrySet()) {
+                long key = entry.getKey();
+                int x = unpackX(key);
+                int y = unpackY(key);
+                int z = unpackZ(key);
+                Block block = anchor.getWorld().getBlockAt(x, y, z);
+                try {
+                    block.setBlockData(
+                            org.bukkit.Bukkit.createBlockData(entry.getValue()),
+                            false);
+                    restored++;
+                } catch (IllegalArgumentException ignored) {
+                    // Donnée de bloc inconnue (version différente) : on
+                    // laisse le bloc tel quel plutôt que de crasher.
+                }
+            }
+        }
+        plugin.getLogger().info("[Bases] Terrain restauré "
+                + color.getColoredName() + " §7: " + restored + " bloc(s).");
+    }
+
+    /** Empaquette des coordonnées de bloc (x,y,z) dans un long. */
+    private static long packBlockKey(int x, int y, int z) {
+        return ((long) (x & 0x3FFFFFF) << 38)
+                | ((long) (y & 0xFFF) << 26)
+                | (z & 0x3FFFFFF);
+    }
+
+    private static int unpackX(long key) {
+        int x = (int) (key >> 38);
+        // Restaure le signe (encodage sur 26 bits).
+        return (x << 6) >> 6;
+    }
+
+    private static int unpackY(long key) {
+        int y = (int) ((key >> 26) & 0xFFF);
+        return (y << 20) >> 20;
+    }
+
+    private static int unpackZ(long key) {
+        int z = (int) (key & 0x3FFFFFF);
+        return (z << 6) >> 6;
     }
 
     /**

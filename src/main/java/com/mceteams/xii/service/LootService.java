@@ -205,6 +205,12 @@ public class LootService {
             case "strong_iron_chestplate" -> Material.IRON_CHESTPLATE;
             case "strong_iron_leggings" -> Material.IRON_LEGGINGS;
             case "strong_iron_boots" -> Material.IRON_BOOTS;
+            case "netherite_sword" -> Material.NETHERITE_SWORD;
+            case "netherite_pickaxe" -> Material.NETHERITE_PICKAXE;
+            case "netherite_helmet" -> Material.NETHERITE_HELMET;
+            case "netherite_chestplate" -> Material.NETHERITE_CHESTPLATE;
+            case "netherite_leggings" -> Material.NETHERITE_LEGGINGS;
+            case "netherite_boots" -> Material.NETHERITE_BOOTS;
             default -> Material.IRON_SWORD;
         };
 
@@ -213,6 +219,16 @@ public class LootService {
 
         if (meta != null) {
             switch (variant) {
+                case "netherite_sword" -> {
+                    meta.addEnchant(Enchantment.SHARPNESS, 5, false);
+                    meta.addEnchant(Enchantment.UNBREAKING, 3, false);
+                    meta.addEnchant(Enchantment.LOOTING, 3, false);
+                }
+                case "netherite_pickaxe" -> {
+                    meta.addEnchant(Enchantment.EFFICIENCY, 5, false);
+                    meta.addEnchant(Enchantment.UNBREAKING, 3, false);
+                    meta.addEnchant(Enchantment.FORTUNE, 3, false);
+                }
                 case "iron_sword" -> {
                     meta.addEnchant(Enchantment.SHARPNESS, rand(1, 3), false);
                     meta.addEnchant(Enchantment.UNBREAKING, 2, false);
@@ -244,11 +260,15 @@ public class LootService {
                              "iron_leggings", "iron_boots" -> rand(1, 2);
                         case "strong_iron_helmet", "strong_iron_chestplate",
                              "strong_iron_leggings", "strong_iron_boots" -> 3;
+                        case "netherite_helmet", "netherite_chestplate",
+                             "netherite_leggings", "netherite_boots" -> 4;
                         default -> 2; // pièces diamant
                     };
                     meta.addEnchant(Enchantment.PROTECTION, protection, false);
                     meta.addEnchant(Enchantment.UNBREAKING,
-                            variant.startsWith("strong") ? 3 : 2, false);
+                            variant.startsWith("strong_iron")
+                                    || variant.startsWith("netherite") ? 3 : 2,
+                            false);
                 }
             }
             item.setItemMeta(meta);

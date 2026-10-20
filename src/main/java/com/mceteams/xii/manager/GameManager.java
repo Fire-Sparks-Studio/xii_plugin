@@ -179,6 +179,9 @@ public class GameManager {
     private void enterWaiting(boolean silent) {
         state = GameState.WAITING;
         plugin.getSystemController().refresh();
+        // Spawn du monde remis sur le lobby (le spawn avait été éloigné
+        // pendant la partie pour neutraliser la spawn protection).
+        restoreLobbyWorldSpawn();
         // FIX : rafraîchit scoreboards + tab => efface la sidebar de fin
         // de partie qui restait sinon affichée indéfiniment.
         plugin.getScoreboardManager().updateAll();
@@ -214,6 +217,57 @@ public class GameManager {
         }
         // Items de lobby selon l'état (WAITING => sélecteur + item admin si op).
         plugin.getLobbyItemManager().giveLobbyItems(player);
+    }
+
+    // -----------------------------------------------------------------
+    // SPAWN PROTECTION (vanilla) neutralisée pendant la partie
+    // -----------------------------------------------------------------
+
+    /**
+     * Retire la SPAWN PROTECTION vanilla pendant la partie.
+     *
+     * La protection de spawn de Minecraft est centrée sur le point
+     * d'apparition du monde ({@code world.getSharedSpawnPos()}) et
+     * s'applique aux joueurs NON-op dans un rayon en X/Z : elle n'est
+     * PAS désactivable via l'API Bukkit. Comme le serveur place le spawn
+     * du monde sur le lobby (au centre de la map), les joueurs ne
+     * pouvaient pas poser de blocs autour du centre une fois en jeu
+     * (alors que les ops, eux, le pouvaient).
+     *
+     * Solution : éloigner le spawn du monde HORS de la zone jouable
+     * pendant la partie (le plugin gère lui-même respawn/spawns des
+     * équipes, le spawn vanilla n'est donc plus utilisé). Il sera remis
+     * sur le lobby au retour en WAITING.
+     */
+    private void moveWorldSpawnAwayFromGame() {
+        var zone = plugin.getZoneManager().getZone();
+        if (zone == null || zone.getWorld() == null) {
+            return;
+        }
+        World world = zone.getWorld();
+        // Point situé à l'extérieur de la zone (taille/2 + marge), au
+        // niveau du sol approximatif de la zone.
+        int x = (int) (zone.getCenterX() + zone.getSize());
+        int z = (int) (zone.getCenterZ() + zone.getSize());
+        int y = world.getHighestBlockYAt(x, z);
+        world.setSpawnLocation(x, y, z);
+        plugin.getLogger().info("[Spawn] Spawn du monde éloigné en jeu ("
+                + x + ", " + y + ", " + z + ") : spawn protection hors zone.");
+    }
+
+    /**
+     * Replace le spawn du monde sur le lobby (attente) : la protection
+     * vanilla reste alors cantonnée au lobby, comme avant la partie.
+     */
+    private void restoreLobbyWorldSpawn() {
+        Location lobbySpawn = getLobbySpawn();
+        if (lobbySpawn == null || lobbySpawn.getWorld() == null) {
+            return;
+        }
+        lobbySpawn.getWorld().setSpawnLocation(
+                lobbySpawn.getBlockX(),
+                lobbySpawn.getBlockY(),
+                lobbySpawn.getBlockZ());
     }
 
     /**
@@ -334,6 +388,11 @@ public class GameManager {
             }
         }
 
+        // DÉSPAWN + RÉGÉNÉRATION des bases des équipes INEXISTANTES au
+        // lancement (équipe jamais créée, ou vidée) : la structure est
+        // retirée et l'empreinte redevient du terrain naturel.
+        plugin.getBaseManager().despawnBasesWithoutPlayers();
+
         // 4 : téléportation à la base de chaque équipe.
         for (Player player : Bukkit.getOnlinePlayers()) {
             var data = plugin.getPlayerManager().getData(player);
@@ -372,6 +431,11 @@ public class GameManager {
 
         // Le lobby d'attente disparaît (il sera reposé au retour).
         plugin.getStructureManager().removeLobbyBlocks();
+
+        // SPAWN PROTECTION : on éloigne le spawn du monde de la zone
+        // jouable pour que les joueurs (non-ops) puissent poser des blocs
+        // partout, y compris autour du centre (0 0).
+        moveWorldSpawnAwayFromGame();
 
         // 7 : passage officiel en PREPARATION (phase + sous-phase START).
         state = GameState.PREPARATION;

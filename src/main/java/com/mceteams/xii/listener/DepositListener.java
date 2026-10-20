@@ -68,7 +68,8 @@ public class DepositListener implements Listener {
             Map.entry(Material.EMERALD, Material.EMERALD_ORE),
             Map.entry(Material.AMETHYST_SHARD, Material.AMETHYST_CLUSTER),
             Map.entry(Material.ANCIENT_DEBRIS, Material.ANCIENT_DEBRIS),
-            Map.entry(Material.NETHERITE_SCRAP, Material.ANCIENT_DEBRIS)
+            Map.entry(Material.NETHERITE_SCRAP, Material.ANCIENT_DEBRIS),
+            Map.entry(Material.NETHERITE_INGOT, Material.ANCIENT_DEBRIS)
     );
 
     /** Une partie (préparation ou combat) est-elle en cours ? */
@@ -193,21 +194,21 @@ public class DepositListener implements Listener {
             if (owner == null) {
                 return;
             }
-            // En PRÉPARATION : équipe propriétaire (ou admin) uniquement.
-            if (plugin.getGameManager().getState() == GameState.PREPARATION) {
-                var openerTeam = plugin.getTeamManager()
-                        .getTeamOf(player.getUniqueId());
-                if (openerTeam != owner
-                        && !player.hasPermission("xii.admin")) {
-                    event.setCancelled(true);
-                    MessageUtil.sendActionBar(player,
-                            "§c✘ Coffre réservé : vous n'appartenez pas à "
-                                    + owner.getColor().getColorCode()
-                                    + "l'équipe " + owner.getColor().getDisplayName()
-                                    + "§c.");
-                }
+            // RÈGLE UTILISATEUR : le coffre de dépôt d'une base n'est
+            // ouvrable QUE par l'équipe propriétaire (ou un admin), et ce
+            // dans TOUTES les phases. Un adversaire ne peut donc jamais
+            // ouvrir - ni voler - le dépôt d'une base adverse.
+            var openerTeam = plugin.getTeamManager()
+                    .getTeamOf(player.getUniqueId());
+            if (openerTeam != owner
+                    && !player.hasPermission("xii.admin")) {
+                event.setCancelled(true);
+                MessageUtil.sendActionBar(player,
+                        "§c✘ Coffre réservé : vous n'appartenez pas à "
+                                + owner.getColor().getColorCode()
+                                + "l'équipe " + owner.getColor().getDisplayName()
+                                + "§c.");
             }
-            // En COMBAT : tout le monde y accède.
         }
     }
 

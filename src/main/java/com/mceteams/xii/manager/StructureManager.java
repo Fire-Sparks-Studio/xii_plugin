@@ -2,6 +2,7 @@ package com.mceteams.xii.manager;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.TeamColor;
+import com.mceteams.xii.model.GameBase;
 import com.mceteams.xii.model.GameZone;
 import com.mceteams.xii.structure.StructureLocation;
 import com.mceteams.xii.structure.StructurePlacer;
@@ -389,6 +390,81 @@ public class StructureManager {
         placementKeys.clear();
     }
 
+    /**
+     * Retire la STRUCTURE DE BASE d'un modèle : purge les blocs de
+     * structure enregistrés dans son empreinte et OUBLIE son placement.
+     *
+     * La remise en état du terrain (blocs à AIR / restauration) est faite
+     * par l'appelant ({@link com.mceteams.xii.manager.BaseManager}) à
+     * partir de l'instantané de terrain pris avant la pose ; ici on ne
+     * s'occupe que des traces internes de {@code StructureManager} pour
+     * qu'une régénération de fin de partie ne repose pas la base.
+     *
+     * @param base modèle de base à oublier
+     * @return nombre de clés de structure purgées
+     */
+    public int removeBasePlacement(GameBase base) {
+        if (base == null || base.getAnchor() == null
+                || base.getAnchor().getWorld() == null) {
+            return 0;
+        }
+        Location anchor = base.getAnchor();
+        String worldName = anchor.getWorld().getName();
+        int ax = anchor.getBlockX();
+        int ay = anchor.getBlockY();
+        int az = anchor.getBlockZ();
+        // Emission verticale large (la base peut s'étendre sous/sur l'ancre).
+        int minY = ay - 32;
+        int maxY = ay + 96;
+
+        // 1. Purge des clés de structure dans l'empreinte 35x35.
+        // NB : le nom du monde peut lui-même contenir ':' (ex : "xii:monde") :
+        // on parse RELATIVEMENT au préfixe connu plutôt qu'avec un
+        // split(':') naïf (sinon la clé serait ignorée ou mal découpée).
+        String prefix = worldName + ":";
+        int purged = 0;
+        java.util.Iterator<String> it = structureKeys.iterator();
+        while (it.hasNext()) {
+            String key = it.next();
+            if (!key.startsWith(prefix)) {
+                continue;
+            }
+            int[] xyz = parseBlockKey(key, prefix.length());
+            if (xyz == null) {
+                continue;
+            }
+            if (xyz[0] >= ax - 1 && xyz[0] <= ax + GameBase.SIZE
+                    && xyz[2] >= az - 1 && xyz[2] <= az + GameBase.SIZE
+                    && xyz[1] >= minY && xyz[1] <= maxY) {
+                it.remove();
+                purged++;
+            }
+        }
+
+        // 2. Blocs posés par le poseur de secours (mêmes coordonnées).
+        placedBlocks.removeIf(location -> location.getWorld() != null
+                && location.getWorld().getName().equals(worldName)
+                && location.getBlockX() >= ax - 1
+                && location.getBlockX() <= ax + GameBase.SIZE
+                && location.getBlockZ() >= az - 1
+                && location.getBlockZ() <= az + GameBase.SIZE
+                && location.getBlockY() >= minY
+                && location.getBlockY() <= maxY);
+
+        // 3. Historique de placement : on oublie ce placement de base pour
+        // que la régénération de fin de partie ne la repose pas.
+        String placementPrefix = BASES_PATH + "|" + worldName
+                + "|" + ax + "|" + ay + "|" + az + "|";
+        placements.removeIf(record -> placementKey(record.resourcePath(),
+                record.location()).startsWith(placementPrefix));
+        placementKeys.removeIf(key -> key.startsWith(placementPrefix));
+
+        plugin.getLogger().info("[Structures] Base oubliée à l'ancre ("
+                + ax + ", " + ay + ", " + az + ") : " + purged
+                + " clé(s) de structure purgée(s).");
+        return purged;
+    }
+
     // -----------------------------------------------------------------
     // Protection des blocs de structure
     // -----------------------------------------------------------------
@@ -397,6 +473,30 @@ public class StructureManager {
     private String blockKey(Location location) {
         return location.getWorld().getName() + ":" + location.getBlockX()
                 + ":" + location.getBlockY() + ":" + location.getBlockZ();
+    }
+
+    /**
+     * Décode une clé de bloc "monde:x:y:z" en {x, y, z}, en partant de la
+     * fin de la chaîne (le nom du monde peut contenir ':').
+     *
+     * @param key    clé complète
+     * @param offset index de départ de la partie "x:y:z" (longueur du
+     *               préfixe monde + séparateur)
+     * @return les coordonnées, ou null si la clé est mal formée
+     */
+    private static int[] parseBlockKey(String key, int offset) {
+        String rest = key.substring(offset);
+        String[] parts = rest.split(":");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new int[]{Integer.parseInt(parts[0]),
+                    Integer.parseInt(parts[1]),
+                    Integer.parseInt(parts[2])};
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     /** Clé canonique d'un placement (fichier + ancre + rotation). */
