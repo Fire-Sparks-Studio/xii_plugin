@@ -234,6 +234,12 @@ public class XiiPlugin extends JavaPlugin {
     public void onDisable() {
         getLogger().info("Arrêt des fonctionnalités actives en cours...");
         Bukkit.getScheduler().cancelTasks(this);
+        if (packageService != null) {
+            // Colis en vol : on retire les parachutes (pas d'entités
+            // orphelines dans le monde au prochain démarrage).
+            packageService.removeAllParachutes();
+            packageService.stopAllSmokeBeacons();
+        }
         if (gameManager != null) {
             gameManager.shutdown();
         }

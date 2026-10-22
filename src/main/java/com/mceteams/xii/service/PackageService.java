@@ -11,15 +11,24 @@ import com.mceteams.xii.util.MessageUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Chest;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
+import org.bukkit.util.Vector;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -113,6 +122,17 @@ public class PackageService {
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
+     * Colonnes de FUMÉE (feu de camp) par colis posé : signal visuel
+     * qui permet de repérer le colis de loin.
+     */
+    private final java.util.Map<UUID, org.bukkit.scheduler.BukkitRunnable> smokeBeacons =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Position du feu de camp de chaque colis (pour le nettoyage). */
+    private final java.util.Map<UUID, Location> smokeCampfires =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
      * Lance un coffre en chute avec PARACHUTE depuis le ciel vers la
      * surface sèche résolue :
      * - FallingBlock CHEST taggué, descente freinée (~0.18/tick) ;
@@ -165,23 +185,8 @@ public class PackageService {
                     fb.addScoreboardTag(FALLING_TAG);
                 });
 
-        // Parachute : stand INVISIBLE coiffé d'une bannière blanche.
-        // Un armor stand invisible continue de rendre son équipement :
-        // seule la bannière flotte au-dessus du coffre.
-        org.bukkit.entity.ArmorStand parachute = world.spawn(
-                start.clone().add(0, 1.4, 0),
-                org.bukkit.entity.ArmorStand.class, as -> {
-                    as.setVisible(false);
-                    as.setSmall(true);
-                    as.setGravity(false);
-                    as.setBasePlate(false);
-                    as.setArms(false);
-                    as.setInvulnerable(true);
-                    as.setMarker(true);
-                    as.getEquipment().setHelmet(
-                            new ItemStack(Material.WHITE_BANNER));
-                    as.addScoreboardTag(PARACHUTE_TAG);
-                });
+        // Parachute : canopée blanche + cordes (cf. spawnParachute).
+        java.util.Map<Entity, Vector> parts = spawnParachute(start);
 
         // Descente freinée : on maintient une vitesse de chute douce
         // et le parachute reste soudé au coffre pendant toute la descente.
@@ -192,6 +197,9 @@ public class PackageService {
                 if (!falling.isValid()) {
                     cancel();
                     slowFallTasks.remove(fallingId);
+                    // Plus de coffre : on retire le parachute (pas de
+                    // "carré blanc" oublié dans le ciel).
+                    parts.keySet().forEach(Entity::remove);
                     return;
                 }
                 var v = falling.getVelocity();
@@ -199,7 +207,15 @@ public class PackageService {
                     v.setY(-0.18);
                     falling.setVelocity(v);
                 }
-                parachute.teleport(falling.getLocation().add(0, 1.3, 0));
+                // Le parachute (canopée + cordes) suit le coffre.
+                Location chestLoc = falling.getLocation();
+                for (var entry : parts.entrySet()) {
+                    Entity part = entry.getKey();
+                    if (!part.isValid()) {
+                        continue;
+                    }
+                    part.teleport(chestLoc.clone().add(entry.getValue()));
+                }
             }
         };
         slow.runTaskTimer(plugin, 1L, 1L);
@@ -217,6 +233,66 @@ public class PackageService {
             com.mceteams.xii.util.SoundUtil.play(online,
                     Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 0.9f);
         }
+    }
+
+    /**
+     * Crée le PARACHUTE au-dessus d'un point (centre du coffre en chute) :
+     * <ul>
+     *   <li>canopée : 2 "pavés" de laine blanche (BlockDisplay) CROISÉS à
+     *       90° -> un carré blanc (parachute carré) visible de N'IMPORTE
+     *       QUEL angle ;</li>
+     *   <li>cordes : 4 fines colonnes de laine blanche reliant les coins de
+     *       la canopée au coffre.</li>
+     * </ul>
+     *
+     * Les BlockDisplay n'ont AUCUNE hitbox (le clic sur le coffre reste
+     * possible) et sont rendus par le client (garantit la visibilité).
+     *
+     * @return chaque entité avec son décalage relatif au coffre (pour la
+     *         suivi pendant la descente).
+     */
+    private java.util.Map<Entity, Vector> spawnParachute(Location center) {
+        java.util.Map<Entity, Vector> parts = new java.util.HashMap<>();
+        World world = center.getWorld();
+
+        // CANOPEE : deux carrés blancs croisés (rotation Y de 90°).
+        for (int i = 0; i < 2; i++) {
+            Quaternionf rotation = new Quaternionf();
+            if (i == 1) {
+                rotation.rotateY((float) (Math.PI / 2.0));
+            }
+            BlockDisplay canopy = world.spawn(
+                    center.clone().add(0, 1.75, 0),
+                    BlockDisplay.class, d -> {
+                        d.setBlock(Material.WHITE_WOOL.createBlockData());
+                        d.setTransformation(new Transformation(
+                                new Vector3f(0f, 0f, 0f),
+                                rotation,
+                                new Vector3f(1.2f, 1.2f, 0.08f),
+                                new Quaternionf()));
+                        d.addScoreboardTag(PARACHUTE_TAG);
+                    });
+            parts.put(canopy, new Vector(0, 1.75, 0));
+        }
+
+        // CORDES : 4 verticales fines, des coins de la canopée au coffre.
+        for (int i = 0; i < 4; i++) {
+            double dx = (i % 2 == 0) ? -0.5 : 0.5;
+            double dz = (i < 2) ? -0.5 : 0.5;
+            BlockDisplay rope = world.spawn(
+                    center.clone().add(dx, 1.0, dz),
+                    BlockDisplay.class, d -> {
+                        d.setBlock(Material.WHITE_WOOL.createBlockData());
+                        d.setTransformation(new Transformation(
+                                new Vector3f(0f, 0f, 0f),
+                                new Quaternionf(),
+                                new Vector3f(0.06f, 1.0f, 0.06f),
+                                new Quaternionf()));
+                        d.addScoreboardTag(PARACHUTE_TAG);
+                    });
+            parts.put(rope, new Vector(dx, 1.0, dz));
+        }
+        return parts;
     }
 
     /**
@@ -270,6 +346,161 @@ public class PackageService {
         Package pack = new Package(UUID.randomUUID(), block.getLocation(),
                 containsRareItem);
         plugin.getPackageManager().register(pack);
+        startSmokeBeacon(pack);
+    }
+
+    // -----------------------------------------------------------------
+    // SIGNAL VISUEL : fumEE de feu de camp au-dessus du colis
+    // -----------------------------------------------------------------
+
+    /**
+     * Démarre la COLONNE DE FUMÉE qui signale le colis au sol :
+     * <ul>
+     *   <li>particules "fumée de feu de camp" (CAMPFIRE_COSY_SMOKE) émises
+     *       le long d'une colonne haute (packages.smoke.height) ;</li>
+     *   <li>un vrai FEU DE CAMP posé sur le coffre (packages.smoke.campfire) :
+     *       sa fumée vanilla est rendue par le client, donc visible de
+     *       TRÈS LOIN (les particules serveur, elles, s'arrêtent à ~32
+     *       blocs).</li>
+     * </ul>
+     *
+     * La colonne s'arrête dès que le colis est récupéré (ou en fin de partie).
+     */
+    private void startSmokeBeacon(Package pack) {
+        var config = plugin.getConfigManager();
+        if (!config.isPackageSmokeEnabled()) {
+            return;
+        }
+        World world = pack.getLocation().getWorld();
+        if (world == null) {
+            return;
+        }
+
+        // Base de la colonne : le dessus du coffre.
+        Location base = pack.getLocation().clone().add(0.5, 1.0, 0.5);
+        int height = config.getPackageSmokeHeight();
+        int period = config.getPackageSmokePeriodTicks();
+        boolean campfire = config.isPackageSmokeCampfire();
+        UUID id = pack.getId();
+
+        if (campfire) {
+            Block chest = pack.getLocation().getBlock();
+            placeCampfire(chest);
+            smokeCampfires.put(id, chest.getRelative(0, 1, 0).getLocation());
+        }
+
+        org.bukkit.scheduler.BukkitRunnable beacon =
+                new org.bukkit.scheduler.BukkitRunnable() {
+            /** Hauteur (relative) des bouffées de fumée en vol. */
+            final double[] puffs = new double[6];
+            int cycle = 0;
+
+            @Override
+            public void run() {
+                Package current = plugin.getPackageManager().byId(id);
+                if (current == null || current.isOpened()) {
+                    stopSmokeBeacon(id);
+                    cancel();
+                    return;
+                }
+
+                // Source : la fumée du feu de camp, au sommet du coffre.
+                world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, base, 3,
+                        0.20, 0.02, 0.20, 0.02);
+
+                // Colonne : des bouffées qui MONTENT en continu (et
+                // redescendent en boucle) -> un panache de fumée visible
+                // de loin, même si la base est masquée par un bloc.
+                double top = Math.max(3.0, height - 1.0);
+                for (int i = 0; i < puffs.length; i++) {
+                    puffs[i] += 0.6;
+                    if (puffs[i] > top) {
+                        puffs[i] = 0;
+                    }
+                    world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE,
+                            base.clone().add(0, puffs[i], 0), 1,
+                            0.30, 0.05, 0.30, 0.01);
+                }
+                cycle++;
+
+                // Feu de camp : on le repose s'il a été cassé / éteint
+                // (pluie, explosion, joueur trop curieux).
+                if (campfire && cycle % 5 == 0) {
+                    placeCampfire(current.getLocation().getBlock());
+                }
+            }
+        };
+        beacon.runTaskTimer(plugin, 0L, period);
+        smokeBeacons.put(id, beacon);
+    }
+
+    /** Pose (ou rallume) un feu de camp sur le coffre du colis. */
+    private void placeCampfire(Block chestBlock) {
+        Block above = chestBlock.getRelative(0, 1, 0);
+        if (above.getType() != Material.AIR) {
+            if (above.getType() != Material.CAMPFIRE) {
+                return; // quelque chose d'autre occupe la place
+            }
+            // Feu de camp déjà allumé : on ne touche à rien.
+            BlockData current = above.getBlockData();
+            if (current instanceof org.bukkit.block.data.Lightable lit
+                    && lit.isLit()) {
+                return;
+            }
+            // Éteint (pluie, burnout) : on le remplace pour le rallumer.
+            above.setType(Material.AIR, false);
+        }
+        BlockData data = Material.CAMPFIRE.createBlockData();
+        if (data instanceof org.bukkit.block.data.Lightable lit) {
+            lit.setLit(true);
+        }
+        // applyPhysics = false : pas de vérification de support (le coffre
+        // est bien en dessous, mais on ne veut aucun effet de bord).
+        above.setBlockData(data, false);
+    }
+
+    /**
+     * Arrête la colonne de fumée d'un colis (récupéré ou fin de partie) et
+     * retire son feu de camp.
+     */
+    public void stopSmokeBeacon(UUID packageId) {
+        org.bukkit.scheduler.BukkitRunnable beacon =
+                smokeBeacons.remove(packageId);
+        if (beacon != null) {
+            try {
+                beacon.cancel();
+            } catch (IllegalStateException ignored) {
+                // pas schedulée / déjà annulée
+            }
+        }
+        Location fire = smokeCampfires.remove(packageId);
+        if (fire != null) {
+            Block block = fire.getBlock();
+            if (block.getType() == Material.CAMPFIRE) {
+                block.setType(Material.AIR, false);
+            }
+        }
+    }
+
+    /** Arrête TOUTES les colonnes de fumée (fin de partie / nettoyage). */
+    public void stopAllSmokeBeacons() {
+        for (UUID id : new ArrayList<>(smokeBeacons.keySet())) {
+            stopSmokeBeacon(id);
+        }
+    }
+
+    /**
+     * Supprime TOUTES les entités de parachute encore en vol (arrêt du
+     * plugin) : pas de "carré blanc" oublié suspendu dans le ciel.
+     */
+    public void removeAllParachutes() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (entity.getScoreboardTags().contains(PARACHUTE_TAG)) {
+                    entity.remove();
+                }
+            }
+        }
     }
 
     /**
@@ -725,8 +956,14 @@ public class PackageService {
 
     /** Supprime physiquement le bloc coffre du colis. */
     private void removeChestBlock(TransferSession session) {
-        if (session.chestLocation.getBlock().getType() == Material.CHEST) {
-            session.chestLocation.getBlock().setType(Material.AIR);
+        Block chest = session.chestLocation.getBlock();
+        // Le feu de camp de signalisation part avec le coffre.
+        Block above = chest.getRelative(0, 1, 0);
+        if (above.getType() == Material.CAMPFIRE) {
+            above.setType(Material.AIR, false);
+        }
+        if (chest.getType() == Material.CHEST) {
+            chest.setType(Material.AIR);
         }
     }
 
@@ -767,6 +1004,8 @@ public class PackageService {
             return; // déjà revendiqué par quelqu'un d'autre
         }
         pack.setOpened(true);
+        // Le colis est récupéré : plus de colonne de fumée ni de feu de camp.
+        stopSmokeBeacon(pack.getId());
         plugin.getPackageManager().unregister(pack.getId());
 
         // Points PACKAGE pour l'ouvreur (multiplicateurs via PointService).

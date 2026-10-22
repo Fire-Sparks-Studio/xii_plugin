@@ -3,6 +3,7 @@ package com.mceteams.xii.manager;
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.model.Package;
 import org.bukkit.Location;
+import org.bukkit.block.Block;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -47,6 +48,13 @@ public class PackageManager {
         return null;
     }
 
+    /**
+     * @return le colis d'identifiant donné, ou null.
+     */
+    public Package byId(UUID packageId) {
+        return activePackages.get(packageId);
+    }
+
     /** Retire un colis du registre (après ouverture ou nettoyage). */
     public void unregister(UUID packageId) {
         activePackages.remove(packageId);
@@ -66,9 +74,19 @@ public class PackageManager {
         while (iterator.hasNext()) {
             Package pack = iterator.next();
             Location loc = pack.getLocation();
-            if (loc.getWorld() != null
-                    && loc.getBlock().getType() == org.bukkit.Material.CHEST) {
-                loc.getBlock().setType(org.bukkit.Material.AIR);
+            // Colonnes de fumee + feu de camp du colis : on coupe tout.
+            if (plugin.getPackageService() != null) {
+                plugin.getPackageService().stopSmokeBeacon(pack.getId());
+            }
+            if (loc.getWorld() != null) {
+                Block chest = loc.getBlock();
+                Block above = chest.getRelative(0, 1, 0);
+                if (above.getType() == org.bukkit.Material.CAMPFIRE) {
+                    above.setType(org.bukkit.Material.AIR, false);
+                }
+                if (chest.getType() == org.bukkit.Material.CHEST) {
+                    chest.setType(org.bukkit.Material.AIR);
+                }
             }
             iterator.remove();
         }

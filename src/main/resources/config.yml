@@ -6,7 +6,7 @@
 
 # Version du schéma : si le fichier installé est plus ancien, il est
 # automatiquement remplacé (l'ancien est sauvegardé en .bak).
-config-version: 10
+config-version: 11
 
 # -----------------------------------------------------------------
 # Items d'UPGRADE et TOTEM (consommés par clic droit)
@@ -154,6 +154,14 @@ packages:
   min-interval-seconds: 60   # intervalle minimal entre deux colis
   max-interval-seconds: 180  # intervalle maximal
   upgrade-factor: 2.0        # facteur appliqué pendant PACKAGE_UPGRADE
+  # Signal visuel d'un colis posé (colonne de fumée de feu de camp) :
+  # permet de repérer le colis de loin.
+  smoke:
+    enabled: true            # active la colonne de fumée
+    height: 30               # hauteur de la colonne (blocs)
+    period-ticks: 4          # période d'émission des particules
+    campfire: true           # pose un vrai feu de camp sur le coffre
+                             # (sa fumée vanilla est visible de très loin)
 
 # -----------------------------------------------------------------
 # Météorites - spécifications §22, §25

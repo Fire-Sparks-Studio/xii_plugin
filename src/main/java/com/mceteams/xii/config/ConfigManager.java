@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 10;
+    private static final int CONFIG_VERSION = 11;
 
     // -----------------------------------------------------------------
     // UPGRADES (items consommables)
@@ -406,6 +406,29 @@ public class ConfigManager {
 
     public double getPackageUpgradeFactor() {
         return config.getDouble("packages.upgrade-factor", 2.0);
+    }
+
+    /**
+     * Signal visuel d'un colis posé : colonne de fumée de feu de camp
+     * (permis de repérer le colis de loin).
+     */
+    public boolean isPackageSmokeEnabled() {
+        return config.getBoolean("packages.smoke.enabled", true);
+    }
+
+    /** Hauteur de la colonne de fumée (en blocs). */
+    public int getPackageSmokeHeight() {
+        return Math.max(4, config.getInt("packages.smoke.height", 30));
+    }
+
+    /** Période d'émission des particules de fumée (en ticks). */
+    public int getPackageSmokePeriodTicks() {
+        return Math.max(1, config.getInt("packages.smoke.period-ticks", 4));
+    }
+
+    /** Un vrai feu de camp est-il posé sur le colis (visible de loin) ? */
+    public boolean isPackageSmokeCampfire() {
+        return config.getBoolean("packages.smoke.campfire", true);
     }
 
     // -----------------------------------------------------------------
