@@ -30,7 +30,7 @@ public class GameBase {
     /** Rayon (blocs) de la zone de protection autour du centre. */
     private final int radius;
     /** Spawn des joueurs de l'équipe. */
-    private final Location spawn;
+    private Location spawn;
     /** Position exacte du bloc coeur (géré par CoreService). */
     private final Location coreLocation;
 
@@ -83,6 +83,19 @@ public class GameBase {
 
     public Location getSpawn() {
         return spawn.clone();
+    }
+
+    /**
+     * Remplace le spawn de la base.
+     *
+     * Utilisé quand le repère de spawn (laine VIOLETTE) est découvert APRÈS
+     * la création du model (la pose de la structure est asynchrone) : le
+     * spawn réel est alors plus précis que l'estimation initiale.
+     */
+    public void setSpawn(Location spawn) {
+        if (spawn != null && spawn.getWorld() != null) {
+            this.spawn = spawn.clone();
+        }
     }
 
     public Location getCoreLocation() {

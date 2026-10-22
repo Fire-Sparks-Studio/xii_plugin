@@ -90,10 +90,11 @@ public class ProtectionService {
      * - les blocs de STRUCTURE (posés par le .nbt) sont INVIOLABLES par
      *   tous (incassables) ;
      * - les CHAMPS (crops, farmland) sont toujours protégés ;
-     * - chaque équipe peut casser les blocs QU'ELLE a posés (les autres
-     *   blocs y sont intouchables) ;
-     * - le VERRE VIOLET est destructible à partir du jour 7 (COMBAT) et
-     *   uniquement par les AUTRES équipes (voir règles ci-dessous) ;
+     * - les BLOCS NATURELS de la base (minerais, pierre, terre...) sont
+     *   cassables par l'équipe PROPRIÉTAIRE (et par elle seule) ;
+     * - le VERRE VIOLET est destructible par les AUTRES équipes à partir
+     *   du jour 7 (COMBAT) et UNIQUEMENT si TOUS les cœurs de tour de la
+     *   base sont détruits (le propriétaire peut toujours casser le sien) ;
      * - les CRISTAUX (sea_lantern) sont laissés à CoreListener/WorldListener ;
      * - hors base : casse libre (PRÉPARATION et COMBAT).
      */
@@ -122,43 +123,52 @@ public class ProtectionService {
         boolean purpleGlass = type == Material.PURPLE_STAINED_GLASS
                 || type == Material.PURPLE_STAINED_GLASS_PANE;
 
-        // RÈGLE UTILISATEUR : le VERRE VIOLET (deux formes) est destructible
-        // SEULEMENT À PARTIR DU JOUR 7 (COMBAT) et SEULEMENT par les AUTRES
-        // équipes (jamais par le propriétaire de la base), à l'image de la
-        // protection du CŒUR. Pendant la PRÉPARATION il est inviolable.
-        if (purpleGlass
-                && plugin.getPhaseManager().getPhase()
-                != com.mceteams.xii.enums.GamePhase.COMBAT) {
-            return false;
+        boolean owner = playerTeamOf(player) == base.getColor();
+
+        // RÈGLE UTILISATEUR : le VERRE VIOLET (deux formes).
+        // - le PROPRIÉTAIRE peut casser le sien (casse "propre", comme
+        //   tous les blocs de sa base) ;
+        // - les ADVERSES ne peuvent le percer qu'APRÈS la destruction de
+        //   TOUS les cœurs de tour de la base (les 4 tours), et seulement
+        //   pendant le COMBAT (jour 7+). Pendant la PRÉPARATION il est
+        //   inviolable pour tout le monde.
+        if (purpleGlass) {
+            if (owner) {
+                return true;
+            }
+            if (plugin.getPhaseManager().getPhase()
+                    != com.mceteams.xii.enums.GamePhase.COMBAT) {
+                return false;
+            }
+            // Les tours doivent être TOUTES détruites : le cœur central
+            // devient alors accessible.
+            // SÉCURITÉ : si la base n'a AUCUNE tour enregistrée (pose
+            // incomplète), le verre violet reste INTROUVABLE : on ne
+            // considère jamais "0 tour" comme "tours détruites".
+            return plugin.getCoreService().hasBase(base.getColor())
+                    && plugin.getCoreService().towersAlive(base.getColor()) == 0;
         }
 
-        // 1. Blocs de structure : inviolables par tous (en COMBAT, le verre
-        //    violet est géré ci-dessus et échappe à cette règle).
-        if (!purpleGlass && plugin.getStructureManager()
+        // 1. Blocs de structure : inviolables par tous.
+        if (plugin.getStructureManager()
                 .isStructureBlock(block.getLocation())) {
             return false;
         }
 
-        boolean owner = playerTeamOf(player) == base.getColor();
-
-        // 2. VERRE VIOLET (jour 7+) : cassable PAR LES AUTRES équipes,
-        //    jamais par son propriétaire.
-        if (purpleGlass) {
-            return !owner;
-        }
-
-        // 3. Champs : toujours protégés.
+        // 2. Champs : toujours protégés.
         if (isProtectedTerrain(block.getType())) {
             return false;
         }
 
-        // 4. Bloc posé par l'équipe : cassable par l'équipe seule.
+        // 3. Bloc posé par l'équipe : cassable par l'équipe seule.
         if (base.isOwnedBlock(block.getLocation())) {
             return owner;
         }
 
-        // 5. Tout autre bloc de la base : l'équipe propriétaire seule
-        //    (le terrain naturel reste modifiable par ses propriétaires).
+        // 4. Tout autre bloc de la base (TERRAIN NATUREL : minerais, pierre,
+        //    terre...) : l'équipe propriétaire seule. La STRUCTURE reste
+        //    intouchable (règle 1 ci-dessus), mais le relief naturel de la
+        //    base est modifiable par ses propriétaires.
         return owner;
     }
 

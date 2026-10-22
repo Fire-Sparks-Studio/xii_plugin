@@ -154,7 +154,14 @@ public class RawTemplatePlacer {
                 }
                 target.getBlock().setBlockData(
                         Bukkit.createBlockData(block.dataString()), false);
-                written.add(target);
+                // RÈGLE UTILISATEUR : les REPÈRES "espace vide" (bloc
+                // alternatif au structure_void) sont posés (MarkerManager
+                // les convertira en AIR) mais NE sont PAS enregistrés
+                // comme blocs de structure : leur position doit rester
+                // libre (ni protégée, ni "bloc de structure").
+                if (!baseGrassFill || !isVoidMarker(block.dataString())) {
+                    written.add(target);
+                }
             } catch (Throwable throwable) {
                 failed++;
                 if (failed <= 5) { // pas de spam : 5 exemples suffisent
@@ -202,7 +209,7 @@ public class RawTemplatePlacer {
             int z = location.getZ() + block.z();
             int y = location.getY() + block.y();
             long key = columnKey(x, z);
-            if (isVoid(block.dataString())) {
+            if (isVoidMarker(block.dataString())) {
                 voidColumns.add(key);
             } else {
                 floorByColumn.merge(key, y, Math::min);
@@ -227,7 +234,9 @@ public class RawTemplatePlacer {
             for (int y = topY; y >= bottomY; y--) {
                 Block block = world.getBlockAt(x, y, z);
                 Material type = block.getType();
-                if (type != Material.AIR && type != Material.STRUCTURE_VOID) {
+                if (type != Material.AIR && type != Material.STRUCTURE_VOID
+                        && !plugin.getConfigManager()
+                        .getVoidMarkerMaterials().contains(type)) {
                     continue; // ne jamais écraser un bloc de structure existant
                 }
                 block.setBlockData(Bukkit.createBlockData(
@@ -280,7 +289,7 @@ public class RawTemplatePlacer {
         int globalFloor = location.getY();
         for (TemplateBlock block : blocks) {
             String data = block.dataString();
-            if (isVoid(data) || data.equals("minecraft:air")) {
+            if (isVoidMarker(data) || data.equals("minecraft:air")) {
                 continue;
             }
             int x = location.getX() + block.x();
@@ -319,6 +328,41 @@ public class RawTemplatePlacer {
     private boolean isVoid(String dataString) {
         return dataString != null
                 && dataString.startsWith(STRUCTURE_VOID);
+    }
+
+    /**
+     * true si la chaîne BlockData représente un REPÈRE "ESPACE VIDE".
+     *
+     * RÈGLE UTILISATEUR : le repère canonique est le structure_void ;
+     * si l'outil de sauvegarde du .nbt ne le conserve pas, le
+     * développeur le remplace par un bloc spécifique (BARRIER, LIGHT...)
+     * listé en configuration ({@code bases.void-marker-blocks}).
+     *
+     * Ces blocs sont posés puis convertis en AIR par le MarkerManager,
+     * et leur emplacement reste vide (pose interdite).
+     */
+    private boolean isVoidMarker(String dataString) {
+        if (dataString == null) {
+            return false;
+        }
+        String name = dataString;
+        int bracket = name.indexOf('[');
+        if (bracket >= 0) {
+            name = name.substring(0, bracket);
+        }
+        int colon = name.indexOf(':');
+        if (colon >= 0) {
+            name = name.substring(colon + 1);
+        }
+        Material material = Material.matchMaterial(name);
+        if (material == null) {
+            return false;
+        }
+        if (material == Material.STRUCTURE_VOID) {
+            return true;
+        }
+        return plugin.getConfigManager().getVoidMarkerMaterials()
+                .contains(material);
     }
 
     /**
@@ -672,18 +716,7 @@ public class RawTemplatePlacer {
 
     /** Cycle des directions cardinales pour chaque rotation. */
     private String rotateFacing(String facing, StructureRotation rotation) {
-        List<String> cycle = List.of("north", "east", "south", "west");
-        int index = cycle.indexOf(facing);
-        if (index < 0) {
-            return facing;
-        }
-        int delta = switch (rotation) {
-            case CLOCKWISE_90 -> 1;
-            case CLOCKWISE_180 -> 2;
-            case COUNTERCLOCKWISE_90 -> 3;
-            default -> 0;
-        };
-        return cycle.get((index + delta) % 4);
+        return rotation.rotateDirection(facing);
     }
 
     private String stripNamespace(String name) {

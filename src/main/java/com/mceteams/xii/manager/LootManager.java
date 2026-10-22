@@ -63,55 +63,69 @@ public class LootManager {
     private void registerDefaultTables() {
         // ---------------- PACKAGE NORMAL : progression -----------------
         // (poids rares/légendaires volontairement relevés)
-        // REBALANCE : diamants/émeraudes remontés (quantités utiles) et
-        // ajout d'une pincée de netherite (scrap/débris antique) + très
-        // rares pièces d'équipement en diamant. La netherite garde un
-        // poids FAIBLE pour ne pas rendre les colis trop rentables.
+        // REBALANCE : colis encore PLUS avantageux (quantités et poids
+        // remontés) sans casser l'équilibre : la netherite reste RARE
+        // (poids faible), mais les diamants/émeraudes et l'équipement en
+        // diamant sont nettement plus fréquents, et quelques pièces
+        // d'équipement en netherite apparaissent (très bas poids).
         tables.put(LootTableId.PACKAGE_NORMAL, List.of(
-                LootEntry.resource(Material.COAL, 10, 4, 12),
-                LootEntry.resource(Material.IRON_INGOT, 10, 4, 10),
-                LootEntry.resource(Material.COPPER_INGOT, 8, 4, 12),
-                LootEntry.resource(Material.GOLD_INGOT, 8, 2, 6),
-                LootEntry.resource(Material.LAPIS_LAZULI, 7, 4, 12),
-                LootEntry.resource(Material.REDSTONE, 7, 4, 12),
-                LootEntry.resource(Material.DIAMOND, 8, 2, 4),
-                LootEntry.resource(Material.EMERALD, 7, 2, 4),
-                LootEntry.resource(Material.QUARTZ, 6, 3, 8),
-                LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 1, 3),
-                LootEntry.resource(Material.ARROW, 6, 8, 24),
-                // Netherite : précieuse mais jamais garantie (1 seul scrap,
+                LootEntry.resource(Material.COAL, 12, 6, 16),
+                LootEntry.resource(Material.IRON_INGOT, 12, 6, 14),
+                LootEntry.resource(Material.COPPER_INGOT, 9, 6, 16),
+                LootEntry.resource(Material.GOLD_INGOT, 10, 4, 10),
+                LootEntry.resource(Material.LAPIS_LAZULI, 8, 6, 16),
+                LootEntry.resource(Material.REDSTONE, 8, 6, 16),
+                LootEntry.resource(Material.DIAMOND, 10, 3, 7),
+                LootEntry.resource(Material.EMERALD, 9, 2, 6),
+                LootEntry.resource(Material.QUARTZ, 7, 4, 10),
+                LootEntry.resource(Material.EXPERIENCE_BOTTLE, 7, 2, 5),
+                LootEntry.resource(Material.ARROW, 7, 12, 32),
+                // Netherite : précieuse mais jamais garantie (1 ou 2 scrap,
                 // ou très rarement 1 débris antique).
-                LootEntry.resource(Material.NETHERITE_SCRAP, 3, 1, 1),
+                LootEntry.resource(Material.NETHERITE_SCRAP, 4, 1, 2),
                 LootEntry.resource(Material.ANCIENT_DEBRIS, 1, 1, 1),
-                LootEntry.equipment("iron_sword", 2),
-                LootEntry.equipment("iron_pickaxe", 2),
-                LootEntry.equipment("bow", 2),
-                LootEntry.equipment("iron_helmet", 1),
-                LootEntry.equipment("iron_chestplate", 1),
-                LootEntry.equipment("iron_leggings", 1),
-                LootEntry.equipment("iron_boots", 1),
-                LootEntry.equipment("diamond_sword", 1),
-                LootEntry.equipment("diamond_pickaxe", 1),
-                LootEntry.upgrade(ItemRarity.COMMON, 3),
-                LootEntry.upgrade(ItemRarity.RARE, 1),
+                LootEntry.equipment("iron_sword", 3),
+                LootEntry.equipment("iron_pickaxe", 3),
+                LootEntry.equipment("bow", 3),
+                LootEntry.equipment("iron_helmet", 2),
+                LootEntry.equipment("iron_chestplate", 2),
+                LootEntry.equipment("iron_leggings", 2),
+                LootEntry.equipment("iron_boots", 2),
+                LootEntry.equipment("strong_iron_helmet", 1),
+                LootEntry.equipment("strong_iron_chestplate", 1),
+                LootEntry.equipment("diamond_sword", 2),
+                LootEntry.equipment("diamond_pickaxe", 2),
+                LootEntry.equipment("diamond_helmet", 1),
+                LootEntry.equipment("diamond_chestplate", 1),
+                LootEntry.equipment("netherite_sword", 1),
+                LootEntry.equipment("netherite_pickaxe", 1),
+                LootEntry.upgrade(ItemRarity.COMMON, 4),
+                LootEntry.upgrade(ItemRarity.RARE, 2),
                 LootEntry.upgrade(ItemRarity.EPIC, 3),
                 LootEntry.totem(2)
         ));
 
         // ---------------- PACKAGE UPGRADE : upgrades dominantes --------
         // (rare plus rare que légendaire/épique : inversion demandée)
+        // REBALANCE : plus de diamants/émeraudes, plus de netherite, un
+        // peu de métal pour l'artisanat.
         tables.put(LootTableId.PACKAGE_UPGRADE, List.of(
                 LootEntry.upgrade(ItemRarity.COMMON, 30),
                 LootEntry.upgrade(ItemRarity.RARE, 22),
                 LootEntry.upgrade(ItemRarity.EPIC, 28),
                 LootEntry.totem(6),
-                LootEntry.resource(Material.DIAMOND, 6, 2, 4),
-                LootEntry.resource(Material.EMERALD, 6, 2, 4),
-                LootEntry.resource(Material.NETHERITE_SCRAP, 3, 1, 2),
-                LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 2, 4)
+                LootEntry.resource(Material.DIAMOND, 8, 3, 8),
+                LootEntry.resource(Material.EMERALD, 8, 3, 7),
+                LootEntry.resource(Material.NETHERITE_SCRAP, 5, 1, 3),
+                LootEntry.resource(Material.ANCIENT_DEBRIS, 1, 1, 1),
+                LootEntry.resource(Material.GOLD_INGOT, 6, 4, 12),
+                LootEntry.resource(Material.IRON_INGOT, 6, 8, 20),
+                LootEntry.resource(Material.EXPERIENCE_BOTTLE, 6, 2, 5)
         ));
 
         // ---------------- PACKAGE CURSED : junk + jackpot ---------------
+        // REBALANCE : le gros du colis reste du junk (la malédiction doit
+        // rester un vrai risque), mais le jackpot gagne en volume.
         tables.put(LootTableId.PACKAGE_CURSED, List.of(
                 LootEntry.resource(Material.COBWEB, 10, 16, 48),
                 LootEntry.resource(Material.STRING, 9, 8, 24),
@@ -121,13 +135,13 @@ public class LootManager {
                 LootEntry.resource(Material.GRAVEL, 8, 8, 24),
                 LootEntry.resource(Material.DIRT, 8, 8, 24),
                 // Jackpot exceptionnel (risque/récompense) :
-                LootEntry.resource(Material.DIAMOND, 3, 2, 5),
-                LootEntry.resource(Material.EMERALD, 3, 2, 5),
-                LootEntry.resource(Material.NETHERITE_SCRAP, 2, 1, 2),
-                LootEntry.upgrade(ItemRarity.COMMON, 2),
-                LootEntry.upgrade(ItemRarity.RARE, 1),
+                LootEntry.resource(Material.DIAMOND, 4, 3, 8),
+                LootEntry.resource(Material.EMERALD, 4, 3, 8),
+                LootEntry.resource(Material.NETHERITE_SCRAP, 3, 1, 3),
+                LootEntry.upgrade(ItemRarity.COMMON, 3),
+                LootEntry.upgrade(ItemRarity.RARE, 2),
                 LootEntry.upgrade(ItemRarity.EPIC, 4),
-                LootEntry.totem(3)
+                LootEntry.totem(4)
         ));
 
         // ---------------- DUNGEON NORMAL --------------------------------

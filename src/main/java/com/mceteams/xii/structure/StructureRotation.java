@@ -1,5 +1,7 @@
 package com.mceteams.xii.structure;
 
+import java.util.List;
+
 /**
  * Rotation d'une structure lors de son placement.
  *
@@ -44,5 +46,30 @@ public enum StructureRotation {
         // La cible est plutôt à l'est (+X) ou à l'ouest (-X).
         return dx > 0 ? COUNTERCLOCKWISE_90   // cible à l'est => regarder est
                 : CLOCKWISE_90;               // cible à l'ouest => regarder ouest
+    }
+
+    /**
+     * Rotation d'une direction cardinale ("north", "east", "south",
+     * "west") selon la rotation de la structure.
+     *
+     * Convention : vue de dessus, une rotation horaire de 90° fait
+     * passer north-&gt;east, east-&gt;south, south-&gt;west, west-&gt;north.
+     *
+     * @param direction direction cardinale (minuscule)
+     * @return la direction tournée (la direction d'origine si inconnue)
+     */
+    public String rotateDirection(String direction) {
+        List<String> cycle = List.of("north", "east", "south", "west");
+        int index = cycle.indexOf(direction);
+        if (index < 0) {
+            return direction;
+        }
+        int delta = switch (this) {
+            case CLOCKWISE_90 -> 1;
+            case CLOCKWISE_180 -> 2;
+            case COUNTERCLOCKWISE_90 -> 3;
+            default -> 0;
+        };
+        return cycle.get((index + delta) % 4);
     }
 }

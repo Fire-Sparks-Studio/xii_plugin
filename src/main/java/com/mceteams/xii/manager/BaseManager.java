@@ -2,6 +2,7 @@ package com.mceteams.xii.manager;
 
 import com.mceteams.xii.XiiPlugin;
 import com.mceteams.xii.enums.TeamColor;
+import com.mceteams.xii.model.BaseMarkers;
 import com.mceteams.xii.model.GameBase;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.model.GameZone;
@@ -13,32 +14,41 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 /**
  * Gère les bases des équipes (spec §7).
  *
- * Disposition : les 4 bases sont posées sur les axes cardinaux à
+ * DISPOSITION : les 4 bases sont posées sur les axes cardinaux à
  * distance fixe du centre :
- *   BLEU  au nord (-Z), ROUGE au sud (+Z),
- *   JAUNE à l'ouest (-X), VERT à l'est (+X).
+ *   nord (-Z), sud (+Z), ouest (-X), est (+X).
+ * Ce choix garantit un espacement maximal entre bases ET une
+ * compatibilité avec les donjons qui occupent les 4 diagonales
+ * (+/-500 ; +/-500) — aucune superposition possible.
+ *
+ * ATTRIBUTION AU HASARD (RÈGLE UTILISATEUR) : aucune couleur n'a
+ * d'emplacement réservé. Les 4 emplacements sont des positions
+ * PHYSIQUES ; l'affectation des équipes à ces emplacements est tirée
+ * AU SORT AU LANCEMENT de la partie (BaseManager#assignBasesToTeams).
+ * Une fois attribuée, l'emplacement est celui de l'équipe jusqu'à la
+ * fin de la partie. Les emplacements non attribués (équipes en
+ * moins) sont retirés du monde.
  *
  * RÈGLE IMPORTANTE : une base n'est JAMAIS posée au-dessus de l'eau.
  * Si la position cardinale idéale tombe sur un plan d'eau, la base est
  * DÉCALÉE le long de son axe (vers l'extérieur en priorité pour
  * préserver l'espacement, puis vers l'intérieur) jusqu'à la première
  * surface sèche. L'ancrage est ensuite posé AU NIVEAU DU SOL (hauteur
- * réelle du terrain). Le point de spawn subit le même traitement.
- *
- * Ce choix des axes garantit un espacement maximal entre bases ET une
- * compatibilité avec les donjons qui occupent les 4 diagonales
- * (+/-500 ; +/-500) — aucune superposition possible.
+ * réelle du terrain, et NON le sommet de la canopée : en forêt, la
+ * base reposait dans les arbres).
  *
  * Chaque base regarde vers le centre de la map (StructureRotation).
  * Les lectures de terrain sont faites APRÈS chargement ASYNCHRONE des
@@ -56,44 +66,141 @@ public class BaseManager {
     private static final int SPAWN_SEARCH_RADIUS = 40;
     /** Enveloppe de préchargement de chunks autour d'une ancre. */
     private static final int CHUNK_ENVELOPE = 56;
+    /** Rayon de recherche d'un spawn sûr autour du repère (laine). */
+    private static final int SAFE_SPAWN_RADIUS = 6;
+    /** Profondeur max de comblement des trous sous une base. */
+    private static final int GROUND_FILL_DEPTH = 6;
+    /** Nombre de vérifications différées (données tardives de pose). */
+    private static final int LATE_REFRESH_ATTEMPTS = 30;
+
+    /**
+     * Matériaux de SOL naturel : servent à retrouver la VRAIE surface du
+     * terrain (en forêt, le bloc le plus haut est une feuille : la base
+     * se retrouvait posée DANS la canopée).
+     */
+    private static final Set<Material> GROUND_MATERIALS = Set.of(
+            Material.GRASS_BLOCK, Material.DIRT, Material.COARSE_DIRT,
+            Material.ROOTED_DIRT, Material.PODZOL, Material.MUD,
+            Material.SAND, Material.SANDSTONE, Material.RED_SAND,
+            Material.RED_SANDSTONE, Material.GRAVEL, Material.CLAY,
+            Material.STONE, Material.ANDESITE, Material.DIORITE,
+            Material.GRANITE, Material.DEEPSLATE, Material.TUFF,
+            Material.CALCITE, Material.SNOW_BLOCK, Material.TERRACOTTA,
+            Material.NETHERRACK, Material.END_STONE, Material.OBSIDIAN,
+            Material.MAGMA_BLOCK, Material.MYCELIUM, Material.BLACKSTONE,
+            Material.BASALT, Material.BLUE_ICE, Material.PACKED_ICE);
 
     private final XiiPlugin plugin;
-    /** Bases placées, par couleur. */
+    /** Bases placées, par couleur (après attribution). */
     private final Map<TeamColor, GameBase> bases = new EnumMap<>(TeamColor.class);
 
     /**
+     * Les 4 EMPLACEMENTS de base (positions cardinales, physiques).
+     * Ils ne dépendent pas des équipes : l'affectation se fait au
+     * lancement de la partie.
+     */
+    private final List<BaseSlot> slots = new ArrayList<>();
+
+    /** Affectation courante : équipe -> emplacement. */
+    private final Map<TeamColor, BaseSlot> assignment = new LinkedHashMap<>();
+
+    /** Aléa de l'attribution des bases aux équipes. */
+    private final Random random = new Random();
+
+    /** Tâche de vérification différée (repères/cristaux tardifs). */
+    private org.bukkit.scheduler.BukkitTask lateRefreshTask;
+
+    /**
      * Instantané du TERRAIN AVANT la pose de chaque base : permet de
-     * "régénérer" l'empreinte si la base doit être déspawn (équipe
-     * inexistante au lancement). Paper 26.2 ne permet pas de régénérer un
-     * chunk ({@code World#regenerateChunk} lève
+     * "régénérer" l'empreinte si l'emplacement doit être déspawn
+     * (équipe inexistante au lancement). Paper 26.2 ne permet pas de
+     * régénérer un chunk ({@code World#regenerateChunk} lève
      * {@code UnsupportedOperationException}), on restaure donc les blocs
      * d'origine mémorisés ici.
      *
-     * Clé = position de bloc empaquetée (x,y,z) ; valeur = BlockData
-     * sérialisée ("minecraft:grass_block[snowy=false]") ou null pour l'air.
+     * Clé = index d'emplacement ; valeur = (x,y,z) -> BlockData
+     * sérialisée ("minecraft:grass_block[snowy=false]").
      */
-    private final Map<TeamColor, Map<Long, String>> terrainSnapshots =
-            new EnumMap<>(TeamColor.class);
+    private final Map<Integer, Map<Long, String>> terrainSnapshots =
+            new HashMap<>();
+
+    /**
+     * EMPLACEMENT de base : une position cardinale et tout ce qui la
+     * concerne (structure posée, repères, cristaux).
+     */
+    public static final class BaseSlot {
+        /** Index de l'emplacement (0..3). */
+        public final int index;
+        /** Direction cardinale (-1/0/+1). */
+        public int unitX;
+        public int unitZ;
+        /** Ancre de la structure .nbt. */
+        public Location anchor;
+        /** Rotation appliquée à la structure. */
+        public StructureRotation rotation = StructureRotation.NONE;
+        /** Repères lus dans l'empreinte (null tant que la pose n'a pas
+         *  été traitée). */
+        public BaseMarkers markers;
+        /** Les repères ont-ils déjà été appliqués à une équipe ? */
+        public boolean markersApplied;
+        /** Cristal central (coeur de la base). */
+        public Location coreCrystal;
+        /** Cristaux des 4 tours (boucliers). */
+        public final List<Location> towers = new ArrayList<>();
+        /** Coffre de dépôt. */
+        public Location chest;
+        /** L'emplacement a-t-il été retiré du monde ? */
+        public boolean removed;
+
+        public BaseSlot(int index, int unitX, int unitZ) {
+            this.index = index;
+            this.unitX = unitX;
+            this.unitZ = unitZ;
+        }
+
+        /** Libellé lisible (pour les logs). */
+        public String label() {
+            String dir;
+            if (unitX == 0 && unitZ < 0) {
+                dir = "nord";
+            } else if (unitX == 0) {
+                dir = "sud";
+            } else if (unitX < 0) {
+                dir = "ouest";
+            } else {
+                dir = "est";
+            }
+            return dir;
+        }
+    }
 
     public BaseManager(XiiPlugin plugin) {
         this.plugin = plugin;
     }
 
+    // -----------------------------------------------------------------
+    // Construction des emplacements (au /zone set)
+    // -----------------------------------------------------------------
+
     /**
-     * Construit et place les bases de toutes les équipes actives.
+     * Construit et place les 4 emplacements de base.
      * Appelé par GameManager après /zone set.
      *
      * ASYNCHRONE : les chunks des positions candidates sont chargés via
      * getChunkAtAsync AVANT toute lecture de terrain ; le placement
      * effectif a lieu sur le thread principal une fois tout chargé.
+     *
+     * NB : l'affectation des emplacements aux équipes n'est PAS faite ici
+     * (elle est tirée au sort au LANCEMENT de la partie).
      */
     public void buildBases(GameZone zone) {
-        // NB : NE PAS vider la map ici. Les ancres conservées permettent
-        // de REPOSER les bases exactement au même endroit lors d'une
-        // reconstruction (rebuildModels / régénération). Sans cela,
+        // NB : NE PAS vider la map ici. Les emplacements conservés
+        // permettent de REPOSER les bases exactement au même endroit lors
+        // d'une reconstruction (rebuildModels / régénération). Sans cela,
         // l'ancre était recalculée sur le toit de la base déjà posée et
         // une copie EMPILÉE apparaissait ("2 bases l'une sur l'autre").
-        // La map n'est vidée que par /zone delete (clearAll()).
+        // Les emplacements ne sont vidés que par /zone delete
+        // (clearAll()).
 
         Location center = zone.getCenterLocation();
         if (center == null || center.getWorld() == null) {
@@ -163,152 +270,324 @@ public class BaseManager {
     }
 
     /**
-     * Placement effectif (thread principal, chunks chargés).
+     * Placement effectif (thread principal, chunks chargés) : les 4
+     * emplacements cardinaux sont posés.
      */
     private void placeBases(GameZone zone) {
         Location center = zone.getCenterLocation();
         if (center == null || center.getWorld() == null) {
             return; // zone supprimée pendant le chargement async
         }
-        putBase(TeamColor.BLUE, 0, -1, center);   // nord : -Z
-        putBase(TeamColor.RED, 0, 1, center);     // sud : +Z
-        putBase(TeamColor.YELLOW, -1, 0, center); // ouest : -X
-        putBase(TeamColor.GREEN, 1, 0, center);   // est : +X
+        World world = center.getWorld();
 
-        plugin.getLogger().info("[Bases] " + bases.size() + " base(s) placée(s).");
+        // Emplacements cardinaux : nord (-Z), sud (+Z), ouest (-X), est (+X).
+        int[][] directions = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+
+        for (int i = 0; i < directions.length; i++) {
+            BaseSlot slot;
+            if (slots.size() > i) {
+                slot = slots.get(i); // réutilisé (ancre conservée)
+            } else {
+                slot = new BaseSlot(i, directions[i][0], directions[i][1]);
+                slots.add(slot);
+            }
+            slot.unitX = directions[i][0];
+            slot.unitZ = directions[i][1];
+            slot.removed = false;
+            slot.markersApplied = false;
+
+            // Ancre : conservée si l'emplacement existe déjà, sinon
+            // calculée (surface sèche, au niveau du VRAI sol).
+            if (slot.anchor == null || slot.anchor.getWorld() == null) {
+                slot.anchor = resolveDryAnchor(slot, world, center);
+            }
+            slot.rotation = StructureRotation.facingToward(slot.anchor, center);
+
+            // Instantané du terrain AVANT la pose : permet de restaurer
+            // l'empreinte si l'emplacement doit être déspawn (équipe
+            // inexistante au lancement).
+            captureTerrainSnapshot(slot, slot.anchor);
+
+            boolean placed = plugin.getStructureManager().placeBase(
+                    slot.anchor, slot.rotation,
+                    markers -> onSlotWritten(slot, markers));
+            if (!placed) {
+                plugin.getLogger().warning("[Bases] Structure manquante pour "
+                        + "l'emplacement " + slot.label() + " (bases.nbt)");
+            }
+        }
+
+        plugin.getLogger().info("[Bases] " + slots.size()
+                + " emplacement(s) de base posé(s) (attribution des équipes "
+                + "au lancement de la partie).");
     }
 
     /**
-     * Place une base et enregistre son GameBase.
-     *
-     * @param unitX direction cardinale (-1/0/+1)
-     * @param unitZ direction cardinale (-1/0/+1)
+     * Callback de pose d'un emplacement : la structure est écrite, les
+     * repères ont été lus. On en profite pour combler les trous sous la
+     * base et pour repérer les cristaux.
      */
-    private void putBase(TeamColor color, int unitX, int unitZ, Location center) {
-        World world = center.getWorld();
+    private void onSlotWritten(BaseSlot slot, BaseMarkers markers) {
+        slot.markers = markers;
+        slot.markersApplied = false;
 
-        // ÉQUIPE SANS MEMBRE dès le lancement : AUCUNE base, et élimination
-        // automatique. Le joueur qui le rejoindrait plus tard rejoindrait
-        // une équipe déjà éliminée sans spawn (règle utilisateur).
-        GameTeam team = plugin.getTeamManager().getTeam(color);
-        if (team != null && team.getPlayerCount() == 0) {
-            removeBase(color);
-            if (!team.isEliminated()) {
-                team.setEliminated(true);
-                plugin.getLogger().info("[Bases] Équipe " + color.getColoredName()
-                        + " §7sans membre au lancement : éliminée automatiquement, "
-                        + "aucune base posée.");
-            }
-            plugin.getGameManager().checkVictoryConditions();
+        // Remblai des trous sous le niveau du sol (dirt) : en forêt, le
+        // terrain n'est pas plat et la base "flotte" par endroits.
+        if (markers != null && markers.floorY() != null) {
+            fillGroundHoles(slot.anchor, markers.floorY());
+        }
+
+        // Cristaux (coeur + 4 tours) : conversion des laines repères puis
+        // enregistrement.
+        tryScanCrystals(slot, 0);
+
+        // Si l'attribution est déjà faite (lancement effectué), on
+        // rattache les repères à l'équipe correspondante.
+        applyMarkersToAssignedTeam(slot);
+    }
+
+    // -----------------------------------------------------------------
+    // Attribution AU HASARD des bases aux équipes (lancement de partie)
+    // -----------------------------------------------------------------
+
+    /**
+     * ATTRIBUTION ALÉATOIRE des bases : tirée AU SORT AU LANCEMENT de la
+     * partie. Les équipes présentes sont réparties sur les 4
+     * emplacements de base (aucune couleur n'a d'emplacement réservé) ;
+     * les emplacements non attribués sont retirés du monde (terrain
+     * d'origine restauré).
+     *
+     * Rappel : les joueurs sont téléportés APRÈS cet appel (cf.
+     * GameManager#beginPreparation).
+     */
+    public void assignBasesToTeams() {
+        if (slots.isEmpty()) {
+            plugin.getLogger().warning("[Bases] Aucun emplacement de base : "
+                    + "attribution impossible.");
             return;
         }
 
-        // Position SÈCHE le long de l'axe, ancrée au niveau du sol.
-        // IDEMPOTENCE : si une base existe déjà pour cette couleur, on
-        // réutilise SON ancre (jamais recalculée sur le toit de la base
-        // déjà posée => plus de double empilement).
-        GameBase existing = bases.get(color);
-        Location anchor;
-        if (existing != null && existing.getAnchor().getWorld() != null) {
-            anchor = existing.getAnchor();
-        } else {
-            anchor = resolveDryAnchor(color, world, center, unitX, unitZ);
+        // 1. Équipes PRÉSENTES au lancement (les autres sont éliminées).
+        List<TeamColor> active = new ArrayList<>();
+        for (TeamColor color : TeamColor.values()) {
+            GameTeam team = plugin.getTeamManager().getTeam(color);
+            if (team != null && team.getPlayerCount() > 0) {
+                active.add(color);
+            }
         }
 
-        // Instantané du terrain AVANT la pose : permet de restaurer
-        // l'empreinte si la base doit être déspawn (équipe inexistante au
-        // lancement). On capture l'empreinte 35x35 (marge +1) sur une
-        // hauteur couvrant la structure (l'ancre est abaissée de 9 sous le
-        // sol, la structure peut monter de ~40 blocs).
-        captureTerrainSnapshot(color, anchor);
+        // 2. TIRAGE AU SORT des emplacements.
+        List<BaseSlot> pool = new ArrayList<>(slots);
+        Collections.shuffle(pool, random);
 
-        boolean placed = plugin.getStructureManager()
-                .placeBase(color, anchor, center);
-
-        // Même si la structure manque (.nbt non fournie), on crée le model
-        // pour que le reste du jeu fonctionne pendant le développement.
-        if (!placed) {
-            plugin.getLogger().warning("[Bases] Structure manquante pour "
-                    + color.getColoredName() + " §7(bases.nbt)");
+        // 3. Reset des modèles : les bases sont reconstruites.
+        bases.clear();
+        assignment.clear();
+        plugin.getGateManager().clearGates();
+        plugin.getNpcManager().resetAll();
+        for (TeamColor color : TeamColor.values()) {
+            plugin.getCoreService().unregisterBase(color);
+        }
+        for (BaseSlot slot : slots) {
+            slot.markersApplied = false;
         }
 
+        // 4. Affectation des emplacements aux équipes.
+        Map<TeamColor, BaseSlot> chosen = new LinkedHashMap<>();
+        for (int i = 0; i < active.size() && i < pool.size(); i++) {
+            chosen.put(active.get(i), pool.get(i));
+        }
+        assignment.putAll(chosen);
+
+        for (Map.Entry<TeamColor, BaseSlot> entry : chosen.entrySet()) {
+            wireBase(entry.getKey(), entry.getValue());
+        }
+
+        // 5. Emplacements non attribués : la structure est retirée.
+        for (BaseSlot slot : slots) {
+            if (!chosen.containsValue(slot)) {
+                removeSlot(slot);
+            }
+        }
+
+        // 6. Annonce du tirage.
+        StringBuilder summary = new StringBuilder("[Bases] Attribution : ");
+        for (Map.Entry<TeamColor, BaseSlot> entry : chosen.entrySet()) {
+            summary.append(entry.getKey().getColoredName())
+                    .append(" §7→ §f").append(entry.getValue().label())
+                    .append("§7, ");
+        }
+        plugin.getLogger().info(summary.toString());
+
+        // 7. Les données de pose (repères, cristaux) peuvent arriver APRÈS
+        //    l'attribution (pose asynchrone) : on réessaie un moment.
+        scheduleLateRefresh();
+    }
+
+    /**
+     * Crée (ou met à jour) le modèle d'une base et la câble à son équipe.
+     */
+    private void wireBase(TeamColor color, BaseSlot slot) {
+        World world = slot.anchor.getWorld();
+        if (world == null) {
+            return;
+        }
         int protectionRadius = 27; // rayon de la zone protégée autour du centre
 
         // Le centre de la base = CENTRE GÉOMÉTRIQUE de la boîte (la zone de
         // protection PvP couvre alors TOUTE l'empreinte 35x35).
-        Location boxCenter = anchor.clone()
+        Location boxCenter = slot.anchor.clone()
                 .add(GameBase.HALF, 0, GameBase.HALF);
 
-        // Spawn : DEVANT la façade (côté du centre de la map), jamais
-        // au-dessus de l'eau (repli : colonne de l'ancre).
-        StructureRotation rotation = StructureRotation.facingToward(anchor, center);
-        Location spawnWanted = facadeSpawnInFront(anchor, rotation);
-        Location spawn = resolveDrySpawnNear(world, spawnWanted, anchor);
-        // Le SPAWN reste SUR la surface réelle (pas le décalage -9 appliqué
-        // à la structure) : les joueurs sortent à hauteur du sol, devant la
-        // façade, au lieu d'être enfouis sous la base abaissée.
-        spawn.setY(surfaceY(world, spawn.getBlockX(), spawn.getBlockZ()));
-
-        bases.put(color, new GameBase(
-                color, anchor, boxCenter, protectionRadius, spawn, anchor.clone()));
+        Location spawn = resolveSpawn(slot);
+        GameBase base = new GameBase(color, slot.anchor, boxCenter,
+                protectionRadius, spawn, slot.anchor.clone());
+        bases.put(color, base);
 
         // IMPORTANT : câble le spawn dans le GameTeam (source de vérité).
-        // Sans ça, GameManager/RespawnManager ne trouvaient aucun spawn
-        // et envoyaient les joueurs en spectateur par erreur !
+        GameTeam team = plugin.getTeamManager().getTeam(color);
         if (team != null) {
             team.setSpawn(spawn);
         }
 
-        // Les cristaux (5 sea_lantern, ou laines noire/marron des nouveaux
-        // gabarits) et le coffre de dépôt sont fournis PAR LA STRUCTURE
-        // .nbt : on les localise dans le monde puis on les enregistre
-        // auprès du CoreService.
-        locateAndRegisterCrystals(color, anchor);
-    }
-
-    /** Retire la base (et ses cristaux enregistrés) d'une équipe. */
-    private void removeBase(TeamColor color) {
-        GameBase base = bases.remove(color);
-        plugin.getCoreService().unregisterBase(color);
-        // DÉSPAWN de la structure : on restaure le terrain d'origine de
-        // l'empreinte (instantané pris avant la pose) et on oublie le
-        // placement pour qu'une régénération de fin de partie ne repose
-        // pas la base.
-        if (base != null && base.getAnchor() != null) {
-            plugin.getStructureManager().removeBasePlacement(base);
-            restoreTerrainSnapshot(color, base.getAnchor());
-        }
-        terrainSnapshots.remove(color);
+        applyMarkers(color, slot);
+        applyCrystals(color, slot);
     }
 
     /**
-     * DÉSPAWN des bases dont l'équipe n'existe pas au lancement de la
-     * partie : retirer la structure, régénérer la zone joueurs et purger
-     * les modèles. Appelé par GameManager au début de la PRÉPARATION,
-     * après l'élimination automatique des équipes vides.
-     *
-     * @return nombre de bases effectivement retirées
+     * Rattache les repères d'un emplacement à l'équipe qui l'possède :
+     * portillons, PNJ, emplacements à laisser vides, bannières, spawn.
      */
-    public int despawnBasesWithoutPlayers() {
-        int removed = 0;
-        for (TeamColor color : TeamColor.values()) {
-            GameTeam team = plugin.getTeamManager().getTeam(color);
-            boolean absent = team == null || team.getPlayerCount() == 0;
-            if (!absent) {
-                continue;
-            }
-            boolean hadModel = bases.containsKey(color);
-            if (!hadModel) {
-                // Aucune structure posée pour cette couleur : rien à faire
-                // (cas d'une équipe inexistante depuis /zone set).
-                continue;
-            }
-            removeBase(color);
-            removed++;
-            plugin.getLogger().info("[Bases] Base " + color.getColoredName()
-                    + " §7retirée (équipe inexistante au lancement) : zone régénérée.");
+    private void applyMarkers(TeamColor color, BaseSlot slot) {
+        BaseMarkers markers = slot.markers;
+        if (markers == null || slot.markersApplied) {
+            return;
         }
-        return removed;
+        GameBase base = bases.get(color);
+        if (base == null) {
+            return;
+        }
+
+        // Portillons (ils s'ouvrent à l'approche des propriétaires).
+        for (Location gate : markers.gates()) {
+            plugin.getGateManager().registerGate(color, gate);
+        }
+        // PNJ d'équipe.
+        if (markers.upgradeNpc() != null) {
+            plugin.getNpcManager().setUpgradeNpc(color, markers.upgradeNpc());
+        }
+        if (markers.itemNpc() != null) {
+            plugin.getNpcManager().setItemNpc(color, markers.itemNpc());
+        }
+        // Emplacements du gabarit qui doivent rester VIDES.
+        for (Location voidSlot : markers.voidSlots()) {
+            base.addVoidSlot(voidSlot);
+        }
+        // Bannières blanches : couleur de l'équipe.
+        int recolored = plugin.getMarkerManager()
+                .recolorBanners(markers.banners(), color);
+        if (recolored > 0) {
+            plugin.getLogger().info("[Bases] " + color.getColoredName()
+                    + " §7: " + recolored + " bannière(s) recolorée(s).");
+        }
+
+        // Spawn intérieur (laine VIOLETTE) : plus précis que l'estimation.
+        if (markers.spawn() != null) {
+            Location safe = findSafeSpawn(slot.anchor.getWorld(),
+                    markers.spawn());
+            if (safe != null) {
+                base.setSpawn(safe);
+                GameTeam team = plugin.getTeamManager().getTeam(color);
+                if (team != null) {
+                    team.setSpawn(safe);
+                }
+            }
+        }
+
+        slot.markersApplied = true;
+    }
+
+    /**
+     * Enregistre les cristaux (coeur + tours) de l'emplacement pour une
+     * équipe donnée (si ils ont été retrouvés).
+     */
+    private void applyCrystals(TeamColor color, BaseSlot slot) {
+        if (slot.coreCrystal == null || slot.towers.size() < 4) {
+            return;
+        }
+        if (plugin.getCoreService().hasBase(color)) {
+            return; // déjà enregistré (ne pas ré-armer les tours)
+        }
+        plugin.getCoreService().registerBaseCrystals(color, slot.coreCrystal,
+                slot.towers, slot.chest);
+        plugin.getLogger().info("[Bases] " + color.name().toLowerCase()
+                + " : 5 cristaux + coffre de dépôt enregistrés.");
+    }
+
+    /**
+     * Applique les repères d'un emplacement à l'équipe qui lePossède
+     * (appelé quand la pose asynchrone se termine après l'attribution).
+     */
+    private void applyMarkersToAssignedTeam(BaseSlot slot) {
+        for (Map.Entry<TeamColor, BaseSlot> entry : assignment.entrySet()) {
+            if (entry.getValue() == slot) {
+                applyMarkers(entry.getKey(), slot);
+                applyCrystals(entry.getKey(), slot);
+            }
+        }
+    }
+
+    /**
+     * Vérifications différées : la pose de la structure est asynchrone,
+     * les repères (spawn, bannières) et les cristaux peuvent arriver après
+     * l'attribution. On réessaie quelques fois.
+     */
+    private void scheduleLateRefresh() {
+        if (lateRefreshTask != null) {
+            lateRefreshTask.cancel();
+            lateRefreshTask = null;
+        }
+        lateRefreshTask = new org.bukkit.scheduler.BukkitRunnable() {
+            private int attempts = 0;
+
+            @Override
+            public void run() {
+                boolean pending = false;
+                for (BaseSlot slot : slots) {
+                    if (slot.removed) {
+                        continue;
+                    }
+                    if (slot.markers == null || !slot.markersApplied
+                            || slot.coreCrystal == null) {
+                        pending = true;
+                        applyMarkersToAssignedTeam(slot);
+                    }
+                }
+                attempts++;
+                if (!pending || attempts >= LATE_REFRESH_ATTEMPTS) {
+                    cancel();
+                    lateRefreshTask = null;
+                }
+            }
+        }.runTaskTimer(plugin, 20L, 20L);
+    }
+
+    /**
+     * Retire un emplacement du monde : la structure disparaît et le
+     * terrain d'origine est restauré.
+     */
+    private void removeSlot(BaseSlot slot) {
+        if (slot.removed) {
+            return;
+        }
+        slot.removed = true;
+        if (slot.anchor != null && slot.anchor.getWorld() != null) {
+            plugin.getStructureManager().removeBasePlacement(slot.anchor);
+            restoreTerrainSnapshot(slot);
+            plugin.getLogger().info("[Bases] Emplacement "
+                    + slot.label() + " §7retiré (aucune équipe attribuée) : "
+                    + "zone régénérée.");
+        }
     }
 
     // -----------------------------------------------------------------
@@ -318,14 +597,18 @@ public class BaseManager {
     /**
      * Mémorise l'état de TOUS les blocs de l'empreinte de la base (35x35,
      * marge +1) avant sa pose : c'est ce qui permet de rendre le terrain
-     * d'origine si la base doit être retirée.
+     * d'origine si l'emplacement doit être retiré.
      *
-     * Hauteur capturée : de {@code anchor.y - 8} (sous-sol proche) à
-     * {@code anchor.y + 48} (au-dessus du toit de la structure).
+     * L'instantané n'est pris qu'UNE FOIS par emplacement (le terrain
+     * d'origine ne doit pas être écrasé par la structure lors d'une
+     * reconstruction).
      */
-    private void captureTerrainSnapshot(TeamColor color, Location anchor) {
+    private void captureTerrainSnapshot(BaseSlot slot, Location anchor) {
         if (anchor == null || anchor.getWorld() == null) {
             return;
+        }
+        if (terrainSnapshots.containsKey(slot.index)) {
+            return; // déjà mémorisé
         }
         World world = anchor.getWorld();
         int ax = anchor.getBlockX();
@@ -344,9 +627,9 @@ public class BaseManager {
                 }
             }
         }
-        terrainSnapshots.put(color, snapshot);
+        terrainSnapshots.put(slot.index, snapshot);
         plugin.getLogger().info("[Bases] Instantané terrain "
-                + color.getColoredName() + " §7: " + snapshot.size()
+                + slot.label() + " §7: " + snapshot.size()
                 + " bloc(s) mémorisé(s).");
     }
 
@@ -356,11 +639,12 @@ public class BaseManager {
      * (base posée avant une mise à jour, ou serveur redémarré), on se
      * contente d'un nettoyage best-effort des blocs au-dessus du sol.
      */
-    private void restoreTerrainSnapshot(TeamColor color, Location anchor) {
+    private void restoreTerrainSnapshot(BaseSlot slot) {
+        Location anchor = slot.anchor;
         if (anchor == null || anchor.getWorld() == null) {
             return;
         }
-        Map<Long, String> snapshot = terrainSnapshots.get(color);
+        Map<Long, String> snapshot = terrainSnapshots.get(slot.index);
         int restored = 0;
         if (snapshot != null && !snapshot.isEmpty()) {
             for (Map.Entry<Long, String> entry : snapshot.entrySet()) {
@@ -381,7 +665,7 @@ public class BaseManager {
             }
         }
         plugin.getLogger().info("[Bases] Terrain restauré "
-                + color.getColoredName() + " §7: " + restored + " bloc(s).");
+                + slot.label() + " §7: " + restored + " bloc(s).");
     }
 
     /** Empaquette des coordonnées de bloc (x,y,z) dans un long. */
@@ -405,6 +689,83 @@ public class BaseManager {
     private static int unpackZ(long key) {
         int z = (int) (key & 0x3FFFFFF);
         return (z << 6) >> 6;
+    }
+
+    // -----------------------------------------------------------------
+    // Spawn
+    // -----------------------------------------------------------------
+
+    /**
+     * Spawn de l'équipe : le repère VIOLET (à l'intérieur de la base) s'il
+     * est connu, sinon le repli "devant la façade" (ancien comportement).
+     */
+    private Location resolveSpawn(BaseSlot slot) {
+        World world = slot.anchor.getWorld();
+        BaseMarkers markers = slot.markers;
+        if (markers != null && markers.spawn() != null) {
+            Location safe = findSafeSpawn(world, markers.spawn());
+            if (safe != null) {
+                return safe;
+            }
+            plugin.getLogger().warning("[Bases] Repère de spawn (laine "
+                    + "violette) unsafe : recherche d'un emplacement sûr "
+                    + "à proximité.");
+        }
+
+        // Repli : spawn devant la FAÇADE (côté du centre de la map),
+        // jamais au-dessus de l'eau.
+        Location wanted = facadeSpawnInFront(slot.anchor, slot.rotation);
+        Location spawn = resolveDrySpawnNear(world, wanted, slot.anchor);
+        spawn.setY(surfaceY(world, spawn.getBlockX(), spawn.getBlockZ()));
+        return spawn;
+    }
+
+    /**
+     * Cherche un point de spawn SÛR autour du repère : le bloc doit être
+     * de l'AIR, le bloc du dessous doit être SOLIDE (le joueur ne tombe
+     * pas dans le vide) et la tête doit être libre.
+     *
+     * @return le spawn sûr, ou null si aucun trouvé.
+     */
+    private Location findSafeSpawn(World world, Location wanted) {
+        if (world == null || wanted == null) {
+            return null;
+        }
+        int bx = wanted.getBlockX();
+        int by = wanted.getBlockY();
+        int bz = wanted.getBlockZ();
+        for (int radius = 0; radius <= SAFE_SPAWN_RADIUS; radius++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (radius > 0 && Math.abs(dx) != radius
+                            && Math.abs(dz) != radius) {
+                        continue; // périmètre uniquement
+                    }
+                    int x = bx + dx;
+                    int z = bz + dz;
+                    for (int y = by; y >= by - 2; y--) {
+                        if (isSafeSpawn(world, x, y, z)) {
+                            return new Location(world, x + 0.5, y, z + 0.5);
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Un emplacement est-il un spawn sûr (pieds dans l'air, sol dessous) ? */
+    private boolean isSafeSpawn(World world, int x, int y, int z) {
+        if (y <= world.getMinHeight() || y >= world.getMaxHeight() - 1) {
+            return false;
+        }
+        Block feet = world.getBlockAt(x, y, z);
+        Block head = world.getBlockAt(x, y + 1, z);
+        Block ground = world.getBlockAt(x, y - 1, z);
+        if (!feet.getType().isAir() || !head.getType().isAir()) {
+            return false;
+        }
+        return ground.getType().isSolid();
     }
 
     /**
@@ -444,58 +805,6 @@ public class BaseManager {
     }
 
     /**
-     * Résout la position de la base le long de son axe cardinal :
-     * distance idéale d'abord, puis décalages vers l'EXTÉRIEUR (préserve
-     * l'espacement inter-bases) puis vers l'INTÉRIEUR, jusqu'à la
-     * première surface sèche. L'ancre est posée au sol (Y réel).
-     */
-    private Location resolveDryAnchor(TeamColor color, World world,
-                                      Location center, int unitX, int unitZ) {
-        int radius = plugin.getConfigManager().getBaseRadius();
-        int centerX = center.getBlockX();
-        int centerZ = center.getBlockZ();
-        int minRadius = Math.max(1, radius / MIN_RADIUS_DIVISOR);
-        GameZone zone = plugin.getZoneManager().getZone();
-
-        for (int step = 0; step <= AXIS_SEARCH_STEPS; step++) {
-            int[] deltas = step == 0
-                    ? new int[]{0}
-                    : new int[]{step * SEARCH_STEP, -step * SEARCH_STEP};
-            for (int delta : deltas) {
-                int dist = radius + delta;
-                if (dist < minRadius) {
-                    continue;
-                }
-                int x = centerX + unitX * dist;
-                int z = centerZ + unitZ * dist;
-                if (zone != null && !zone.contains(
-                        new Location(world, x, center.getY(), z))) {
-                    continue; // on ne sort jamais de la zone
-                }
-                if (LocationUtil.isDryColumn(world, x, z)) {
-                    if (delta != 0) {
-                        plugin.getLogger().info("[Bases] "
-                                + color.getColoredName() + " §7décalée de "
-                                + (delta > 0 ? "+" : "") + delta
-                                + " blocs le long de son axe (eau détectée).");
-                    }
-                    return new Location(world, x + 0.5,
-                            worldGroundY(world, x, z), z + 0.5);
-                }
-            }
-        }
-
-        // Aucune surface sèche sur toute la plage de recherche (océan
-        // immense ?) : position idéale, avec alerte forte.
-        plugin.getLogger().severe("[Bases] AUCUNE surface sèche trouvée le "
-                + "long de l'axe " + color + " : base posée sur la position "
-                + "idéale malgré l'eau.");
-        int x = centerX + unitX * radius;
-        int z = centerZ + unitZ * radius;
-        return new Location(world, x + 0.5, worldGroundY(world, x, z), z + 0.5);
-    }
-
-    /**
      * Garantit un point de spawn SUR UNE COLONNE SÈCHE : recherche en
      * anneaux croissants autour du point voulu ; repli sur la colonne de
      * l'ancre (garantie sèche) en dernier recours.
@@ -530,15 +839,9 @@ public class BaseManager {
         return fallback.clone();
     }
 
-    /** Trouve une hauteur "posable" au-dessus du sol pour un point. */
-    private double worldGroundY(Location location) {
-        var world = location.getWorld();
-        if (world == null) {
-            return location.getY();
-        }
-        return worldGroundY(world,
-                location.getBlockX(), location.getBlockZ());
-    }
+    // -----------------------------------------------------------------
+    // Niveau du sol (forêt) et comblement des trous
+    // -----------------------------------------------------------------
 
     /** Hauteur du sol réel (surface), sans le décalage de la structure. */
     private double surfaceY(World world, int x, int z) {
@@ -551,6 +854,26 @@ public class BaseManager {
      * ~18 => le quadrant centré sur l'ancre).
      */
     private static final int GROUND_SAMPLE_RADIUS = 17;
+
+    /**
+     * VRAIE surface du terrain d'une colonne : on IGNORE la végétation
+     * (feuilles, troncs, herbes, fleurs) et on descend jusqu'à trouver un
+     * bloc de SOL (herbe, terre, pierre...).
+     *
+     * RÈGLE UTILISATEUR : sans ce correctif, une base posée en FORÊT
+     * reposait sur la CANOPÉE (le bloc le plus haut était une feuille) :
+     * la base flottait dans les arbres.
+     */
+    private int groundSurfaceY(World world, int x, int z) {
+        int maxY = world.getHighestBlockYAt(x, z);
+        int minY = world.getMinHeight();
+        for (int y = maxY; y > minY; y--) {
+            if (GROUND_MATERIALS.contains(world.getBlockAt(x, y, z).getType())) {
+                return y;
+            }
+        }
+        return maxY;
+    }
 
     /**
      * NIVEAU DE SOL MAJORITAIRE (surface + 1) sur le rayon d'une base.
@@ -571,7 +894,7 @@ public class BaseManager {
                 int sx = x + dx;
                 int sz = z + dz;
                 if (LocationUtil.isDryColumn(world, sx, sz)) {
-                    int ground = world.getHighestBlockYAt(sx, sz) + 1;
+                    int ground = groundSurfaceY(world, sx, sz) + 1;
                     histogram.merge(ground, 1, Integer::sum);
                 }
             }
@@ -588,7 +911,7 @@ public class BaseManager {
         }
         // Repli sûr : on garde la colonne centrale si aucun échantillon.
         if (histogram.isEmpty()) {
-            majority = world.getHighestBlockYAt(x, z) + 1;
+            majority = groundSurfaceY(world, x, z) + 1;
         }
         return majority;
     }
@@ -597,18 +920,147 @@ public class BaseManager {
      * Hauteur du sol (+1) pour une base, calculée comme le NIVEAU
      * MAJORITAIRE du relief dans le rayon de la base.
      *
-     * RÈGLE UTILISATEUR : on ne se fie PAS au niveau d'un seul bloc
-     * (un arbre isolé ou un pic ferait voler la base) : on échantillonne
-     * le terrain sur tout le rayon de la base et on retient la hauteur
-     * la plus fréquente. Un relief ponctuel compté une seule fois n'est
-     * jamais retenu (ni pour rehausser ni pour creuser).
+     * RÈGLE UTILISATEUR : la base (et son spawn) doit reposer AU SOL
+     * et non flotter. On abaisse de 9 blocs la position d'ancrage
+     * calculée (les troncs/feuilles du footprint sont nettoyés à la
+     * pose, voir RawTemplatePlacer.clearTreeIntersections).
      */
     private double worldGroundY(World world, int x, int z) {
-        // RÈGLE UTILISATEUR : la base (et son spawn) doit reposer AU SOL
-        // et non flotter. On abaisse de 9 blocs la position d'ancrage
-        // calculée (les troncs/feuilles du footprint sont nettoyés à la
-        // pose, voir RawTemplatePlacer.clearTreeIntersections).
-        return majorityGroundY(world, x, z) - 9.0;
+        // L'échantillonnage se fait sur le CENTRE de l'empreinte
+        // (l'ancre est le coin de la boîte 35x35) : c'est le relief
+        // SOUS LA BASE qui compte.
+        return majorityGroundY(world, x + GameBase.HALF, z + GameBase.HALF) - 9.0;
+    }
+
+    /**
+     * COMBLEMENT DES TROUS sous le niveau du sol d'une base.
+     *
+     * RÈGLE UTILISATEUR : sous le niveau du sol de la base, s'il y a de
+     * la terre (grass_block / dirt), les trous (air, herbes, neige) sont
+     * remplacés par de la DIRT : la base ne "flotte" plus au-dessus du
+     * terrain. Si la colonne ne repose sur AUCUNE terre, on ne comble
+     * rien (le gabarit reste ce qu'il est).
+     */
+    private void fillGroundHoles(Location anchor, int floorY) {
+        World world = anchor.getWorld();
+        if (world == null) {
+            return;
+        }
+        int ax = anchor.getBlockX();
+        int az = anchor.getBlockZ();
+        int filled = 0;
+        for (int x = ax; x <= ax + GameBase.SIZE - 1; x++) {
+            for (int z = az; z <= az + GameBase.SIZE - 1; z++) {
+                // 1. La colonne doit reposer sur de la terre.
+                boolean earth = false;
+                for (int y = floorY - 1; y >= floorY - 1 - GROUND_FILL_DEPTH;
+                     y--) {
+                    if (y < world.getMinHeight()) {
+                        break;
+                    }
+                    Material type = world.getBlockAt(x, y, z).getType();
+                    if (type == Material.GRASS_BLOCK || type == Material.DIRT
+                            || type == Material.COARSE_DIRT
+                            || type == Material.ROOTED_DIRT
+                            || type == Material.PODZOL
+                            || type == Material.MUD) {
+                        earth = true;
+                        break;
+                    }
+                    if (!isFillableHole(type)) {
+                        break; // un bloc plein arrête la descente
+                    }
+                }
+                if (!earth) {
+                    continue;
+                }
+                // 2. Comblement des trous (de la surface vers le bas).
+                for (int y = floorY - 1; y >= floorY - 1 - GROUND_FILL_DEPTH;
+                     y--) {
+                    if (y < world.getMinHeight()) {
+                        break;
+                    }
+                    Block block = world.getBlockAt(x, y, z);
+                    if (!isFillableHole(block.getType())) {
+                        break;
+                    }
+                    block.setType(Material.DIRT, false);
+                    filled++;
+                }
+            }
+        }
+        if (filled > 0) {
+            plugin.getLogger().info("[Bases] Trous sous la base comblés : "
+                    + filled + " bloc(s) de terre.");
+        }
+    }
+
+    /** Ce bloc peut-il être remplacé par de la terre (trou) ? */
+    private static boolean isFillableHole(Material type) {
+        return type.isAir()
+                || type == Material.SHORT_GRASS
+                || type == Material.TALL_GRASS
+                || type == Material.FERN
+                || type == Material.LARGE_FERN
+                || type == Material.DEAD_BUSH
+                || type == Material.SNOW
+                || type == Material.LIGHT;
+    }
+
+    // -----------------------------------------------------------------
+    // Position de la base le long de son axe
+    // -----------------------------------------------------------------
+
+    /**
+     * Résout la position de la base le long de son axe cardinal :
+     * distance idéale d'abord, puis décalages vers l'EXTÉRIEUR (préserve
+     * l'espacement inter-bases) puis vers l'INTÉRIEUR, jusqu'à la
+     * première surface sèche. L'ancre est posée au sol (Y réel).
+     */
+    private Location resolveDryAnchor(BaseSlot slot, World world,
+                                      Location center) {
+        int radius = plugin.getConfigManager().getBaseRadius();
+        int centerX = center.getBlockX();
+        int centerZ = center.getBlockZ();
+        int minRadius = Math.max(1, radius / MIN_RADIUS_DIVISOR);
+        GameZone zone = plugin.getZoneManager().getZone();
+
+        for (int step = 0; step <= AXIS_SEARCH_STEPS; step++) {
+            int[] deltas = step == 0
+                    ? new int[]{0}
+                    : new int[]{step * SEARCH_STEP, -step * SEARCH_STEP};
+            for (int delta : deltas) {
+                int dist = radius + delta;
+                if (dist < minRadius) {
+                    continue;
+                }
+                int x = centerX + slot.unitX * dist;
+                int z = centerZ + slot.unitZ * dist;
+                if (zone != null && !zone.contains(
+                        new Location(world, x, center.getY(), z))) {
+                    continue; // on ne sort jamais de la zone
+                }
+                if (LocationUtil.isDryColumn(world, x, z)) {
+                    if (delta != 0) {
+                        plugin.getLogger().info("[Bases] Emplacement "
+                                + slot.label() + " §7décalé de "
+                                + (delta > 0 ? "+" : "") + delta
+                                + " blocs le long de son axe (eau détectée).");
+                    }
+                    return new Location(world, x + 0.5,
+                            worldGroundY(world, x, z), z + 0.5);
+                }
+            }
+        }
+
+        // Aucune surface sèche sur toute la plage de recherche (océan
+        // immense ?) : position idéale, avec alerte forte.
+        plugin.getLogger().severe("[Bases] AUCUNE surface sèche trouvée pour "
+                + "l'emplacement " + slot.label() + " : base posée sur la "
+                + "position idéale malgré l'eau.");
+        int x = centerX + slot.unitX * radius;
+        int z = centerZ + slot.unitZ * radius;
+        return new Location(world, x + 0.5, worldGroundY(world, x, z), z + 0.5);
     }
 
     // -----------------------------------------------------------------
@@ -622,12 +1074,12 @@ public class BaseManager {
     private static final int CRYSTAL_SCAN_RADIUS = 45;
     /** Hauteur maximale scrutée au-dessus de l'ancrage. */
     private static final int CRYSTAL_SCAN_MAX_Y = 16;
-    /** Tentatives de scan différées (placement bascule éventuellement async). */
+    /** Tentatives de scan différées (placement bascule async). */
     private static final int CRYSTAL_SCAN_RETRIES = 6;
 
     /**
-     * Localise les 5 cristaux (sea_lantern) et le coffre de dépôt de la
-     * base puis les enregistre dans le CoreService.
+     * Localise les 5 cristaux (sea_lantern) et le coffre de dépôt de
+     * l'emplacement puis les enregistre dans le CoreService.
      *
      * La structure fournit ses propres cristaux ; le centre est identifié
      * comme le cristal le plus proche du centroïde des lanternes trouvées
@@ -636,12 +1088,9 @@ public class BaseManager {
      * Si le scan ne trouve rien (placement asynchrone du poseur de
      * secours), on réessaie un peu plus tard.
      */
-    private void locateAndRegisterCrystals(TeamColor color, Location anchor) {
-        tryScanCrystals(color, anchor, 0);
-    }
-
-    private void tryScanCrystals(TeamColor color, Location anchor, int attempt) {
-        World world = anchor.getWorld();
+    private void tryScanCrystals(BaseSlot slot, int attempt) {
+        Location anchor = slot.anchor;
+        World world = anchor == null ? null : anchor.getWorld();
         if (world == null) {
             return;
         }
@@ -650,7 +1099,13 @@ public class BaseManager {
         List<Location> chests = new ArrayList<>();
         scanBaseRegion(anchor, lanterns, chests);
 
-        if (!chests.isEmpty() && lanterns.size() >= 5) {
+        // RÈGLE UTILISATEUR : les cristaux sont repérés par la laine NOIRE
+        // (cœur) et les laines MARRON (tours) du gabarit. Le gabarit
+        // actuel ne contient PAS de coffre : celui-ci est donc OPTIONNEL
+        // (il ne doit pas empêcher la détection des cristaux, sinon la
+        // base n'aurait ni cœur ni tours → le verre violet deviendrait
+        // cassable par les adversaires dès le combat).
+        if (lanterns.size() >= 5) {
             // Dédoublonnage PAR COLONNE XZ : on ne garde que le cristal le
             // PLUS BAS de chaque colonne. Cela neutralise un éventuel
             // double-empilement résiduel de la structure (deux lanternes
@@ -665,7 +1120,7 @@ public class BaseManager {
             }
             List<Location> unique = new ArrayList<>(byColumn.values());
             if (unique.size() >= 5) {
-                registerCrystals(color, unique, chests);
+                collectCrystals(slot, unique, chests);
                 return;
             }
             // Moins de 5 colonnes distinctes => placement pas encore en
@@ -676,11 +1131,11 @@ public class BaseManager {
             // La pose de secours (RawTemplatePlacer) est asynchrone :
             // on rescanne un peu plus tard.
             org.bukkit.Bukkit.getScheduler().runTaskLater(plugin,
-                    () -> tryScanCrystals(color, anchor, attempt + 1), 20L);
+                    () -> tryScanCrystals(slot, attempt + 1), 20L);
             return;
         }
         plugin.getLogger().severe("[Bases] Cristaux introuvables pour "
-                + color.getColoredName() + " §7(" + lanterns.size()
+                + "l'emplacement " + slot.label() + " §7(" + lanterns.size()
                 + " cristal/lanternes, " + chests.size()
                 + " coffre(s) trouvés, " + (CRYSTAL_SCAN_RETRIES + 1)
                 + " scans).");
@@ -692,8 +1147,8 @@ public class BaseManager {
      * - les 4 TOURS sont les 4 cristaux les plus éloignés du centre ;
      * - les cristaux supplémentaires (lanternes décoratives) sont ignorés.
      */
-    private void registerCrystals(TeamColor color, List<Location> unique,
-                                  List<Location> chests) {
+    private void collectCrystals(BaseSlot slot, List<Location> unique,
+                                 List<Location> chests) {
         double cx = unique.stream().mapToDouble(Location::getX)
                 .average().orElse(0);
         double cz = unique.stream().mapToDouble(Location::getZ)
@@ -716,14 +1171,18 @@ public class BaseManager {
                 squaredXZDistance(b, heart), squaredXZDistance(a, heart)));
         List<Location> towers = new ArrayList<>(remaining.subList(0, 4));
 
-        // Le coffre de dépôt = le coffre le plus proche du centre.
-        Location chest = chests.get(0);
-        double bestChest = Double.MAX_VALUE;
-        for (Location candidate : chests) {
-            double d = candidate.distanceSquared(center);
-            if (d < bestChest) {
-                bestChest = d;
-                chest = candidate;
+        // Le coffre de dépôt = le coffre le plus proche du centre
+        // (OPTIONNEL : le gabarit actuel n'en contient pas).
+        Location chest = null;
+        if (!chests.isEmpty()) {
+            chest = chests.get(0);
+            double bestChest = Double.MAX_VALUE;
+            for (Location candidate : chests) {
+                double d = candidate.distanceSquared(center);
+                if (d < bestChest) {
+                    bestChest = d;
+                    chest = candidate;
+                }
             }
         }
 
@@ -736,10 +1195,13 @@ public class BaseManager {
             setCrystalBlock(tower);
         }
 
-        plugin.getCoreService()
-                .registerBaseCrystals(color, center, towers, chest);
-        plugin.getLogger().info("[Bases] " + color.name().toLowerCase()
-                + " : 5 cristaux + coffre de dépôt enregistrés.");
+        slot.coreCrystal = center;
+        slot.towers.clear();
+        slot.towers.addAll(towers);
+        slot.chest = chest;
+
+        // Si l'attribution est déjà faite, on enregistre tout de suite.
+        applyMarkersToAssignedTeam(slot);
     }
 
     /** Pose un bloc cristal (sea_lantern) dans le monde, à cette position. */
@@ -789,7 +1251,7 @@ public class BaseManager {
                     // Candidats cristaux : le sea_lantern posé directement
                     // dans le .nbt OU les laines NOIRE (cœur) / MARRON
                     // (tours) des nouveaux gabarits - converties en
-                    // sea_lantern par registerCrystals.
+                    // sea_lantern par collectCrystals.
                     if (type == com.mceteams.xii.service.CoreService.CRYSTAL_MATERIAL
                             || type == Material.BLACK_WOOL
                             || type == Material.BROWN_WOOL) {
@@ -801,6 +1263,10 @@ public class BaseManager {
             }
         }
     }
+
+    // -----------------------------------------------------------------
+    // Accès
+    // -----------------------------------------------------------------
 
     /** @return la base d'une équipe, ou null si non construite. */
     public GameBase getBase(TeamColor color) {
@@ -836,6 +1302,13 @@ public class BaseManager {
 
     /** Vide toutes les bases (retour WAITING / zone supprimée). */
     public void clearAll() {
+        if (lateRefreshTask != null) {
+            lateRefreshTask.cancel();
+            lateRefreshTask = null;
+        }
         bases.clear();
+        assignment.clear();
+        slots.clear();
+        terrainSnapshots.clear();
     }
 }

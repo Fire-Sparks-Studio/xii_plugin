@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 8;
+    private static final int CONFIG_VERSION = 9;
 
     // -----------------------------------------------------------------
     // UPGRADES (items consommables)
@@ -70,6 +70,13 @@ public class ConfigManager {
     /** Cache des points par minerai (chargé une fois). */
     private final Map<Material, Integer> miningPoints = new EnumMap<>(Material.class);
 
+    /**
+     * Cache des blocs "ESPACE VIDE" du gabarit de base (chargé une fois).
+     *
+     * @see #getVoidMarkerMaterials()
+     */
+    private List<Material> voidMarkerMaterials = List.of();
+
     public ConfigManager(XiiPlugin plugin) {
         this.plugin = plugin;
         reload();
@@ -106,6 +113,10 @@ public class ConfigManager {
         }
 
         config = plugin.getConfig();
+
+        // Le cache des repères "espace vide" est invalidé à chaque
+        // rechargement de la configuration.
+        voidMarkerMaterials = List.of();
 
         // --- Points de minage -------------------------------------
         miningPoints.clear();
@@ -204,6 +215,48 @@ public class ConfigManager {
 
     public int getSpawnOffset() {
         return config.getInt("bases.spawn-offset", 4);
+    }
+
+    /**
+     * Blocs "ESPACE VIDE" du gabarit de base : ils marquent les trous du
+     * template qui doivent rester VIDES.
+     *
+     * RÈGLE UTILISATEUR : le repère d'origine est le
+     * {@code structure_void}. Mais certains outils de sauvegarde de .nbt
+     * (WorldEdit, structure blocks, ...) ne conservent PAS ce bloc dans
+     * le fichier : le développeur peut alors remplacer chaque "trou"
+     * par un bloc spécifique (BARRIER, LIGHT... : invisibles et sûrs).
+     * Le plugin convertit alors ces blocs en AIR et interdit la pose à
+     * leur emplacement.
+     *
+     * @return la liste des matériaux repères (jamais vide).
+     */
+    public List<Material> getVoidMarkerMaterials() {
+        if (!voidMarkerMaterials.isEmpty()) {
+            return voidMarkerMaterials;
+        }
+        List<String> names = config.getStringList("bases.void-marker-blocks");
+        if (names == null || names.isEmpty()) {
+            names = List.of("STRUCTURE_VOID", "BARRIER");
+        }
+        List<Material> materials = new ArrayList<>();
+        for (String name : names) {
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            Material material = Material.matchMaterial(name.trim());
+            if (material == null) {
+                plugin.getLogger().warning("[Config] Bloc de repère "
+                        + "'espace vide' inconnu : " + name + " (ignoré)");
+                continue;
+            }
+            materials.add(material);
+        }
+        if (materials.isEmpty()) {
+            materials.add(Material.STRUCTURE_VOID);
+        }
+        voidMarkerMaterials = List.copyOf(materials);
+        return voidMarkerMaterials;
     }
 
     // -----------------------------------------------------------------

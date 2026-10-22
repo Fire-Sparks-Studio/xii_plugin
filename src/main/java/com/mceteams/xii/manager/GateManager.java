@@ -57,7 +57,7 @@ public class GateManager {
 
     /**
      * Enregistre un portillon à ouvrir pour une équipe (appelé par
-     * MarkerManager à la pose d'une laine bleu ciel).
+     * BaseManager quand les repères sont rattachés à une équipe).
      */
     public void registerGate(TeamColor color, Location gate) {
         if (color == null || gate == null || gate.getWorld() == null) {
@@ -65,6 +65,16 @@ public class GateManager {
         }
         gatesByTeam.computeIfAbsent(color, k -> new ArrayList<>())
                 .add(gate.clone());
+    }
+
+    /**
+     * OUBLIE tous les portillons enregistrés (sans toucher à la tâche de
+     * surveillance) : utilisé au LANCEMENT de la partie, quand les bases
+     * sont attribuées au hasard aux équipes (les portillons suivent la
+     * nouvelle couleur propriétaire).
+     */
+    public void clearGates() {
+        gatesByTeam.clear();
     }
 
     // -----------------------------------------------------------------

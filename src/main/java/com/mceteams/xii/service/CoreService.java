@@ -176,6 +176,18 @@ public class CoreService {
         return data == null ? 0 : data.aliveTowers.size();
     }
 
+    /**
+     * Cette équipe a-t-elle déjà des CRISTAUX enregistrés (base posée et
+     * rattachée) ?
+     *
+     * Utilisé au lancement de la partie : les cristaux ne doivent pas
+     * être ré-enregistrés (sinon les tours détruites seraient
+     * ré-armées).
+     */
+    public boolean hasBase(TeamColor color) {
+        return bases.containsKey(color);
+    }
+
     /** Le coeur est-il protégé par au moins une tour encore debout ? */
     public boolean isHeartShielded(TeamColor color) {
         return towersAlive(color) > 0;

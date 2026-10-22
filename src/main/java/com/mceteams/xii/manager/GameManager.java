@@ -388,10 +388,15 @@ public class GameManager {
             }
         }
 
-        // DÉSPAWN + RÉGÉNÉRATION des bases des équipes INEXISTANTES au
-        // lancement (équipe jamais créée, ou vidée) : la structure est
-        // retirée et l'empreinte redevient du terrain naturel.
-        plugin.getBaseManager().despawnBasesWithoutPlayers();
+        // RÈGLE UTILISATEUR : ATTRIBUTION AU HASARD DES BASES.
+        // Au lancement de la partie, les bases (4 emplacements physiques)
+        // sont réparties AU HASARD entre les équipes présentes : aucune
+        // couleur n'a d'emplacement réservé. Les emplacements non
+        // attribués (équipes en moins) sont retirés du monde et le terrain
+        // d'origine est restauré.
+        // L'appel se fait AVANT la téléportation : le spawn de chaque
+        // équipe est celui de LA BASE qui lui a été attribuée.
+        plugin.getBaseManager().assignBasesToTeams();
 
         // 4 : téléportation à la base de chaque équipe.
         for (Player player : Bukkit.getOnlinePlayers()) {

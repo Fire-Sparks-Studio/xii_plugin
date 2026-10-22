@@ -178,25 +178,31 @@ public class StructureManager {
     }
 
     /**
-     * Place une base d'équipe à l'ancrage donné, orientée vers le centre.
+     * Place une base d'équipe à l'ancrage donné, avec la rotation voulue.
      *
-     * Les 4 équipes partagent LE MÊME template (bases.nbt) : seule la
-     * rotation diffère (la base regarde vers le centre de map).
+     * Les 4 emplacements de base partagent LE MÊME template (bases.nbt) :
+     * seule la rotation diffère (la base regarde vers le centre de map).
      *
      * NB : le remblai herbeux (fill grass sous le plancher, style
      * village) est appliqué par le poseur de secours, de même que
      * l'enregistrement des blocs de structure (protection).
      *
-     * @param color  équipe propriétaire de la base
-     * @param anchor point d'ancrage calculé par BaseManager
-     * @param target point que la base doit regarder (centre de map)
+     * RÈGLE UTILISATEUR : les REPÈRES (lainages) sont appliqués APRÈS
+     * l'écriture de la structure (sinon la pose des blocs du .nbt les
+     * écraserait). Ils sont NEUTRALISÉS d'équipe : c'est
+     * BaseManager#assignBasesToTeams (au LANCEMENT de la partie) qui
+     * rattachera les repères à l'équipe propriétaire de l'emplacement.
+     *
+     * @param anchor   point d'ancrage calculé par BaseManager
+     * @param rotation rotation de la structure
+     * @param onWritten reçoit les repères une fois la structure écrite
      */
-    public boolean placeBase(TeamColor color,
-                             Location anchor,
-                             Location target) {
-        var location = StructureLocation.of(anchor,
-                com.mceteams.xii.structure.StructureRotation
-                        .facingToward(anchor, target));
+    public boolean placeBase(Location anchor,
+                             com.mceteams.xii.structure.StructureRotation rotation,
+                             java.util.function.Consumer<
+                                     com.mceteams.xii.model.BaseMarkers>
+                                     onWritten) {
+        var location = StructureLocation.of(anchor, rotation);
         java.io.File cached = loader.ensureCached(BASES_PATH, BASES_NAME);
         return place(BASES_PATH, BASES_NAME, location, true, written -> {
                     structureKeys.addAll(keys(written));
@@ -212,11 +218,17 @@ public class StructureManager {
                     }
                     // RÈGLE UTILISATEUR : applique les REPÈRES (lainages)
                     // posés par le développeur dans l'empreinte de la base
-                    // (sol rouge → herbe, portillons bleu ciel → spruce
-                    // ouverts, PNJ vert/jaune → emplacements). On traite
-                    // APRÈS l'écriture de la structure pour ne pas être
-                    // écrasé par la pose des blocs du .nbt.
-                    plugin.getMarkerManager().processBase(color, anchor);
+                    // (sol rouge → herbe, portillons bleu ciel → spruce,
+                    // PNJ vert/jaune → emplacements, laine violette → spawn,
+                    // bannières blanches → à recolorer). On traite APRÈS
+                    // l'écriture de la structure pour ne pas être écrasé
+                    // par la pose des blocs du .nbt.
+                    com.mceteams.xii.model.BaseMarkers markers =
+                            plugin.getMarkerManager().processBase(anchor,
+                                    rotation);
+                    if (onWritten != null) {
+                        onWritten.accept(markers);
+                    }
                 },
                 true);
     }
@@ -404,15 +416,35 @@ public class StructureManager {
      * @return nombre de clés de structure purgées
      */
     public int removeBasePlacement(GameBase base) {
-        if (base == null || base.getAnchor() == null
-                || base.getAnchor().getWorld() == null) {
+        if (base == null) {
             return 0;
         }
-        Location anchor = base.getAnchor();
-        String worldName = anchor.getWorld().getName();
-        int ax = anchor.getBlockX();
-        int ay = anchor.getBlockY();
-        int az = anchor.getBlockZ();
+        return removeBasePlacement(base.getAnchor());
+    }
+
+    /**
+     * Retire la STRUCTURE DE BASE d'un ANCRE : purge les blocs de
+     * structure enregistrés dans son empreinte et OUBLIE son placement.
+     *
+     * La remise en état du terrain (blocs à AIR / restauration) est faite
+     * par l'appelant ({@link com.mceteams.xii.manager.BaseManager}) à
+     * partir de l'instantané de terrain pris avant la pose ; ici on ne
+     * s'occupe que des traces internes de {@code StructureManager} pour
+     * qu'une régénération de fin de partie ne repose pas la base.
+     *
+     * @param anchor ancre de la base à oublier
+     * @return nombre de clés de structure purgées
+     */
+    public int removeBasePlacement(Location anchor) {
+        if (anchor == null
+                || anchor.getWorld() == null) {
+            return 0;
+        }
+        Location base = anchor;
+        String worldName = base.getWorld().getName();
+        int ax = base.getBlockX();
+        int ay = base.getBlockY();
+        int az = base.getBlockZ();
         // Emission verticale large (la base peut s'étendre sous/sur l'ancre).
         int minY = ay - 32;
         int maxY = ay + 96;
