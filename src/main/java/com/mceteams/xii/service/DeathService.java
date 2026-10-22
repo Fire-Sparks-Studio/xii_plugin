@@ -99,6 +99,10 @@ public class DeathService {
             MessageUtil.broadcast("\n§c☠ §f" + victim.getName()
                     + " §7a été tué par §c" + killer.getName()
                     + finalSuffix + "\n");
+        } else if (cause == DeathCause.ZONE) {
+            MessageUtil.broadcast("\n§c☠ §f" + victim.getName()
+                    + " §7est mort §8(hors de la zone de combat)"
+                    + finalSuffix + "\n");
         } else {
             MessageUtil.broadcast("\n§c☠ §f" + victim.getName()
                     + " §7est mort"

@@ -217,6 +217,8 @@ public class RawTemplatePlacer {
         }
 
         int filled = 0;
+        java.util.List<Material> voidMarkers =
+                plugin.getConfigManager().getVoidMarkerMaterials();
         for (long key : voidColumns) {
             // Un void n'autorise le remblai QUE s'il se trouve sous le
             // plancher de la colonne (sinon : couloir / vide au sol → rien).
@@ -234,9 +236,11 @@ public class RawTemplatePlacer {
             for (int y = topY; y >= bottomY; y--) {
                 Block block = world.getBlockAt(x, y, z);
                 Material type = block.getType();
-                if (type != Material.AIR && type != Material.STRUCTURE_VOID
-                        && !plugin.getConfigManager()
-                        .getVoidMarkerMaterials().contains(type)) {
+                if (type == Material.STRUCTURE_VOID
+                        || voidMarkers.contains(type)) {
+                    continue; // emplacement "espace vide" : AUCUN bloc
+                }
+                if (type != Material.AIR) {
                     continue; // ne jamais écraser un bloc de structure existant
                 }
                 block.setBlockData(Bukkit.createBlockData(
@@ -259,13 +263,16 @@ public class RawTemplatePlacer {
      *
      * writeBlocks IGNORE l'air du gabarit (l'air n'écrase pas le
      * terrain, pour le lobby/donjons) ; pour les bases, on vide donc
-     * EXPLICITEMENT ces cellules. Seule la portion AU-DESSUS du sol de
-     * leur colonne est vidée : on ne creuse jamais sous la structure
-     * (le relief enterré reste intact).
+     * EXPLICITEMENT ces cellules. Seule la portion comprise ENTRE le
+     * plancher et le TOIT de la colonne est vidée :
+     * - on ne creuse jamais sous la structure (le relief enterré reste
+     *   intact) ;
+     * - on ne purge rien AU-DESSUS du toit (les cellules air du
+     *   gabarit laissées telles quelles : le monde garde ses blocs).
      *
      * Les {@code structure_void}, eux, sont posés par writeBlocks
      * (baseGrassFill) : MarkerManager les convertit en air et mémorise
-     * l'emplacement comme "à laisser vide" (pose interdite).
+     * l'emplacement comme "à laisser vide de blocs NATURELS".
      *
      * Appelé par StructureManager.placeBase pour les DEUX voies de pose
      * (API et poseur de secours), après l'écriture de la structure.
@@ -282,11 +289,13 @@ public class RawTemplatePlacer {
             return;
         }
 
-        // Sol par colonne = plus bas bloc NI vide du gabarit (plancher) ;
-        // repli : sol global du gabarit (borné à l'ancre pour ne jamais
-        // creuser de sous-sol sur une colonne entièrement vide).
+        // Sol ET toit par colonne = plus bas / plus haut bloc NI vide du
+        // gabarit ; repli : sol global du gabarit (borné à l'ancre pour
+        // ne jamais creuser de sous-sol sur une colonne entièrement vide).
         Map<Long, Integer> floorByColumn = new HashMap<>();
+        Map<Long, Integer> topByColumn = new HashMap<>();
         int globalFloor = location.getY();
+        int globalTop = location.getY();
         for (TemplateBlock block : blocks) {
             String data = block.dataString();
             if (isVoidMarker(data) || data.equals("minecraft:air")) {
@@ -295,8 +304,11 @@ public class RawTemplatePlacer {
             int x = location.getX() + block.x();
             int z = location.getZ() + block.z();
             int y = location.getY() + block.y();
-            floorByColumn.merge(columnKey(x, z), y, Math::min);
+            long key = columnKey(x, z);
+            floorByColumn.merge(key, y, Math::min);
+            topByColumn.merge(key, y, Math::max);
             globalFloor = Math.min(globalFloor, y);
+            globalTop = Math.max(globalTop, y);
         }
 
         int cleared = 0;
@@ -307,10 +319,14 @@ public class RawTemplatePlacer {
             int x = location.getX() + block.x();
             int y = location.getY() + block.y();
             int z = location.getZ() + block.z();
-            int floor = floorByColumn.getOrDefault(columnKey(x, z),
-                    globalFloor);
+            long key = columnKey(x, z);
+            int floor = floorByColumn.getOrDefault(key, globalFloor);
+            int top = topByColumn.getOrDefault(key, globalTop);
             if (y < floor) {
                 continue; // sous le plancher de la colonne : on ne creuse pas
+            }
+            if (y > top) {
+                continue; // au-dessus du toit : les blocs du monde restent
             }
             Block target = world.getBlockAt(x, y, z);
             if (!target.getType().isAir()) {

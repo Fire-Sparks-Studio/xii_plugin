@@ -85,6 +85,7 @@ public class XiiPlugin extends JavaPlugin {
     private GateManager gateManager;
     private MarkerManager markerManager;
     private NpcManager npcManager;
+    private CombatZoneManager combatZoneManager;
 
     // --- Système de loot -----------------------------------------------
     private LootManager lootManager;
@@ -189,6 +190,7 @@ public class XiiPlugin extends JavaPlugin {
         this.gateManager = new GateManager(this);
         this.npcManager = new NpcManager();
         this.markerManager = new MarkerManager(this);
+        this.combatZoneManager = new CombatZoneManager(this);
         getLogger().info("│  └─ Terminé");
 
         // 8) Contrôleur système + orchestrateur global.
@@ -332,6 +334,7 @@ public class XiiPlugin extends JavaPlugin {
     public GateManager getGateManager() { return gateManager; }
     public MarkerManager getMarkerManager() { return markerManager; }
     public NpcManager getNpcManager() { return npcManager; }
+    public CombatZoneManager getCombatZoneManager() { return combatZoneManager; }
 
     public PointService getPointService() { return pointService; }
     public CombatService getCombatService() { return combatService; }

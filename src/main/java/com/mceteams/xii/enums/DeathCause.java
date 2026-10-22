@@ -9,10 +9,12 @@ package com.mceteams.xii.enums;
  * PLAYER     : tué par un joueur (kill attribué).
  * DISCONNECT : déconnexion pendant la fenêtre de combat (15 s après
  *              avoir reçu un coup) - traitée comme une mort.
+ * ZONE       : mort hors de la zone de combat qui se réduit.
  * OTHER      : toute autre cause (chute, météorite, dragon...).
  */
 public enum DeathCause {
     PLAYER,
     DISCONNECT,
+    ZONE,
     OTHER
 }

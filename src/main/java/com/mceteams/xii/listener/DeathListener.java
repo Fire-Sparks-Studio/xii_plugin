@@ -54,6 +54,10 @@ public class DeathListener implements Listener {
             if (killer.getUniqueId().equals(data.getLastDamager())) {
                 cause = DeathCause.PLAYER;
             }
+        } else if (plugin.getCombatZoneManager().isActive()
+                && !plugin.getCombatZoneManager().isInside(victim.getLocation())) {
+            // Mort hors de la zone de combat qui se réduit.
+            cause = DeathCause.ZONE;
         }
 
         // Message de mort vanilla masqué : le plugin diffuse les siens.

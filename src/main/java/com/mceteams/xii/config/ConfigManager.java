@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 9;
+    private static final int CONFIG_VERSION = 10;
 
     // -----------------------------------------------------------------
     // UPGRADES (items consommables)
@@ -203,10 +203,43 @@ public class ConfigManager {
     }
 
     // -----------------------------------------------------------------
+    // Zone de combat (réduction pendant la phase de combat)
+    // -----------------------------------------------------------------
+
+    /** La zone de combat qui se réduit est-elle activée ? */
+    public boolean isCombatZoneEnabled() {
+        return config.getBoolean("zone.combat-zone.enabled", true);
+    }
+
+    /**
+     * Rayon de DÉPART de la zone de combat (en blocs depuis le centre
+     * de la zone). 0 = automatique : la moitié de la taille de la zone.
+     * 1500 couvre toute la map 2000x2000 (les coins sont à 1414).
+     */
+    public int getCombatZoneStartRadius() {
+        return config.getInt("zone.combat-zone.start-radius", 1500);
+    }
+
+    /** Rayon FINAL de la zone de combat (les bases à 100 blocs restent dedans). */
+    public int getCombatZoneEndRadius() {
+        return config.getInt("zone.combat-zone.end-radius", 150);
+    }
+
+    /** Durée de la réduction de la zone, en secondes (900 = 15 minutes). */
+    public int getCombatZoneShrinkSeconds() {
+        return Math.max(1, config.getInt("zone.combat-zone.shrink-seconds", 900));
+    }
+
+    /** Dégâts par seconde appliqués à un joueur situé hors de la zone. */
+    public double getCombatZoneDamage() {
+        return config.getDouble("zone.combat-zone.damage", 2.0D);
+    }
+
+    // -----------------------------------------------------------------
     // Bases (spec §7)
     // -----------------------------------------------------------------
     public int getBaseRadius() {
-        return config.getInt("bases.radius", 300);
+        return config.getInt("bases.radius", 100);
     }
 
     public int getCoreOffsetY() {
@@ -218,16 +251,17 @@ public class ConfigManager {
     }
 
     /**
-     * Blocs "ESPACE VIDE" du gabarit de base : ils marquent les trous du
-     * template qui doivent rester VIDES.
+     * Blocs "ESPACE VIDE" du gabarit de base : ils marquent les parties du
+     * template qui doivent rester VIDES de BLOCS NATURELS.
      *
      * RÈGLE UTILISATEUR : le repère d'origine est le
      * {@code structure_void}. Mais certains outils de sauvegarde de .nbt
      * (WorldEdit, structure blocks, ...) ne conservent PAS ce bloc dans
      * le fichier : le développeur peut alors remplacer chaque "trou"
      * par un bloc spécifique (BARRIER, LIGHT... : invisibles et sûrs).
-     * Le plugin convertit alors ces blocs en AIR et interdit la pose à
-     * leur emplacement.
+     * Le plugin convertit alors ces blocs en AIR (plus aucun terrain,
+     * arbre ou butte à l'intérieur), mais l'équipe qui occupe la base
+     * reste AUTORISÉE à y poser ses propres blocs.
      *
      * @return la liste des matériaux repères (jamais vide).
      */

@@ -43,7 +43,11 @@ import java.util.Locale;
  *                      bases attribuées).
  * - structure_void   : converti en AIR (la structure void est DANS la
  *                      base) et l'emplacement est mémorisé : il doit
- *                      rester vide. Un BLOC ALTERNATIF peut être utilisé
+ *                      rester vide de BLOCS NATURELS (ni terrain, ni
+ *                      arbre, ni butte). L'équipe qui occupe la base
+ *                      peut y poser ses propres blocs ; seuls les
+ *                      adversaires y sont interdits.
+ *                      Un BLOC ALTERNATIF peut être utilisé
  *                      si l'outil de sauvegarde du .nbt ne conserve pas
  *                      le structure_void (voir la configuration
  *                      {@code bases.void-marker-blocks} : BARRIER,

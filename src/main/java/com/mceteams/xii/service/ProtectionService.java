@@ -176,11 +176,14 @@ public class ProtectionService {
      * Droits de PLACE (poser) sur un bloc pendant le gameplay.
      *
      * RÈGLE UTILISATEUR : À L'INTÉRIEUR d'une base -
-     * - l'équipe PROPRIÉTAIRE peut poser PARTOUT, SAUF à la place d'un
-     *   {@code structure_void} du gabarit (l'espace vide du template doit
-     *   rester vide) ;
+     * - l'équipe PROPRIÉTAIRE peut poser PARTOUT, y compris dans le
+     *   volume "espace vide" du gabarit (ces emplacements ne sont
+     *   interdits que pour les BLOCS NATURELS : c'est le volume intérieur
+     *   de la base, l'équipe y construit librement) ;
      * - les joueurs ADVERSES ne peuvent poser QU'À PARTIR DU JOUR 7
-     *   (début du COMBAT ; le jour = sous-phase courante, 1..12).
+     *   (début du COMBAT ; le jour = sous-phase courante, 1..12), et
+     *   jamais dans le volume vide du gabarit (ils ne meublent pas la
+     *   base d'autrui).
      * Hors base : pose libre (PRÉPARATION et COMBAT).
      */
     public boolean canPlaceBlock(Player player, Block block) {
@@ -198,15 +201,16 @@ public class ProtectionService {
             return true; // hors base : libre
         }
 
-        // Dans une base : le PROPRIÉTAIRE pose librement (jamais à la
-        // place d'un structure_void) ; les ADVERSES seulement à partir
-        // du jour 7 (COMBAT). L'espace vide prévu du gabarit reste vide
-        // pour tout le monde.
-        if (playerTeamOf(player) != base.getColor()
-                && plugin.getPhaseManager().currentDay() < 7) {
-            return false;
+        // Dans une base : le PROPRIÉTAIRE pose librement PARTOUT (volume
+        // intérieur compris) ; les ADVERSES seulement à partir du jour 7
+        // (COMBAT), et jamais dans le volume vide du gabarit.
+        if (playerTeamOf(player) != base.getColor()) {
+            if (plugin.getPhaseManager().currentDay() < 7) {
+                return false;
+            }
+            return !base.isVoidSlot(block.getLocation());
         }
-        return !base.isVoidSlot(block.getLocation());
+        return true;
     }
 
     /**
@@ -221,8 +225,8 @@ public class ProtectionService {
      * - les CHAMPS (crops, farmland) sont toujours protégés ;
      * - chaque équipe peut poser des blocs dans SA base et casser les
      *   blocs QU'ELLE a posés (les autres blocs y sont intouchables) ;
-* - la POSE dans une base est libre pour le propriétaire (hors
- *   structure_void), réservée aux adversaires à partir du jour 7
+* - la POSE dans une base est libre pour le propriétaire (y compris dans
+ *   le volume "espace vide" du gabarit), réservée aux adversaires à partir du jour 7
  *   (COMBAT) - voir canPlaceBlock ;
      * - les CRISTAUX (sea_lantern) sont laissés à CoreListener (ordre
      *   HIGH), qui gère leur destruction de façon contrôlée ;

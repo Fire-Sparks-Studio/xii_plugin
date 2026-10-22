@@ -171,17 +171,23 @@ public class GameBase {
     }
 
     // -----------------------------------------------------------------
-    // Emplacements de pose autorisés (structure_void du gabarit)
+    // Emplacements "espace vide" du gabarit (structure_void / BARRIER)
     // -----------------------------------------------------------------
 
-    /** Enregistre un emplacement void (structure_void) posable par l'équipe. */
+    /**
+     * Enregistre un emplacement "espace vide" du gabarit.
+     *
+     * Ces cellules doivent rester VIDES de BLOCS NATURELS (le plugin les
+     * convertit en AIR). L'équipe qui occupe la base peut en revanche y
+     * poser ses propres blocs : seuls les ADVERSES y sont interdits.
+     */
     public void addVoidSlot(Location location) {
         if (location != null && location.getWorld() != null) {
             voidSlots.add(blockLocation(location));
         }
     }
 
-    /** Le joueur peut-il poser à cet emplacement (void du gabarit) ? */
+    /** Cet emplacement est-il un "espace vide" du gabarit ? */
     public boolean isVoidSlot(Location location) {
         return location != null && voidSlots.contains(blockLocation(location));
     }

@@ -5,6 +5,7 @@ import com.mceteams.xii.enums.CombatSubPhase;
 import com.mceteams.xii.enums.GameState;
 import com.mceteams.xii.model.GameTeam;
 import com.mceteams.xii.task.CountdownTask;
+import com.mceteams.xii.task.CombatZoneTask;
 import com.mceteams.xii.task.MeteoriteTask;
 import com.mceteams.xii.task.PackageTask;
 import com.mceteams.xii.task.PhaseTask;
@@ -46,6 +47,7 @@ public class GameManager {
     private PackageTask packageTask;
     private MeteoriteTask meteoriteTask;
     private SuddenDeathTask suddenDeathTask;
+    private CombatZoneTask combatZoneTask;
     private org.bukkit.scheduler.BukkitTask lobbyActionbarTask;
 
     public GameManager(XiiPlugin plugin) {
@@ -519,6 +521,11 @@ public class GameManager {
         MessageUtil.broadcast(" §4§lPHASE DE COMBAT");
         MessageUtil.broadcast(" §cLe PvP est désormais autorisé §4partout§c. Bonne chance.");
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
+
+        // ZONE DE COMBAT : la zone de sécurité se réduit autour du centre
+        // (0,0) pendant toute la phase de combat.
+        plugin.getCombatZoneManager().start();
+        startCombatZoneTask();
     }
 
     /**
@@ -913,6 +920,15 @@ public class GameManager {
         suddenDeathTask.runTaskTimer(plugin, 20L, 20L);
     }
 
+    /** Lance la task de la zone de combat (1 tick/seconde). */
+    private void startCombatZoneTask() {
+        if (combatZoneTask != null) {
+            return;
+        }
+        combatZoneTask = new CombatZoneTask(plugin);
+        combatZoneTask.runTaskTimer(plugin, 20L, 20L);
+    }
+
     /**
      * Après un saut de jour : relance les tasks périodiques qui doivent
      * être actives pour la sous-phase COURANTE.
@@ -924,6 +940,10 @@ public class GameManager {
             if (sub != null && sub.ordinal() >= com.mceteams.xii.enums.PreparationSubPhase.PACKAGES.ordinal()) {
                 startPackageTask();
             }
+            // Retour en préparation : plus de zone de combat.
+            safeCancel(combatZoneTask);
+            combatZoneTask = null;
+            plugin.getCombatZoneManager().stop();
         } else if (phaseManager.getPhase() == com.mceteams.xii.enums.GamePhase.COMBAT) {
             var sub = phaseManager.getCombatSubPhase();
             if (sub != null && sub.ordinal() >= CombatSubPhase.METEORITES.ordinal()
@@ -933,6 +953,10 @@ public class GameManager {
             if (sub == CombatSubPhase.SUDDEN_DEATH) {
                 startSuddenDeathTask();
             }
+            // Zone de combat : le rayon est recalculé sur l'horloge des
+            // phases (un saut de jour est donc pris en compte).
+            plugin.getCombatZoneManager().ensureStarted();
+            startCombatZoneTask();
         }
     }
 
@@ -956,7 +980,10 @@ public class GameManager {
         safeCancel(packageTask);        packageTask = null;
         safeCancel(meteoriteTask);      meteoriteTask = null;
         safeCancel(suddenDeathTask);    suddenDeathTask = null;
+        safeCancel(combatZoneTask);      combatZoneTask = null;
         safeCancelBukkitTask(lobbyActionbarTask); lobbyActionbarTask = null;
+        // La zone de combat n'existe plus hors de la phase de combat.
+        plugin.getCombatZoneManager().stop();
     }
 
     private void safeCancel(org.bukkit.scheduler.BukkitRunnable task) {

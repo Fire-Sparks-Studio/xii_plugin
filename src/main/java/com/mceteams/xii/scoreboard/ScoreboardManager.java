@@ -126,6 +126,15 @@ public class ScoreboardManager {
         // --- Prochaine sous-phase + timer ------------------------------
         lines.add(nextSubPhaseLine());
 
+        // --- Zone de combat (rayon de sécurité) ------------------------
+        var combatZone = plugin.getCombatZoneManager();
+        if (combatZone.isActive()) {
+            int radius = (int) Math.ceil(combatZone.getCurrentRadius());
+            boolean outside = !combatZone.isInside(player.getLocation());
+            lines.add((outside ? "§c" : "§7") + "Zone : "
+                    + (outside ? "§c§l" : "§b") + radius + " §7blocs");
+        }
+
         lines.add("");
 
         // --- Lignes des QUATRE équipes ---------------------------------

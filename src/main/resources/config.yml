@@ -6,7 +6,7 @@
 
 # Version du schéma : si le fichier installé est plus ancien, il est
 # automatiquement remplacé (l'ancien est sauvegardé en .bak).
-config-version: 9
+config-version: 10
 
 # -----------------------------------------------------------------
 # Items d'UPGRADE et TOTEM (consommés par clic droit)
@@ -44,22 +44,47 @@ zone:
   waiting-lobby-spawn-x: 0
   waiting-lobby-spawn-y: 7
   waiting-lobby-spawn-z: 0
+  # --- ZONE DE COMBAT (réduction pendant la phase de combat) ----------
+  # À partir du DÉBUT de la phase de combat, la zone de sécurité se
+  # RÉDUIT autour du centre (0,0) : au-delà du rayon, les joueurs
+  # prennent des dégâts continue et doivent réintégrer le cercle.
+  # Les bases (à 100 blocs du centre) restent TOUJOURS accessibles.
+  combat-zone:
+    enabled: true
+    # Rayon de DÉPART. 0 = la moitié de la taille de la zone (1000).
+    # 1500 couvre TOUTE la map (2000x2000, coins à 1414) : personne
+    # n'est hors zone au début du combat.
+    start-radius: 1500
+    # Rayon FINAL atteint à la fin de la réduction (les bases à 100
+    # blocs restent dans la zone).
+    end-radius: 150
+    # Durée de la réduction, en secondes (900 = 15 minutes de combat).
+    shrink-seconds: 900
+    # Dégâts par seconde appliqués à un joueur HORS de la zone.
+    # 2.0 = 1 coeur/seconde (10 s pour mourir depuis la vie pleine).
+    damage: 2.0
 
 # -----------------------------------------------------------------
 # Bases des équipes
 # -----------------------------------------------------------------
 bases:
   # Distance (blocs) entre le centre de la zone et chaque base.
-  # Les bases sont posées sur les 4 axes cardinaux pour rester loin
-  # des donjons qui occupent les 4 diagonales (+/-500 ; +/-500).
-  radius: 300
+  # Les bases sont posées sur les 4 axes cardinaux à 100 blocs du
+  # centre : elles restent donc TOUJOURS accessibles quand la zone de
+  # combat se réduit à 150 blocs (les donjons occupent les 4 diagonales
+  # à +/-500, bien au-delà de la zone finale).
+  radius: 100
   # Position du coeur par rapport au point d'ancrage de la base.
   # À ajuster selon la structure .nbt fournie par le développeur.
   core-offset-y: 3
   spawn-offset: 4
-  # Blocs "ESPACE VIDE" du gabarit de base : ils marquent les trous du
-  # template qui doivent rester VIDES (le plugin les convertit en AIR
-  # et y interdit la pose).
+  # Blocs "ESPACE VIDE" du gabarit de base : ils marquent les parties du
+  # template qui doivent rester VIDES de BLOCS NATURELS (le plugin les
+  # convertit en AIR : ni terrain, ni arbre, ni butte à l'intérieur).
+  # Les Cellules AIR du gabarit, elles, ne sont pas purgées : on laisse
+  # les blocs du monde tels quels.
+  # L'équipe qui occupe la base est AUTORISÉE à y poser ses blocs
+  # (c'est son volume intérieur) ; les adversaires y restent interdits.
   # Le repère d'origine est le structure_void. Si ton outil de sauvegarde
   # de .nbt ne le conserve pas, remplace chaque trou par un de ces blocs
   # (BARRIER est invisible : il n'abîme pas le rendu ; LIGHT marche aussi

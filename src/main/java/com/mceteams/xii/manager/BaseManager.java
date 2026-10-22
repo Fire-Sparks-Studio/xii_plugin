@@ -334,7 +334,7 @@ public class BaseManager {
         // Remblai des trous sous le niveau du sol (dirt) : en forêt, le
         // terrain n'est pas plat et la base "flotte" par endroits.
         if (markers != null && markers.floorY() != null) {
-            fillGroundHoles(slot.anchor, markers.floorY());
+            fillGroundHoles(slot.anchor, markers.floorY(), markers.voidSlots());
         }
 
         // Cristaux (coeur + 4 tours) : conversion des laines repères puis
@@ -940,14 +940,34 @@ public class BaseManager {
      * remplacés par de la DIRT : la base ne "flotte" plus au-dessus du
      * terrain. Si la colonne ne repose sur AUCUNE terre, on ne comble
      * rien (le gabarit reste ce qu'il est).
+     *
+     * TERRAIN "TERRE" : le gravier et le sable comptent aussi (plage,
+     * désert, fond de rivière) : sinon les trous sous la base n'étaient
+     * jamais comblés sur ces terrains.
+     *
+     * EMPLACEMENTS VIDES : les cellules marquées "espace vide" par le
+     * gabarit (structure_void / BARRIER) sont IGNORÉES : elles doivent
+     * rester sans AUCUN bloc naturel.
      */
-    private void fillGroundHoles(Location anchor, int floorY) {
+    private void fillGroundHoles(Location anchor, int floorY,
+                                 List<Location> voidSlots) {
         World world = anchor.getWorld();
         if (world == null) {
             return;
         }
         int ax = anchor.getBlockX();
         int az = anchor.getBlockZ();
+        // Index des cellules "espace vide" (lookup O(1)).
+        Set<Long> voidKeys = new HashSet<>();
+        if (voidSlots != null) {
+            for (Location location : voidSlots) {
+                if (location == null) {
+                    continue;
+                }
+                voidKeys.add(packBlockKey(location.getBlockX(),
+                        location.getBlockY(), location.getBlockZ()));
+            }
+        }
         int filled = 0;
         for (int x = ax; x <= ax + GameBase.SIZE - 1; x++) {
             for (int z = az; z <= az + GameBase.SIZE - 1; z++) {
@@ -959,11 +979,7 @@ public class BaseManager {
                         break;
                     }
                     Material type = world.getBlockAt(x, y, z).getType();
-                    if (type == Material.GRASS_BLOCK || type == Material.DIRT
-                            || type == Material.COARSE_DIRT
-                            || type == Material.ROOTED_DIRT
-                            || type == Material.PODZOL
-                            || type == Material.MUD) {
+                    if (isEarthMaterial(type)) {
                         earth = true;
                         break;
                     }
@@ -980,6 +996,9 @@ public class BaseManager {
                     if (y < world.getMinHeight()) {
                         break;
                     }
+                    if (voidKeys.contains(packBlockKey(x, y, z))) {
+                        continue; // emplacement "espace vide" : aucun bloc
+                    }
                     Block block = world.getBlockAt(x, y, z);
                     if (!isFillableHole(block.getType())) {
                         break;
@@ -993,6 +1012,28 @@ public class BaseManager {
             plugin.getLogger().info("[Bases] Trous sous la base comblés : "
                     + filled + " bloc(s) de terre.");
         }
+    }
+
+    /**
+     * Matériaux considérés comme de la "TERRE" (support du comblement des
+     * trous sous la base). Le gravier et le sable sont inclus : une base
+     * posée sur une plage ou dans un désert doit être remblayée elle aussi.
+     */
+    private static boolean isEarthMaterial(Material type) {
+        return type == Material.GRASS_BLOCK
+                || type == Material.DIRT
+                || type == Material.COARSE_DIRT
+                || type == Material.ROOTED_DIRT
+                || type == Material.PODZOL
+                || type == Material.MUD
+                || type == Material.SAND
+                || type == Material.SANDSTONE
+                || type == Material.RED_SAND
+                || type == Material.RED_SANDSTONE
+                || type == Material.GRAVEL
+                || type == Material.CLAY
+                || type == Material.TERRACOTTA
+                || type == Material.SNOW_BLOCK;
     }
 
     /** Ce bloc peut-il être remplacé par de la terre (trou) ? */

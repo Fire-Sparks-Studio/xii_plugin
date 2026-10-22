@@ -34,22 +34,57 @@ public class ZoneCommand implements TabExecutor {
             MessageUtil.send(sender, "§cPermission insuffisante (xii.admin).");
             return true;
         }
-        // /zone set doit être exécuté par un joueur (position requise).
+        if (args.length != 1) {
+            MessageUtil.send(sender, "§cUsage : /zone <set|delete|info>");
+            return true;
+        }
+        String action = args[0].toLowerCase();
+
+        // /zone info : état de la zone (console ou joueur).
+        if (action.equals("info")) {
+            handleInfo(sender);
+            return true;
+        }
+
+        // /zone set et /zone delete doivent être exécutés par un joueur.
         if (!(sender instanceof Player player)) {
             MessageUtil.send(sender, "§cCommande réservée aux joueurs.");
             return true;
         }
-        if (args.length != 1) {
-            MessageUtil.send(sender, "§cUsage : /zone <set|delete>");
-            return true;
-        }
 
-        switch (args[0].toLowerCase()) {
+        switch (action) {
             case "set" -> handleSet(player);
             case "delete" -> handleDelete();
-            default -> MessageUtil.send(sender, "§cUsage : /zone <set|delete>");
+            default -> MessageUtil.send(sender, "§cUsage : /zone <set|delete|info>");
         }
         return true;
+    }
+
+    /**
+     * /zone info : résumé de la zone de jeu et de la zone de combat.
+     */
+    private void handleInfo(CommandSender sender) {
+        var zone = plugin.getZoneManager().getZone();
+        if (zone == null) {
+            MessageUtil.send(sender, "§7Aucune zone définie.");
+            return;
+        }
+        MessageUtil.send(sender, "§bZone de jeu §7: centre §f"
+                + (int) zone.getCenterX() + "§7, §f" + (int) zone.getCenterZ()
+                + " §7— taille §f" + zone.getSize() + " §7blocs.");
+        MessageUtil.send(sender, "§7Bases à §f" + plugin.getConfigManager().getBaseRadius()
+                + " §7blocs du centre.");
+        var combatZone = plugin.getCombatZoneManager();
+        if (combatZone.isActive()) {
+            MessageUtil.send(sender, "§cZone de combat §7: rayon §b"
+                    + (int) Math.ceil(combatZone.getCurrentRadius())
+                    + " §7blocs — rayon final §b" + (int) combatZone.getEndRadius()
+                    + " §7dans §f" + combatZone.getRemainingShrinkSeconds() + " s");
+        } else {
+            MessageUtil.send(sender, "§7Zone de combat : inactive (pendant le combat : "
+                    + plugin.getConfigManager().getCombatZoneEndRadius()
+                    + " blocs).");
+        }
     }
 
     /**
@@ -101,7 +136,7 @@ public class ZoneCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command,
                                       String alias, String[] args) {
         if (args.length == 1) {
-            return List.of("set", "delete").stream()
+            return List.of("set", "delete", "info").stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .toList();
         }
