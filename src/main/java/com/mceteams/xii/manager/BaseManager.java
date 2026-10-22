@@ -70,6 +70,16 @@ public class BaseManager {
     private static final int SAFE_SPAWN_RADIUS = 6;
     /** Profondeur max de comblement des trous sous une base. */
     private static final int GROUND_FILL_DEPTH = 6;
+    /**
+     * Profondeur max du remblai de la MARGE autour d'une base : au-delà,
+     * ce n'est plus un fossé mais une falaise (on ne comble pas).
+     */
+    private static final int GROUND_MARGIN_MAX_DEPTH = 12;
+    /**
+     * Délai (en ticks) avant le renvoi des chunks à jour aux clients :
+     * le moteur d'éclairage applique ses mises à jour de façon différée.
+     */
+    private static final long LIGHT_REFRESH_DELAY_TICKS = 40L;
     /** Nombre de vérifications différées (données tardives de pose). */
     private static final int LATE_REFRESH_ATTEMPTS = 30;
 
@@ -335,11 +345,20 @@ public class BaseManager {
         // terrain n'est pas plat et la base "flotte" par endroits.
         if (markers != null && markers.floorY() != null) {
             fillGroundHoles(slot.anchor, markers.floorY(), markers.voidSlots());
+            // Marge AUTOUR de la base (entrée + côtés) : sans elle,
+            // l'entrée donne sur un fossé et les côtés sont à côté du vide.
+            fillGroundMargin(slot.anchor, markers.floorY(),
+                    markers.voidSlots());
         }
 
         // Cristaux (coeur + 4 tours) : conversion des laines repères puis
         // enregistrement.
         tryScanCrystals(slot, 0);
+
+        // Refresh de l'ÉCLAIRAGE des chunks de la base (l'ombre de la
+        // base et le niveau de lumière intérieur doivent être recalculés
+        // par le serveur, puis renvoyés aux clients).
+        scheduleLightRefresh(slot.anchor);
 
         // Si l'attribution est déjà faite (lancement effectué), on
         // rattache les repères à l'équipe correspondante.
@@ -1011,6 +1030,177 @@ public class BaseManager {
         if (filled > 0) {
             plugin.getLogger().info("[Bases] Trous sous la base comblés : "
                     + filled + " bloc(s) de terre.");
+        }
+    }
+
+    /**
+     * REMBLAI DE LA MARGE autour de la base.
+     *
+     * RÈGLE UTILISATEUR : devant l'entrée et sur les côtés de la base, il
+     * faut des BLOCS : sinon l'entrée mène sur un fossé et les côtés de
+     * la base sont à côté du vide. On comble donc la MARGE (configurable)
+     * autour de l'empreinte 35x35, jusqu'au niveau du plancher de la base.
+     *
+     * Règles :
+     * - on ne remplit QUE ce qui manque (le terrain est plus bas que le
+     *   plancher de la base) et on n'écrase jamais un bloc déjà présent ;
+     * - les cellules "espace vide" du gabarit restent vides ;
+     * - un écart trop important (falaise) n'est pas comblé : ce n'est
+     *   pas un fossé ;
+     * - applyPhysics = true : le moteur d'éclairage du serveur doit
+     *   recalculer la lumière de la plateforme.
+     */
+    private void fillGroundMargin(Location anchor, int floorY,
+                                  List<Location> voidSlots) {
+        World world = anchor.getWorld();
+        if (world == null) {
+            return;
+        }
+        int margin = plugin.getConfigManager().getBasesGroundMargin();
+        if (margin <= 0) {
+            return;
+        }
+        int ax = anchor.getBlockX();
+        int az = anchor.getBlockZ();
+        // Index des cellules "espace vide" (lookup O(1)).
+        Set<Long> voidKeys = new HashSet<>();
+        if (voidSlots != null) {
+            for (Location location : voidSlots) {
+                if (location == null) {
+                    continue;
+                }
+                voidKeys.add(packBlockKey(location.getBlockX(),
+                        location.getBlockY(), location.getBlockZ()));
+            }
+        }
+        int filled = 0;
+        for (int x = ax - margin; x <= ax + GameBase.SIZE - 1 + margin; x++) {
+            for (int z = az - margin; z <= az + GameBase.SIZE - 1 + margin;
+                 z++) {
+                if (x >= ax && x <= ax + GameBase.SIZE - 1
+                        && z >= az && z <= az + GameBase.SIZE - 1) {
+                    continue; // intérieur : fillGroundHoles s'en charge
+                }
+                // 1. Niveau du terrain naturel autour de la base.
+                int groundY = groundLevelY(world, x, z, floorY);
+                if (groundY < 0 || groundY >= floorY) {
+                    continue; // déjà au niveau (ou plus haut) : rien à faire
+                }
+                if (floorY - groundY > GROUND_MARGIN_MAX_DEPTH) {
+                    continue; // falaise : ce n'est pas un fossé
+                }
+                Material groundType = world.getBlockAt(x, groundY, z).getType();
+                Material top = marginTopMaterial(groundType);
+                Material fill = top == Material.GRASS_BLOCK
+                        ? Material.DIRT : top;
+                // 2. Remplissage jusqu'au niveau du plancher de la base.
+                for (int y = groundY + 1; y <= floorY; y++) {
+                    if (voidKeys.contains(packBlockKey(x, y, z))) {
+                        break; // emplacement "espace vide" : colonne intacte
+                    }
+                    Block block = world.getBlockAt(x, y, z);
+                    if (!isFillableHole(block.getType())) {
+                        break; // un bloc plein arrête le remblai
+                    }
+                    block.setType(y == floorY ? top : fill, true);
+                    filled++;
+                }
+            }
+        }
+        if (filled > 0) {
+            plugin.getLogger().info("[Bases] Marge remblayée autour de la "
+                    + "base : " + filled + " bloc(s).");
+        }
+    }
+
+    /**
+     * Y du SOL NATUREL autour de la base (le bloc de terrain le plus haut
+     * en dessous du plancher), en ignorant les plantes et les arbres.
+     *
+     * @return le Y du sol, ou -1 si aucun sol n'est trouvé dans la
+     *         profondeur max.
+     */
+    private int groundLevelY(World world, int x, int z, int floorY) {
+        for (int y = floorY; y >= floorY - GROUND_MARGIN_MAX_DEPTH; y--) {
+            if (y < world.getMinHeight()) {
+                break;
+            }
+            Material type = world.getBlockAt(x, y, z).getType();
+            if (GROUND_MATERIALS.contains(type)) {
+                return y; // le vrai sol
+            }
+            if (!isFillableHole(type)) {
+                continue; // arbre, roche, buisson : on descend encore
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Matériau de la COUCHE DE SURFACE du remblai de marge (on suit le
+     * sol naturel : herbe sur la terre, sable sur le sable, etc.).
+     */
+    private static Material marginTopMaterial(Material groundType) {
+        return switch (groundType) {
+            case GRASS_BLOCK, DIRT, COARSE_DIRT, ROOTED_DIRT, PODZOL ->
+                    Material.GRASS_BLOCK;
+            default -> groundType;
+        };
+    }
+
+    /**
+     * RAFRAÎCHIT L'ÉCLAIRAGE des chunks couverts par une base.
+     *
+     * RÈGLE UTILISATEUR (éclairage) : après la pose d'une base (et de son
+     * remblai), les chunks concernés doivent être RENVOYÉS aux clients avec
+     * leur éclairage à jour. Sans ce "refresh", le serveur conserve un
+     * éclairage obsolète : l'ombre reste figée à l'ancien état du terrain
+     * et des zones sombres apparaissent là où il ne devrait pas y en avoir.
+     *
+     * Le moteur d'éclairage applique ses mises à jour de façon DIFFÉRÉE :
+     * on rafraîchit donc le chunk après un court délai.
+     */
+    private void scheduleLightRefresh(Location anchor) {
+        World world = anchor.getWorld();
+        if (world == null) {
+            return;
+        }
+        int margin = plugin.getConfigManager().getBasesGroundMargin();
+        int minX = anchor.getBlockX() - margin;
+        int maxX = anchor.getBlockX() + GameBase.SIZE - 1 + margin;
+        int minZ = anchor.getBlockZ() - margin;
+        int maxZ = anchor.getBlockZ() + GameBase.SIZE - 1 + margin;
+        int minChunkX = minX >> 4;
+        int maxChunkX = maxX >> 4;
+        int minChunkZ = minZ >> 4;
+        int maxChunkZ = maxZ >> 4;
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+                for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                    try {
+                        // refreshChunk attend des COORDONNÉES DE CHUNK.
+                        world.refreshChunk(cx, cz);
+                    } catch (Throwable ignored) {
+                        // chunk déchargé : sans conséquence
+                    }
+                }
+            }
+        }, LIGHT_REFRESH_DELAY_TICKS);
+    }
+
+    /**
+     * Rafraîchit l'éclairage de TOUTES les bases encore en place.
+     *
+     * Appelé au lancement de la partie, APRÈS la téléportation des
+     * joueurs : les chunks sont alors tickés, donc l'éclairage du serveur
+     * est réellement à jour quand il est renvoyé aux clients.
+     */
+    public void refreshBaseLighting() {
+        for (BaseSlot slot : slots) {
+            if (slot.anchor == null || slot.removed) {
+                continue;
+            }
+            scheduleLightRefresh(slot.anchor);
         }
     }
 

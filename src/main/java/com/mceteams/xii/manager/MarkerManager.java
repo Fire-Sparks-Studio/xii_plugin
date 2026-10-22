@@ -245,27 +245,25 @@ public class MarkerManager {
      * Recolore UNE bannière (la rotation, l'orientation et les motifs sont
      * conservés).
      *
+     * MC 1.21.5+ : la couleur de base d'une bannière EST le TYPE DU BLOC
+     * (BLUE_BANNER, RED_WALL_BANNER, ...) : l'API "état de bloc"
+     * ({@code Banner#setBaseColor}) n'agit plus que sur les bannières
+     * "fantômes" de bouclier (cf. javadoc Bukkit : "Only valid for shield
+     * pseudo banners, otherwise base depends on block type"). C'est donc
+     * le MATÉRIAU qu'il faut changer pour que la bannière change
+     * vraiment de couleur (les motifs, eux, sont conservés par le
+     * serveur).
+     *
      * @return true si la bannière a bien été recolorée.
      */
     private boolean recolorBanner(Block block, TeamColor color) {
-        // 1. API "état de bloc" : la bannière garde son orientation et ses
-        //    motifs, seule la couleur de base change.
-        try {
-            org.bukkit.block.BlockState state = block.getState();
-            if (state instanceof org.bukkit.block.Banner banner) {
-                banner.setBaseColor(dyeColor(color));
-                state.update(false, false);
-                return true;
-            }
-        } catch (Throwable throwable) {
-            plugin.getLogger().warning("[Repères] Bannière non recolorable "
-                    + "via l'état de bloc : " + throwable.getMessage());
-        }
-        // 2. Repli : reconstruction du BlockData (matériau + propriétés).
         Material target = bannerMaterial(block.getType(), color);
         if (target == null) {
             return false;
         }
+        // 1. Changement de MATÉRIAU (seule méthode qui change la couleur
+        //    affichée depuis la 1.21.5), en conservant les propriétés de
+        //    la bannière (rotation / orientation).
         try {
             BlockData data = block.getBlockData();
             String asString = data.getAsString();
@@ -273,13 +271,28 @@ public class MarkerManager {
             String properties = bracket >= 0 ? asString.substring(bracket) : "";
             String recoloredData = "minecraft:" + target.getKey().getKey()
                     + properties;
+            // applyPhysics = false : la bannière garde sa place exacte
+            // (une bannière sans support tombe si la physique est
+            // appliquée).
             block.setBlockData(Bukkit.createBlockData(recoloredData), false);
             return true;
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException | IllegalStateException ex) {
             plugin.getLogger().warning("[Repères] Bannière non "
                     + "recolorable en " + color + " : " + ex.getMessage());
-            return false;
         }
+        // 2. Repli : API "état de bloc" (versions antérieures à la 1.21.5).
+        try {
+            org.bukkit.block.BlockState state = block.getState();
+            if (state instanceof org.bukkit.block.Banner banner) {
+                banner.setBaseColor(dyeColor(color));
+                state.update(true, false);
+                return true;
+            }
+        } catch (Throwable throwable) {
+            plugin.getLogger().warning("[Repères] Bannière non recolorable "
+                    + "via l'état de bloc : " + throwable.getMessage());
+        }
+        return false;
     }
 
     /** Ce matériau est-il une bannière (debout ou mur) ? */

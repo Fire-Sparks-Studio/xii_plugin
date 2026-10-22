@@ -49,6 +49,12 @@ public class RawTemplatePlacer {
     private record TemplateBlock(int x, int y, int z, String dataString) {
     }
 
+    /** Bloc "critique pour la lumière" : posé en 2e passe, avec la
+     *  physique (pour que le moteur d'éclairage recalcule l'ombre). */
+    private record PendingBlock(TemplateBlock block, BlockData data,
+                                Location target) {
+    }
+
     /**
      * Place le template sur le thread principal (chunks chargés async au
      * préalable).
@@ -123,6 +129,44 @@ public class RawTemplatePlacer {
                                        boolean baseGrassFill) {
         List<Location> written = new ArrayList<>();
         int failed = 0;
+
+        // Les données des blocs du gabarit ne sont créées QU'UNE fois
+        // (le gabarit ne contient qu'une vingtaine de matériaux).
+        Map<String, BlockData> dataCache = new HashMap<>();
+        // Par colonne, le Y du bloc OPAQUE le plus haut (le "toit") :
+        // ce sont ces blocs qui bouchent la lumière du ciel.
+        Map<Long, Integer> topOpaqueY = new HashMap<>();
+        for (TemplateBlock block : blocks) {
+            if (isVoid(block.dataString())) {
+                continue; // structure_void : traité plus bas
+            }
+            BlockData data = dataCache.get(block.dataString());
+            if (data == null) {
+                try {
+                    data = Bukkit.createBlockData(block.dataString());
+                } catch (Throwable ignored) {
+                    continue; // l'erreur sera signalée à la pose
+                }
+                dataCache.put(block.dataString(), data);
+            }
+            if (!data.isOccluding()) {
+                continue; // ne bouche pas la lumière
+            }
+            int x = location.getX() + block.x();
+            int z = location.getZ() + block.z();
+            int y = location.getY() + block.y();
+            topOpaqueY.merge(columnKey(x, z), y, Math::max);
+        }
+
+        // RÈGLE UTILISATEUR (éclairage) : les blocs qui bouchent la
+        // lumière du ciel (le toit de la base) et les sources de lumière
+        // (torches, lanternes...) sont posés AVEC la physique, et EN
+        // DERNIER : c'est ce qui force le moteur d'éclairage du serveur
+        // à recalculer l'ombrage et à le redistribuer aux clients.
+        // Sans cela, l'éclairage n'est jamais rafraîchi et l'ombre
+        // reste figée à l'ancien état du terrain.
+        List<PendingBlock> lightCritical = new ArrayList<>();
+
         for (TemplateBlock block : blocks) {
             if (isVoid(block.dataString())) {
                 // structure_void : gabarit, jamais "posé" comme un bloc
@@ -152,8 +196,16 @@ public class RawTemplatePlacer {
                 if (target.getBlock().getType() == Material.BEACON) {
                     continue;
                 }
-                target.getBlock().setBlockData(
-                        Bukkit.createBlockData(block.dataString()), false);
+                BlockData data = dataCache.get(block.dataString());
+                if (data == null) {
+                    data = Bukkit.createBlockData(block.dataString());
+                    dataCache.put(block.dataString(), data);
+                }
+                if (isLightCritical(block, data, location, topOpaqueY)) {
+                    lightCritical.add(new PendingBlock(block, data, target));
+                    continue; // posé plus bas, avec la physique
+                }
+                target.getBlock().setBlockData(data, false);
                 // RÈGLE UTILISATEUR : les REPÈRES "espace vide" (bloc
                 // alternatif au structure_void) sont posés (MarkerManager
                 // les convertira en AIR) mais NE sont PAS enregistrés
@@ -170,10 +222,54 @@ public class RawTemplatePlacer {
                 }
             }
         }
+
+        // 2e passe : les blocs "critiques pour la lumière" (avec physique).
+        for (PendingBlock pending : lightCritical) {
+            try {
+                pending.target().getBlock().setBlockData(pending.data(), true);
+                if (!baseGrassFill
+                        || !isVoidMarker(pending.block().dataString())) {
+                    written.add(pending.target());
+                }
+            } catch (Throwable throwable) {
+                failed++;
+                if (failed <= 5) {
+                    plugin.getLogger().warning("[Structures] Bloc ignoré ("
+                            + pending.block().dataString() + ") : "
+                            + throwable);
+                }
+            }
+        }
+
         plugin.getLogger().info("[Structures] Pose manuelle : " + written.size()
                 + " bloc(s)" + (failed > 0 ? ", " + failed + " ignoré(s)" : "")
                 + ".");
         return written;
+    }
+
+    /**
+     * Ce bloc doit-il être posé AVEC la physique (donc recalculer
+     * l'éclairage du serveur) ?
+     *
+     * - les SOURCES de lumière (torche, lanterne, feu de camp...) : sans
+     *   elles, le bloc n'éclaire rien ;
+     * - le bloc OPAQUE le plus haut de sa colonne (le toit) : c'est lui
+     *   qui projette l'ombre de la base.
+     */
+    private boolean isLightCritical(TemplateBlock block, BlockData data,
+                                    StructureLocation location,
+                                    Map<Long, Integer> topOpaqueY) {
+        if (data.getLightEmission() > 0) {
+            return true;
+        }
+        if (!data.isOccluding()) {
+            return false;
+        }
+        int x = location.getX() + block.x();
+        int z = location.getZ() + block.z();
+        int y = location.getY() + block.y();
+        Integer top = topOpaqueY.get(columnKey(x, z));
+        return top != null && y >= top;
     }
 
     /**

@@ -26,7 +26,7 @@ public class ConfigManager {
      * les nouvelles valeurs de gameplay ne seraient jamais appliquées
      * (saveDefaultConfig n'écrase jamais un fichier existant).
      */
-    private static final int CONFIG_VERSION = 11;
+    private static final int CONFIG_VERSION = 12;
 
     // -----------------------------------------------------------------
     // UPGRADES (items consommables)
@@ -251,6 +251,17 @@ public class ConfigManager {
     }
 
     /**
+     * Largeur (en blocs) de la MARGE remblayée autour de la base.
+     *
+     * RÈGLE UTILISATEUR : devant l'entrée et sur les côtés de la base, il
+     * faut des blocs, sinon l'entrée mène sur un fossé et les côtés de la
+     * base sont à côté du vide. 0 = aucun remblai de marge.
+     */
+    public int getBasesGroundMargin() {
+        return Math.max(0, config.getInt("bases.ground-margin", 4));
+    }
+
+    /**
      * Blocs "ESPACE VIDE" du gabarit de base : ils marquent les parties du
      * template qui doivent rester VIDES de BLOCS NATURELS.
      *
@@ -409,8 +420,8 @@ public class ConfigManager {
     }
 
     /**
-     * Signal visuel d'un colis posé : colonne de fumée de feu de camp
-     * (permis de repérer le colis de loin).
+     * Signal visuel d'un colis posé : colonne de fumée BLANCHE type
+     * "flare" (fusée de signalisation), visible de loin.
      */
     public boolean isPackageSmokeEnabled() {
         return config.getBoolean("packages.smoke.enabled", true);
@@ -426,9 +437,9 @@ public class ConfigManager {
         return Math.max(1, config.getInt("packages.smoke.period-ticks", 4));
     }
 
-    /** Un vrai feu de camp est-il posé sur le colis (visible de loin) ? */
-    public boolean isPackageSmokeCampfire() {
-        return config.getBoolean("packages.smoke.campfire", true);
+    /** Flamme orange à la base de la colonne (effet "flare") ? */
+    public boolean isPackageSmokeFlare() {
+        return config.getBoolean("packages.smoke.flare", true);
     }
 
     // -----------------------------------------------------------------

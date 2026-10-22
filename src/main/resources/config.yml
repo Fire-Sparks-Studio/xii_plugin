@@ -6,7 +6,7 @@
 
 # Version du schéma : si le fichier installé est plus ancien, il est
 # automatiquement remplacé (l'ancien est sauvegardé en .bak).
-config-version: 11
+config-version: 12
 
 # -----------------------------------------------------------------
 # Items d'UPGRADE et TOTEM (consommés par clic droit)
@@ -78,6 +78,12 @@ bases:
   # À ajuster selon la structure .nbt fournie par le développeur.
   core-offset-y: 3
   spawn-offset: 4
+  # Largeur (en blocs) de la MARGE remblayée autour de la base.
+  # Devant l'entrée et sur les côtés de la base, le terrain est mis au
+  # niveau du plancher de la base : sinon l'entrée mène sur un fossé et
+  # les côtés de la base sont à côté du vide.
+  # 0 = aucun remblai de marge (le sol reste tel quel).
+  ground-margin: 4
   # Blocs "ESPACE VIDE" du gabarit de base : ils marquent les parties du
   # template qui doivent rester VIDES de BLOCS NATURELS (le plugin les
   # convertit en AIR : ni terrain, ni arbre, ni butte à l'intérieur).
@@ -154,14 +160,14 @@ packages:
   min-interval-seconds: 60   # intervalle minimal entre deux colis
   max-interval-seconds: 180  # intervalle maximal
   upgrade-factor: 2.0        # facteur appliqué pendant PACKAGE_UPGRADE
-  # Signal visuel d'un colis posé (colonne de fumée de feu de camp) :
-  # permet de repérer le colis de loin.
+  # Signal visuel d'un colis posé : colonne de fumée BLANCHE type "flare"
+  # (fusée de signalisation), visible de loin. AUCUN bloc n'est posé sur
+  # le colis (pas de feu de camp).
   smoke:
     enabled: true            # active la colonne de fumée
     height: 30               # hauteur de la colonne (blocs)
     period-ticks: 4          # période d'émission des particules
-    campfire: true           # pose un vrai feu de camp sur le coffre
-                             # (sa fumée vanilla est visible de très loin)
+    flare: true              # flamme orange à la base (effet "flare")
 
 # -----------------------------------------------------------------
 # Météorites - spécifications §22, §25
