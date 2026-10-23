@@ -160,14 +160,13 @@ packages:
   min-interval-seconds: 60   # intervalle minimal entre deux colis
   max-interval-seconds: 180  # intervalle maximal
   upgrade-factor: 2.0        # facteur appliqué pendant PACKAGE_UPGRADE
-  # Signal visuel d'un colis posé : colonne de fumée BLANCHE type "flare"
-  # (fusée de signalisation), visible de loin. AUCUN bloc n'est posé sur
-  # le colis (pas de feu de camp).
+  # Signal visuel d'un colis posé (colonne de fumée type "flare") :
+  # permet de repérer le colis de loin. AUCUN bloc n'est posé sur le colis.
   smoke:
     enabled: true            # active la colonne de fumée
     height: 30               # hauteur de la colonne (blocs)
     period-ticks: 4          # période d'émission des particules
-    flare: true              # flamme orange à la base (effet "flare")
+    flare: true              # flamme ardente à la base (fusée de détresse)
 
 # -----------------------------------------------------------------
 # Météorites - spécifications §22, §25

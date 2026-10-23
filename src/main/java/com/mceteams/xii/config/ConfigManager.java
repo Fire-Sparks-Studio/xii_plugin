@@ -420,8 +420,8 @@ public class ConfigManager {
     }
 
     /**
-     * Signal visuel d'un colis posé : colonne de fumée BLANCHE type
-     * "flare" (fusée de signalisation), visible de loin.
+     * Signal visuel d'un colis posé : colonne de fumée type "flare"
+     * (permet de repérer le colis de loin).
      */
     public boolean isPackageSmokeEnabled() {
         return config.getBoolean("packages.smoke.enabled", true);
@@ -437,7 +437,7 @@ public class ConfigManager {
         return Math.max(1, config.getInt("packages.smoke.period-ticks", 4));
     }
 
-    /** Flamme orange à la base de la colonne (effet "flare") ? */
+    /** Flamme ardente à la base de la colonne (aspect "fusée de détresse") ? */
     public boolean isPackageSmokeFlare() {
         return config.getBoolean("packages.smoke.flare", true);
     }

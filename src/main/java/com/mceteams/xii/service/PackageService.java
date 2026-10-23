@@ -121,8 +121,8 @@ public class PackageService {
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
-     * Panaches de FUMÉE par colis posé : signal visuel type "flare" qui
-     * permet de repérer le colis de loin (aucun bloc posé).
+     * Colonnes de FUMÉE (flare) par colis posé : signal visuel qui
+     * permet de repérer le colis de loin.
      */
     private final java.util.Map<UUID, org.bukkit.scheduler.BukkitRunnable> smokeBeacons =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -131,8 +131,8 @@ public class PackageService {
      * Lance un coffre en chute avec PARACHUTE depuis le ciel vers la
      * surface sèche résolue :
      * - FallingBlock CHEST taggué, descente freinée (~0.18/tick) ;
-     * - BlockDisplay de laine blanche : canopée horizontale + jupe +
-     *   cordes = parachute (cf. spawnParachute) ;
+     * - ArmorStand INVISIBLE coiffé d'une BANNIÈRE blanche = parachute
+     *   (un stand invisible rend toujours son équipement) ;
      * - à l'atterrissage (WorldListener -> handlePackageLanded) :
      *   remplissage du loot + enregistrement, sans annonce.
      *
@@ -234,20 +234,20 @@ public class PackageService {
      * Crée le PARACHUTE au-dessus d'un point (centre du coffre en chute) :
      * <ul>
      *   <li>canopée : un plateau BLANC À PLAT (1.8 x 1.8) au-dessus du
-     *       coffre, entouré de 4 pans verticaux (la "jupe") : la forme de
-     *       parachute reste lisible de tous les angles ;</li>
+     *       coffre, bordé de 4 pans verticaux (la "jupe") : le parachute
+     *       reste lisible de tous les angles ;</li>
      *   <li>cordes : 4 fines colonnes de laine blanche reliant les coins de
      *       la canopée au coffre.</li>
      * </ul>
      *
-     * IMPORTANT : l'échelle d'un BlockDisplay s'applique aux axes du MONDE
-     * (X = est, Y = haut, Z = sud). Une canopée À PLAT impose donc une
-     * échelle fine en Y : (large, mince, large). Avec une échelle fine en
-     * Z, la canopée était DRESSÉE "sur le côté" (le parachute paraissait
-     * bancal, couché sur le flanc).
-     *
      * Les BlockDisplay n'ont AUCUNE hitbox (le clic sur le coffre reste
      * possible) et sont rendus par le client (garantit la visibilité).
+     *
+     * NB : l'échelle d'un BlockDisplay s'applique aux axes du MONDE
+     * (X = est, Y = haut, Z = sud). Une canopée À PLAT impose donc une
+     * échelle MINCE EN Y : (large, mince, large). Avec une échelle mince
+     * en Z, la canopée était DRESSÉE "sur le côté" : le parachute
+     * paraissait bancal.
      *
      * @return chaque entité avec son décalage relatif au coffre (pour la
      *         suivi pendant la descente).
@@ -256,8 +256,8 @@ public class PackageService {
         java.util.Map<Entity, Vector> parts = new java.util.HashMap<>();
         World world = center.getWorld();
 
-        // CANOPEE : plateau horizontal (1.8 x 1.8) à 2 blocs au-dessus du
-        // coffre (échelle : large en X/Z, très fine en Y).
+        // CANOPÉE : plateau horizontal (1.8 x 1.8) à 2 blocs au-dessus
+        // du coffre.
         final double canopyY = 2.0;
         BlockDisplay canopy = world.spawn(
                 center.clone().add(0, canopyY, 0),
@@ -273,12 +273,12 @@ public class PackageService {
         parts.put(canopy, new Vector(0, canopyY, 0));
 
         // JUPE : 4 pans verticaux sur les bords de la canopée (le
-        // parachute reste lisible vu de côté).
+        // parachute reste visible vu du côté, pas seulement du dessus).
         for (int i = 0; i < 4; i++) {
-            boolean alongX = i < 2;              // pan orienté est-ouest ?
-            double side = (i % 2 == 0) ? 0.85 : -0.85;
-            double dx = alongX ? 0.0 : side;
-            double dz = alongX ? side : 0.0;
+            boolean alongX = i < 2;
+            double sign = (i % 2 == 0) ? 0.85 : -0.85;
+            double dx = alongX ? 0.0 : sign;
+            double dz = alongX ? sign : 0.0;
             Vector3f scale = alongX
                     ? new Vector3f(1.8f, 0.45f, 0.08f)
                     : new Vector3f(0.08f, 0.45f, 1.8f);
@@ -371,30 +371,24 @@ public class PackageService {
     }
 
     // -----------------------------------------------------------------
-    // SIGNAL VISUEL : panache de fumée type "flare" au-dessus du colis
+    // SIGNAL VISUEL : colonne de fumée "FLARE" au-dessus du colis
     // -----------------------------------------------------------------
 
-    /** Nombre de bouffées simultanées qui composent le panache. */
-    private static final int SMOKE_PUFFS = 16;
-    /** Vitesse de montée d'une bouffée, par émission (blocs). */
-    private static final double SMOKE_RISE = 1.2;
-    /** Évasement du panache au sommet (blocs). */
-    private static final double SMOKE_TOP_SPREAD = 0.55;
-
     /**
-     * Démarre le panache de fumée qui signale le colis au sol, comme une
-     * FUSÉE DE SIGNALISATION ("flare") :
+     * Démarre la COLONNE DE FUMÉE qui signale le colis au sol, comme une
+     * FUSÉE DE SIGNALISATION (flare) :
      * <ul>
-     *   <li>une flamme orange à la base (packages.smoke.flare) ;</li>
-     *   <li>une colonne de fumée BLANCHE (CAMPFIRE_SIGNAL_SMOKE) dense qui
-     *       monte en continu sur toute la hauteur configurée
-     *       (packages.smoke.height, 30 blocs par défaut) et s'évase vers
-     *       le haut.</li>
+     *   <li>une base ARDENTE (particules FLAME) au sommet du coffre, bien
+     *       visible la nuit ;</li>
+     *   <li>un panache de fumée BLANCHE (CAMPFIRE_SIGNAL_SMOKE) qui monte
+     *       en continu sur toute la hauteur configurée
+     *       (packages.smoke.height, 30 blocs par défaut) et s'évase avec
+     *       l'altitude.</li>
      * </ul>
      *
-     * AUCUN bloc n'est posé sur le colis : le signal est 100 % particules.
-     * Les particules sont émises avec le drapeau "force" pour être
-     * envoyées aux joueurs même au-delà de la portée habituelle.
+     * AUCUN bloc n'est posé sur le colis (pas de feu de camp) : tout le
+     * signal est en particules, et elles sont émises SANS limite de
+     * distance (force = true) pour être repérables de loin.
      *
      * La colonne s'arrête dès que le colis est récupéré (ou en fin de partie).
      */
@@ -408,8 +402,9 @@ public class PackageService {
             return;
         }
 
-        // Base de la colonne : le dessus du coffre.
-        Location base = pack.getLocation().clone().add(0.5, 1.05, 0.5);
+        // Base de la colonne : le dessus du coffre (un peu au-dessus pour
+        // que les particules ne sortent pas du bloc).
+        Location base = pack.getLocation().clone().add(0.5, 1.15, 0.5);
         int height = config.getPackageSmokeHeight();
         int period = config.getPackageSmokePeriodTicks();
         boolean flare = config.isPackageSmokeFlare();
@@ -418,7 +413,7 @@ public class PackageService {
         org.bukkit.scheduler.BukkitRunnable beacon =
                 new org.bukkit.scheduler.BukkitRunnable() {
             /** Hauteur (relative) des bouffées de fumée en vol. */
-            final double[] puffs = new double[SMOKE_PUFFS];
+            final double[] puffs = new double[16];
 
             @Override
             public void run() {
@@ -429,26 +424,28 @@ public class PackageService {
                     return;
                 }
 
-                // Base : la flamme du "flare" (bien visible de nuit).
+                // Base : la flamme du "flare" + le départ du panache.
                 if (flare) {
-                    spawnForced(world, Particle.FLAME, base, 4,
-                            0.12, 0.02, 0.12, 0.01);
+                    spawnForced(world, Particle.FLAME, base, 6,
+                            0.16, 0.06, 0.16, 0.02);
                 }
+                spawnForced(world, Particle.CAMPFIRE_SIGNAL_SMOKE, base, 4,
+                        0.20, 0.02, 0.20, 0.02);
 
-                // Panache : des bouffées qui MONTENT en continu et
-                // repartent du bas -> une colonne de fumée ininterrompue.
+                // Panache : des bouffées qui MONTENT en continu (et
+                // repartent du bas en boucle) -> une colonne de fumée
+                // dense et continue, visible de loin.
                 double top = Math.max(4.0, height - 1.0);
                 for (int i = 0; i < puffs.length; i++) {
-                    puffs[i] += SMOKE_RISE;
+                    puffs[i] += 1.2;
                     if (puffs[i] > top) {
-                        puffs[i] = 0.0;
+                        puffs[i] = 0;
                     }
-                    // Évasement croissant avec la hauteur.
-                    double spread = 0.18
-                            + SMOKE_TOP_SPREAD * (puffs[i] / top);
+                    // Le panache s'évase avec l'altitude.
+                    double spread = 0.20 + 0.35 * (puffs[i] / top);
                     spawnForced(world, Particle.CAMPFIRE_SIGNAL_SMOKE,
                             base.clone().add(0, puffs[i], 0), 1,
-                            spread, 0.02, spread, 0.01);
+                            spread, 0.05, spread, 0.01);
                 }
             }
         };
@@ -457,19 +454,22 @@ public class PackageService {
     }
 
     /**
-     * Émet des particules en forçant l'envoi à TOUS les joueurs (même
-     * au-delà de la portée habituelle de 32 blocs) : c'est ce qui rend le
-     * panache repérable de loin, comme une fusée de signalisation.
+     * Émet une particule SANS limite de distance (force = true) : les
+     * particules classiques ne sont envoyées qu'aux joueurs à ~32 blocs,
+     * ce qui rendait la fumée invisible de loin.
      */
     private static void spawnForced(World world, Particle particle,
-            Location at, int count, double ox, double oy, double oz,
-            double extra) {
+                                    Location location, int count,
+                                    double ox, double oy, double oz,
+                                    double extra) {
         try {
-            world.spawnParticle(particle, at, count, ox, oy, oz, extra,
-                    null, true);
-        } catch (RuntimeException ex) {
-            // Repli : envoi classique (portée limitée).
-            world.spawnParticle(particle, at, count, ox, oy, oz, extra);
+            world.spawnParticle(particle, location, count,
+                    ox, oy, oz, extra, null, true);
+        } catch (Throwable ignored) {
+            // Repli : envoi classique (les particules ne dépassent alors
+            // plus ~32 blocs) si la variante "force" n'est pas acceptée.
+            world.spawnParticle(particle, location, count,
+                    ox, oy, oz, extra);
         }
     }
 

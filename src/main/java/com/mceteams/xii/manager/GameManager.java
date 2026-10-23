@@ -431,6 +431,11 @@ public class GameManager {
             plugin.getClassService().applyPassives(player, data, true);
         }
 
+        // ÉCLAIRAGE : les chunks des bases sont renvoyés aux clients une
+        // fois les joueurs téléportés (chunks tickés) -> plus d'ombre
+        // figée là où le terrain a été remblayé.
+        plugin.getBaseManager().refreshBaseLighting();
+
         // Tout le monde est en jeu : le GROWL DE DRAGON retentit ICI
         // (après téléportation, donc depuis les bases et pas le lobby).
         com.mceteams.xii.util.SoundUtil.broadcast(
