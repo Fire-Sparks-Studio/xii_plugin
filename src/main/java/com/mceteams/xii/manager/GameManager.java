@@ -87,12 +87,7 @@ public class GameManager {
         applyGameRules();
 
         MessageUtil.broadcast("§a✔ Génération de la zone de jeu...");
-        // Aplatir uniquement autour de 0,0 sur rayon 200 avant de poser les bases
-        try {
-            if (plugin.getTerrainManager() != null) {
-                plugin.getTerrainManager().flattenCenter(zone);
-            }
-        } catch (Exception ignored) {}
+        // Génération déjà aplatie via datapack (flat) : pas de destruction de blocs
         // 6/7/8 : zone d'attente, bases, quatre donjons.
         plugin.getStructureManager().placeWaitingLobby(zone);
         plugin.getBaseManager().buildBases(zone);
@@ -161,12 +156,7 @@ public class GameManager {
                 boolean ok = WorldEditRegenUtil.regenerateZone(plugin, zoneBefore);
                 if (ok) {
                     MessageUtil.broadcast("§aRégénération terminée.");
-                    // Ré-appliquer le plateau plat autour de 0,0 si centre correspond
-                    try {
-                        if (plugin.getTerrainManager() != null) {
-                            plugin.getTerrainManager().flattenCenter(zoneBefore);
-                        }
-                    } catch (Exception ignored2) {}
+                    // Génération flat via datapack : pas de modification destructrice
                 } else {
                     MessageUtil.broadcast("§cÉchec de la régénération via WorldEdit.");
                 }

@@ -24,49 +24,7 @@ public class TerrainManager {
     }
 
     public void flattenCenter(GameZone zone) {
-        if (zone == null || zone.getWorld() == null) {
-            return;
-        }
-        if (!flattening.compareAndSet(false, true)) {
-            return;
-        }
-        World world = zone.getWorld();
-        int cx = zone.getCenterLocation() != null ? zone.getCenterLocation().getBlockX() : (int) Math.round(zone.getCenterX());
-        int cz = zone.getCenterLocation() != null ? zone.getCenterLocation().getBlockZ() : (int) Math.round(zone.getCenterZ());
-
-        int minChunkX = (cx - FLAT_RADIUS - 32) >> 4;
-        int maxChunkX = (cx + FLAT_RADIUS + 32) >> 4;
-        int minChunkZ = (cz - FLAT_RADIUS - 32) >> 4;
-        int maxChunkZ = (cz + FLAT_RADIUS + 32) >> 4;
-
-        Set<Long> chunks = new HashSet<>();
-        for (int ccx = minChunkX; ccx <= maxChunkX; ccx++) {
-            for (int ccz = minChunkZ; ccz <= maxChunkZ; ccz++) {
-                chunks.add(((long) ccx << 32) | (ccz & 0xffffffffL));
-            }
-        }
-
-        java.util.ArrayList<Long> list = new java.util.ArrayList<>(chunks);
-        java.util.Iterator<Long> it = list.iterator();
-        org.bukkit.scheduler.BukkitRunnable task = new org.bukkit.scheduler.BukkitRunnable() {
-            @Override
-            public void run() {
-                int done = 0;
-                while (it.hasNext() && done < BATCH_CHUNKS) {
-                    long key = it.next();
-                    int ccx = (int) (key >> 32);
-                    int ccz = (int) key;
-                    flattenChunk(world, ccx, ccz, cx, cz);
-                    done++;
-                }
-                if (!it.hasNext()) {
-                    flattening.set(false);
-                    cancel();
-                    plugin.getLogger().info("[Terrain] Aplatissement centre 0,0 terminé (rayon " + FLAT_RADIUS + ").");
-                }
-            }
-        };
-        task.runTaskTimer(plugin, 0L, BATCH_TICKS);
+        // Désactivé : le monde est déjà plat via le datapack flat. Éviter de détruire/remplir les blocs.
     }
 
     private void flattenChunk(World world, int chunkX, int chunkZ, int cx, int cz) {
