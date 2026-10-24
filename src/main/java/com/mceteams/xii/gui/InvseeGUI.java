@@ -39,34 +39,33 @@ public class InvseeGUI implements InventoryHolder {
         if (target == null) {
             return;
         }
-        inventory = Bukkit.createInventory(this, 99, "§cInvsee: " + target.getName());
+        inventory = Bukkit.createInventory(this, 54, "§cInvsee: " + target.getName());
         ItemStack glass = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
         org.bukkit.inventory.meta.ItemMeta gm = glass.getItemMeta();
         if (gm != null) {
             gm.displayName(net.kyori.adventure.text.Component.text(" "));
             glass.setItemMeta(gm);
         }
-        for (int i = 0; i < 99; i++) {
+        for (int i = 0; i < 54; i++) {
             inventory.setItem(i, glass.clone());
         }
-        // Ligne 2: colonnes 1-4 -> armure (slots 10,19,28,37)
+        // Armure: ligne 2 colonnes 1-4
         ItemStack[] armor = target.getInventory().getArmorContents();
         if (armor != null && armor.length >= 4) {
-            inventory.setItem(10, armor[3]); // casque
-            inventory.setItem(19, armor[2]); // plastron
-            inventory.setItem(28, armor[1]); // jambières
-            inventory.setItem(37, armor[0]); // bottes
+            inventory.setItem(9, armor[3]);
+            inventory.setItem(10, armor[2]);
+            inventory.setItem(11, armor[1]);
+            inventory.setItem(12, armor[0]);
         }
-        inventory.setItem(37 + 9, target.getInventory().getItemInOffHand()); // bouclier colonne 4 ligne 4 approx -> slot 46
-        inventory.setItem(46, target.getInventory().getItemInOffHand());
-        // Inventaire principal lignes 7-10 (slots 63-98)
+        // Bouclier colonne 4 ligne 4
+        inventory.setItem(30, target.getInventory().getItemInOffHand());
+        // Inventaire principal lignes 7-10? map to slots 36-44? better use 27-44 for inv + 45-53 hotbar
         ItemStack[] contents = target.getInventory().getStorageContents();
-        for (int i = 0; i < contents.length && i < 36; i++) {
-            inventory.setItem(63 + i, contents[i]);
+        for (int i = 0; i < contents.length && i < 27; i++) {
+            inventory.setItem(18 + i, contents[i]);
         }
-        // Hotbar ligne 11 (slots 90-98)
         for (int i = 0; i < 9; i++) {
-            inventory.setItem(90 + i, target.getInventory().getItem(i));
+            inventory.setItem(45 + i, target.getInventory().getItem(i));
         }
         admin.openInventory(inventory);
     }
@@ -81,20 +80,20 @@ public class InvseeGUI implements InventoryHolder {
             return;
         }
         ItemStack[] armor = new ItemStack[4];
-        armor[3] = inventory.getItem(10);
-        armor[2] = inventory.getItem(19);
-        armor[1] = inventory.getItem(28);
-        armor[0] = inventory.getItem(37);
+        armor[3] = inventory.getItem(9);
+        armor[2] = inventory.getItem(10);
+        armor[1] = inventory.getItem(11);
+        armor[0] = inventory.getItem(12);
         target.getInventory().setArmorContents(armor);
-        target.getInventory().setItemInOffHand(inventory.getItem(46));
+        target.getInventory().setItemInOffHand(inventory.getItem(30));
         ItemStack[] contents = new ItemStack[36];
-        for (int i = 0; i < 36; i++) {
-            contents[i] = inventory.getItem(63 + i);
+        for (int i = 0; i < 27; i++) {
+            contents[i] = inventory.getItem(18 + i);
+        }
+        for (int i = 0; i < 9; i++) {
+            contents[27 + i] = inventory.getItem(45 + i);
         }
         target.getInventory().setStorageContents(contents);
-        for (int i = 0; i < 9; i++) {
-            target.getInventory().setItem(i, inventory.getItem(90 + i));
-        }
         target.updateInventory();
     }
 

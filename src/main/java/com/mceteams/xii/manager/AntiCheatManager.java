@@ -49,15 +49,16 @@ public class AntiCheatManager {
                 if (!p.equals(player)) {
                     p.hidePlayer(plugin, player);
                     try {
-                        net.kyori.adventure.text.Component leaveMsg = net.kyori.adventure.text.Component.text("§e" + player.getName() + " left the game");
-                        p.sendMessage(leaveMsg);
+                        p.sendMessage("§e" + player.getName() + " left the game");
                     } catch (Exception ignored) {
                         p.sendMessage("§e" + player.getName() + " left the game");
                     }
                 }
             }
-            player.setAllowFlight(true);
-            player.setFlying(true);
+            if (player.getGameMode() != org.bukkit.GameMode.CREATIVE && player.getGameMode() != org.bukkit.GameMode.SPECTATOR) {
+                player.setAllowFlight(true);
+                player.setFlying(true);
+            }
             try {
                 player.playerListName(net.kyori.adventure.text.Component.text("§o[VANISH] " + player.getName()));
             } catch (Exception ignored) {
@@ -103,6 +104,10 @@ public class AntiCheatManager {
     public void onLeftClick(Player player) {
         ClickData cd = clicks.computeIfAbsent(player.getUniqueId(), k -> new ClickData());
         long now = System.currentTimeMillis();
+        if (cd.lastAdded != 0 && now - cd.lastAdded < 80) {
+            cleanupClickTimes(cd, now);
+            return;
+        }
         cd.lastAdded = now;
         cd.clickTimes.addLast(now);
         cleanupClickTimes(cd, now);

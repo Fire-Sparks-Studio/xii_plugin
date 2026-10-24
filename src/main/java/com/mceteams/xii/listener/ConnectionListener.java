@@ -36,6 +36,23 @@ public class ConnectionListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         GameState state = plugin.getGameManager().getState();
+        try {
+            if (plugin.getAntiCheatManager() != null) {
+                for (Player online : org.bukkit.Bukkit.getOnlinePlayers()) {
+                    if (online.equals(player)) continue;
+                    if (plugin.getAntiCheatManager().isVanished(online)) {
+                        player.hidePlayer(plugin, online);
+                    }
+                }
+                if (plugin.getAntiCheatManager().isVanished(player)) {
+                    try {
+                        player.playerListName(net.kyori.adventure.text.Component.text("§o[VANISH] " + player.getName()));
+                    } catch (Exception ignored) {
+                        player.setPlayerListName("§o[VANISH] " + player.getName());
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
 
         // Envoi du resource pack si configuré.
         String packUrl = plugin.getConfigManager().getResourcePackUrl();
