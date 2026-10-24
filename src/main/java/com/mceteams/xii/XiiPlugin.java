@@ -3,6 +3,7 @@ package com.mceteams.xii;
 import com.mceteams.xii.command.PartyCommand;
 import com.mceteams.xii.command.TeamCommand;
 import com.mceteams.xii.command.ZoneCommand;
+import com.mceteams.xii.listener.AntiCheatListener;
 import com.mceteams.xii.config.ConfigManager;
 import com.mceteams.xii.config.DataManager;
 import com.mceteams.xii.config.FileManager;
@@ -86,6 +87,8 @@ public class XiiPlugin extends JavaPlugin {
     private MarkerManager markerManager;
     private NpcManager npcManager;
     private CombatZoneManager combatZoneManager;
+    private TerrainManager terrainManager;
+    private AntiCheatManager antiCheatManager;
 
     // --- Système de loot -----------------------------------------------
     private LootManager lootManager;
@@ -191,6 +194,8 @@ public class XiiPlugin extends JavaPlugin {
         this.npcManager = new NpcManager();
         this.markerManager = new MarkerManager(this);
         this.combatZoneManager = new CombatZoneManager(this);
+        this.terrainManager = new TerrainManager(this);
+        this.antiCheatManager = new AntiCheatManager(this);
         getLogger().info("│  └─ Terminé");
 
         // 8) Contrôleur système + orchestrateur global.
@@ -256,6 +261,7 @@ public class XiiPlugin extends JavaPlugin {
         var pm = getServer().getPluginManager();
         pm.registerEvents(new ConnectionListener(this), this);
         pm.registerEvents(new ProtectionListener(this), this);
+        pm.registerEvents(new AntiCheatListener(this), this);
         pm.registerEvents(new InventoryListener(this), this);
         pm.registerEvents(new InteractionListener(this), this);
         pm.registerEvents(new TeamListener(this), this);
@@ -341,6 +347,8 @@ public class XiiPlugin extends JavaPlugin {
     public MarkerManager getMarkerManager() { return markerManager; }
     public NpcManager getNpcManager() { return npcManager; }
     public CombatZoneManager getCombatZoneManager() { return combatZoneManager; }
+    public TerrainManager getTerrainManager() { return terrainManager; }
+    public AntiCheatManager getAntiCheatManager() { return antiCheatManager; }
 
     public PointService getPointService() { return pointService; }
     public CombatService getCombatService() { return combatService; }

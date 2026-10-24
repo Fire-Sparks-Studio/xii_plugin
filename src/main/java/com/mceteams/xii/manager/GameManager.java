@@ -87,6 +87,12 @@ public class GameManager {
         applyGameRules();
 
         MessageUtil.broadcast("§a✔ Génération de la zone de jeu...");
+        // Aplatir uniquement autour de 0,0 sur rayon 200 avant de poser les bases
+        try {
+            if (plugin.getTerrainManager() != null) {
+                plugin.getTerrainManager().flattenCenter(zone);
+            }
+        } catch (Exception ignored) {}
         // 6/7/8 : zone d'attente, bases, quatre donjons.
         plugin.getStructureManager().placeWaitingLobby(zone);
         plugin.getBaseManager().buildBases(zone);
@@ -129,6 +135,7 @@ public class GameManager {
         plugin.getLobbyItemManager().clearAllOnline();
         plugin.getBaseManager().clearAll();
         plugin.getDungeonManager().clearAll();
+        var zoneBefore = plugin.getZoneManager().getZone();
         // Retire les blocs des structures posées (lobby, bases, donjons).
         plugin.getStructureManager().removeAllPlacedBlocks();
         plugin.getStructureManager().clearHistory();
@@ -137,6 +144,24 @@ public class GameManager {
         plugin.getLootManager().resetForNewGame(); // garantie Totem remise à zéro
         plugin.getPhaseManager().reset();
         resetAllPlayerData();
+        // Regen via WorldEdit si disponible (comme //regen)
+        try {
+            if (zoneBefore != null && Bukkit.getPluginManager().getPlugin("WorldEdit") != null) {
+                MessageUtil.broadcast("§eRégénération de la zone supprimée...");
+                boolean ok = WorldEditRegenUtil.regenerateZone(plugin, zoneBefore);
+                if (ok) {
+                    MessageUtil.broadcast("§aRégénération terminée.");
+                    // Ré-appliquer le plateau plat autour de 0,0 si centre correspond
+                    try {
+                        if (plugin.getTerrainManager() != null) {
+                            plugin.getTerrainManager().flattenCenter(zoneBefore);
+                        }
+                    } catch (Exception ignored2) {}
+                } else {
+                    MessageUtil.broadcast("§cÉchec de la régénération via WorldEdit.");
+                }
+            }
+        } catch (Throwable ignored) {}
 
         // Reset tab : noms des joueurs + header/footer nettoyés.
         plugin.getTabManager().resetAll();
