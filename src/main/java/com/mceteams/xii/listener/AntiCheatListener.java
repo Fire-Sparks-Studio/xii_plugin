@@ -87,7 +87,8 @@ public class AntiCheatListener implements Listener {
         String[] tokens = lower.split("[^a-z]+");
         for (String t : tokens) {
             if (t.isEmpty()) continue;
-            if (t.equals("ez") || t.equals("ezz") || t.equals("ezzz") || t.equals("gg") || t.equals("ggwp")) {
+            // Seul "ez" (et ses variantes) est bloqué ; "gg"/"ggwp" sont autorisés.
+            if (t.equals("ez") || t.equals("ezz") || t.equals("ezzz") || t.equals("ezzzz")) {
                 bad = true;
                 break;
             }

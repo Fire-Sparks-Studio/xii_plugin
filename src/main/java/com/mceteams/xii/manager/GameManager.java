@@ -112,6 +112,16 @@ public class GameManager {
                     + ", " + worldSpawn.getBlockZ() + ").");
         }
 
+        // WorldBorder : la zone de jeu est délimitée par la worldborder
+        // vanilla (empêche aussi l'exploration de chunks hors zone).
+        if (zone.getWorld() != null) {
+            org.bukkit.WorldBorder wb = zone.getWorld().getWorldBorder();
+            wb.setCenter(zone.getCenterX(), zone.getCenterZ());
+            wb.setSize(zone.getSize());
+            wb.setDamageAmount(0.0);
+            wb.setWarningDistance(0);
+        }
+
         // 9/11 : passage en WAITING + restrictions + téléportations.
         enterWaiting(false);
         MessageUtil.broadcast(MessageUtil.SEPARATOR);
@@ -186,6 +196,12 @@ public class GameManager {
             world.setGameRule(org.bukkit.GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, 2);
             world.setGameRule(org.bukkit.GameRules.SPAWN_MOBS, true);
             world.setGameRule(org.bukkit.GameRules.LOCATOR_BAR, true);
+            // Reset de la worldborder.
+            org.bukkit.WorldBorder wb = world.getWorldBorder();
+            wb.setCenter(0, 0);
+            wb.setSize(59999968.0);
+            wb.setDamageAmount(0.2);
+            wb.setWarningDistance(5);
         }
 
         state = GameState.NONE;

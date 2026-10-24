@@ -154,7 +154,7 @@ public class SystemController {
                 true,           // combat (PvP global)
                 true,           // death
                 true,           // exploration
-                false,          // packages : mécanique de préparation uniquement
+                true,           // packages : ouverture toujours possible (pas de spawn en combat)
                 true,           // core destructible en combat
                 meteorsActive,
                 false,          // classSelection

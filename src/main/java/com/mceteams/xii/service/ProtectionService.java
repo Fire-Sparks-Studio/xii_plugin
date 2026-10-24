@@ -160,9 +160,15 @@ public class ProtectionService {
             return false;
         }
 
-        // 3. Bloc posé par l'équipe : cassable par l'équipe seule.
+        // 3. Bloc posé par l'équipe : cassable par l'équipe seule en
+        //    préparation ; en COMBAT, tout le monde peut casser les blocs
+        //    posés (les bases sont ouvertes au combat).
         if (base.isOwnedBlock(block.getLocation())) {
-            return owner;
+            if (owner) {
+                return true;
+            }
+            return plugin.getPhaseManager().getPhase()
+                    == com.mceteams.xii.enums.GamePhase.COMBAT;
         }
 
         // 4. Tout autre bloc de la base (TERRAIN NATUREL : minerais, pierre,

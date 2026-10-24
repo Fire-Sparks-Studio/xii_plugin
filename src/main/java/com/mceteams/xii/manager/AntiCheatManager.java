@@ -101,6 +101,16 @@ public class AntiCheatManager {
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.5f);
                 cd.lastWarn = now;
                 cd.warnings++;
+                String msg = "§c[AntiCheat] §e" + player.getName() + " §7autoclicker suspect (" + cd.clicksLastSecond + " cps). ";
+                for (Player op : Bukkit.getOnlinePlayers()) {
+                    if (op.isOp() || op.hasPermission("xii.admin")) {
+                        net.kyori.adventure.text.Component comp = net.kyori.adventure.text.Component.text(msg)
+                                .append(net.kyori.adventure.text.Component.text("§b[TP]")
+                                        .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/tp " + op.getName() + " " + player.getName()))
+                                        .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(net.kyori.adventure.text.Component.text("Se téléporter sur " + player.getName()))));
+                        op.sendMessage(comp);
+                    }
+                }
             }
             // cancel effect by not doing anything special; actual limiting done via event cancel logic
         } else if (cd.clicksLastSecond > 10) {
@@ -141,8 +151,16 @@ public class AntiCheatManager {
                 // rough heuristic: normal ore ratio varies; flag if very high
                 if (ratio > 0.25) {
                     plugin.getLogger().warning("[AntiCheat] Mining suspect: " + player.getName() + " oreRatio=" + ratio);
-                    Bukkit.broadcast(plugin.getServer().permissionMessage(), "xii.admin");
-                    // don't auto-ban, just flag per request
+                    String msg = "§c[AntiCheat] §e" + player.getName() + " §7suspect (mining ratio " + String.format("%.2f", ratio) + "). ";
+                    for (Player op : Bukkit.getOnlinePlayers()) {
+                        if (op.isOp() || op.hasPermission("xii.admin")) {
+                            net.kyori.adventure.text.Component comp = net.kyori.adventure.text.Component.text(msg)
+                                    .append(net.kyori.adventure.text.Component.text("§b[TP]")
+                                            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/tp " + op.getName() + " " + player.getName()))
+                                            .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(net.kyori.adventure.text.Component.text("Se téléporter sur " + player.getName()))));
+                            op.sendMessage(comp);
+                        }
+                    }
                 }
                 if (ratio > 0.4) {
                     plugin.getLogger().severe("[AntiCheat] Mining ABUSE: " + player.getName() + " oreRatio=" + ratio);
