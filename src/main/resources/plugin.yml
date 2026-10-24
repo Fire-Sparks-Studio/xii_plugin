@@ -25,6 +25,10 @@ commands:
     description: Ouvrir le menu d'administration
     usage: /admin
     permission: xii.admin
+  invsee:
+    description: Inspecter l'inventaire d'un joueur
+    usage: /invsee <joueur>
+    permission: xii.admin
 permissions:
   xii.admin:
     description: Permission admin XII Days

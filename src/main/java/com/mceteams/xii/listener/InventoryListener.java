@@ -6,6 +6,7 @@ import com.mceteams.xii.gui.ConfirmGUI;
 import com.mceteams.xii.gui.TeamManagementGUI;
 import com.mceteams.xii.gui.TeamMembersGUI;
 import com.mceteams.xii.gui.AdminGUI;
+import com.mceteams.xii.gui.InvseeGUI;
 import com.mceteams.xii.gui.TeamOptionsGUI;
 import com.mceteams.xii.gui.TeamSelectionGUI;
 import com.mceteams.xii.service.ClassService;
@@ -43,6 +44,10 @@ public class InventoryListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+        // Invsee : routage prioritaire, même hors système actif.
+        if (event.getView().getTopInventory().getHolder() instanceof InvseeGUI) {
+            return; // laisse Bukkit gérer le déplacement d'items
+        }
         if (!systemEnabled()) {
             return;
         }
@@ -99,6 +104,10 @@ public class InventoryListener implements Listener {
         }
         if (holder instanceof AdminGUI gui) {
             gui.handleClick(event);
+            return true;
+        }
+        if (holder instanceof InvseeGUI gui) {
+            // Pas d'annulation : on laisse l'admin modifier librement.
             return true;
         }
         if (holder instanceof TeamManagementGUI gui) {
@@ -196,6 +205,11 @@ public class InventoryListener implements Listener {
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
+        // Invsee : synchronise les modifications vers le joueur cible,
+        // même hors système actif.
+        if (event.getView().getTopInventory().getHolder() instanceof InvseeGUI gui) {
+            gui.syncBack();
+        }
         if (!systemEnabled()) {
             return;
         }
@@ -205,6 +219,7 @@ public class InventoryListener implements Listener {
 
         // Transfert de colis fermé prématurément : tout le reste est
         // donné directement et le coffre est supprimé (PackageService).
+
         plugin.getPackageService().handleTransferClose(player,
                 event.getInventory());
 

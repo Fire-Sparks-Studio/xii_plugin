@@ -303,6 +303,10 @@ public class XiiPlugin extends JavaPlugin {
         if (admin != null) {
             admin.setExecutor(new com.mceteams.xii.command.AdminCommand(this));
         }
+        var invsee = getCommand("invsee");
+        if (invsee != null) {
+            invsee.setExecutor(new com.mceteams.xii.command.InvseeCommand(this));
+        }
     }
 
     /**
