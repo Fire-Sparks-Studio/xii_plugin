@@ -29,6 +29,10 @@ commands:
     description: Inspecter l'inventaire d'un joueur
     usage: /invsee <joueur>
     permission: xii.admin
+  vanish:
+    description: Activer/désactiver le vanish
+    usage: /vanish
+    permission: xii.admin
 permissions:
   xii.admin:
     description: Permission admin XII Days

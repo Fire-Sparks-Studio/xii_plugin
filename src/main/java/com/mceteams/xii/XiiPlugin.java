@@ -307,6 +307,10 @@ public class XiiPlugin extends JavaPlugin {
         if (invsee != null) {
             invsee.setExecutor(new com.mceteams.xii.command.InvseeCommand(this));
         }
+        var vanish = getCommand("vanish");
+        if (vanish != null) {
+            vanish.setExecutor(new com.mceteams.xii.command.VanishCommand(this));
+        }
     }
 
     /**
