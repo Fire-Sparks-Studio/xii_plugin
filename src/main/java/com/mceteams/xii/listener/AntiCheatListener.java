@@ -37,15 +37,16 @@ public class AntiCheatListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOW)
     public void onInteract(PlayerInteractEvent event) {
-        if (event.getAction() == org.bukkit.event.block.Action.LEFT_CLICK_AIR || event.getAction() == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) {
-            return;
-        }
-        Player p = event.getPlayer();
-        if (plugin.getAntiCheatManager() != null) {
-            plugin.getAntiCheatManager().onLeftClick(p);
-            if (plugin.getAntiCheatManager().shouldCancelClick(p)) {
-                event.setCancelled(true);
+        org.bukkit.event.block.Action action = event.getAction();
+        if (action == org.bukkit.event.block.Action.LEFT_CLICK_AIR || action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) {
+            Player p = event.getPlayer();
+            if (plugin.getAntiCheatManager() != null) {
+                plugin.getAntiCheatManager().onLeftClick(p);
+                if (plugin.getAntiCheatManager().shouldCancelClick(p)) {
+                    event.setCancelled(true);
+                }
             }
+            return;
         }
     }
 

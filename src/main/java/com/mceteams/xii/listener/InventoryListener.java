@@ -45,7 +45,8 @@ public class InventoryListener implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         // Invsee : routage prioritaire, même hors système actif.
-        if (event.getView().getTopInventory().getHolder() instanceof InvseeGUI) {
+        if (event.getView().getTopInventory().getHolder() instanceof InvseeGUI gui) {
+            org.bukkit.Bukkit.getScheduler().runTask(plugin, gui::syncToTarget);
             return; // laisse Bukkit gérer le déplacement d'items
         }
         if (!systemEnabled()) {

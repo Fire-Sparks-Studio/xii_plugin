@@ -50,9 +50,9 @@ public class ZoneManager {
     public GameZone defineZone(Location operatorLocation) {
         this.zone = new GameZone(
                 operatorLocation.getWorld().getName(),
-                operatorLocation.getX(),
-                operatorLocation.getY(),
-                operatorLocation.getZ(),
+                0.0,
+                64.0,
+                0.0,
                 plugin.getConfigManager().getZoneSize()
         );
         dataManager.saveZone(this.zone);

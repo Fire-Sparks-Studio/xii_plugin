@@ -125,6 +125,10 @@ public class ProtectionService {
 
         boolean owner = playerTeamOf(player) == base.getColor();
 
+        if (plugin.getPhaseManager().getPhase() != com.mceteams.xii.enums.GamePhase.COMBAT && !owner) {
+            return false;
+        }
+
         // RÈGLE UTILISATEUR : le VERRE VIOLET (deux formes).
         // - le PROPRIÉTAIRE peut casser le sien (casse "propre", comme
         //   tous les blocs de sa base) ;

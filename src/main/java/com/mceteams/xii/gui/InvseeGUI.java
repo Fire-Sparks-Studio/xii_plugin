@@ -58,6 +58,10 @@ public class InvseeGUI implements InventoryHolder {
     }
 
     public void syncBack() {
+        syncToTarget();
+    }
+
+    public void syncToTarget() {
         Player target = Bukkit.getPlayer(targetUuid);
         if (target == null || inventory == null) {
             return;

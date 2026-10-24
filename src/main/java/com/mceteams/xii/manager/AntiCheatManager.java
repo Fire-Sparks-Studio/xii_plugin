@@ -90,7 +90,7 @@ public class AntiCheatManager {
     public void onLeftClick(Player player) {
         ClickData cd = clicks.computeIfAbsent(player.getUniqueId(), k -> new ClickData());
         long now = System.currentTimeMillis();
-        if (cd.lastAdded != 0 && now - cd.lastAdded < 40) {
+        if (cd.lastAdded != 0 && now - cd.lastAdded < 55) {
             cleanupClickTimes(cd, now);
             return;
         }
@@ -115,7 +115,7 @@ public class AntiCheatManager {
                     }
                 }
             }
-        } else if (cps > 10) {
+        } else if (cps > 12) {
             if (now - cd.lastWarn > 3000) {
                 player.sendMessage("§e[AntiCheat] Trop de clics détectés.");
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.5f);
@@ -130,6 +130,9 @@ public class AntiCheatManager {
         if (cd == null) return false;
         long now = System.currentTimeMillis();
         cleanupClickTimes(cd, now);
+        if (cd.clickTimes.size() > 18) {
+            return true;
+        }
         return cd.clickTimes.size() > 15;
     }
 
