@@ -260,6 +260,7 @@ public class XiiPlugin extends JavaPlugin {
     private void registerListeners() {
         var pm = getServer().getPluginManager();
         pm.registerEvents(new ConnectionListener(this), this);
+        pm.registerEvents(new com.mceteams.xii.listener.BanMessageListener(this), this);
         pm.registerEvents(new ProtectionListener(this), this);
         pm.registerEvents(new AntiCheatListener(this), this);
         pm.registerEvents(new InventoryListener(this), this);
