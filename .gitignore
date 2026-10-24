@@ -5,3 +5,5 @@ out/
 *.jar
 .idea/
 *.iml
+/.aider-desk
+.aider.input.history
