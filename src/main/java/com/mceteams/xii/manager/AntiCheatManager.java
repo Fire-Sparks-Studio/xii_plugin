@@ -5,6 +5,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -22,9 +24,8 @@ public class AntiCheatManager {
     }
 
     public static class ClickData {
-        long lastClick = 0;
-        int clicksLastSecond = 0;
-        long windowStart = System.currentTimeMillis();
+        final Deque<Long> clickTimes = new ArrayDeque<>();
+        long lastAdded = 0;
         int warnings = 0;
         long lastWarn = 0;
     }
@@ -89,19 +90,21 @@ public class AntiCheatManager {
     public void onLeftClick(Player player) {
         ClickData cd = clicks.computeIfAbsent(player.getUniqueId(), k -> new ClickData());
         long now = System.currentTimeMillis();
-        if (now - cd.windowStart > 1000) {
-            cd.windowStart = now;
-            cd.clicksLastSecond = 0;
+        if (cd.lastAdded != 0 && now - cd.lastAdded < 40) {
+            cleanupClickTimes(cd, now);
+            return;
         }
-        cd.clicksLastSecond++;
-        cd.lastClick = now;
-        if (cd.clicksLastSecond > 15) {
+        cd.lastAdded = now;
+        cd.clickTimes.addLast(now);
+        cleanupClickTimes(cd, now);
+        int cps = cd.clickTimes.size();
+        if (cps > 15) {
             if (now - cd.lastWarn > 2000) {
                 player.sendMessage("§c[AntiCheat] Autoclicker suspect - cliques limités.");
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.5f);
                 cd.lastWarn = now;
                 cd.warnings++;
-                String msg = "§c[AntiCheat] §e" + player.getName() + " §7autoclicker suspect (" + cd.clicksLastSecond + " cps). ";
+                String msg = "§c[AntiCheat] §e" + player.getName() + " §7autoclicker suspect (" + cps + " cps). ";
                 for (Player op : Bukkit.getOnlinePlayers()) {
                     if (op.isOp() || op.hasPermission("xii.admin")) {
                         net.kyori.adventure.text.Component comp = net.kyori.adventure.text.Component.text(msg)
@@ -112,8 +115,7 @@ public class AntiCheatManager {
                     }
                 }
             }
-            // cancel effect by not doing anything special; actual limiting done via event cancel logic
-        } else if (cd.clicksLastSecond > 10) {
+        } else if (cps > 10) {
             if (now - cd.lastWarn > 3000) {
                 player.sendMessage("§e[AntiCheat] Trop de clics détectés.");
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.5f);
@@ -127,15 +129,14 @@ public class AntiCheatManager {
         ClickData cd = clicks.get(player.getUniqueId());
         if (cd == null) return false;
         long now = System.currentTimeMillis();
-        if (now - cd.windowStart > 1000) {
-            cd.windowStart = now;
-            cd.clicksLastSecond = 0;
-            return false;
+        cleanupClickTimes(cd, now);
+        return cd.clickTimes.size() > 15;
+    }
+
+    private void cleanupClickTimes(ClickData cd, long now) {
+        while (!cd.clickTimes.isEmpty() && now - cd.clickTimes.peekFirst() > 1000) {
+            cd.clickTimes.pollFirst();
         }
-        if (cd.clicksLastSecond > 15) {
-            return true;
-        }
-        return false;
     }
 
     public void onBlockBreak(Player player, Material mat) {
