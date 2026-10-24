@@ -83,6 +83,7 @@ public class WorldListener implements Listener {
                 event.getEntity() != null
                         && event.getEntity().getScoreboardTags()
                         .contains(com.mceteams.xii.service.MeteoriteService.METEORITE_TAG);
+        boolean isDragon = event.getEntity() instanceof org.bukkit.entity.EnderDragon;
 
         // 1. Protection de la zone d'attente : aucun bloc retiré là-haut.
         protectWaitingLobby(event.blockList());
@@ -91,6 +92,15 @@ public class WorldListener implements Listener {
         if (isMeteorite && plugin.getGameSystems().isMeteoriteListenerEnabled()) {
             plugin.getMeteoriteService().applyImpactDamage(
                     event.getLocation(), event.getEntity());
+        }
+
+        // Dragons de mort subite : ne pas protéger les blocs par cette logique,
+        // laisser détruire tout sur leur passage
+        if (isDragon) {
+            // Ne rien retirer de blockList, laisser l'explosion détruire
+            handleCoresInExplosion(event.blockList());
+            protectDepositChests(event.blockList());
+            return;
         }
 
         // 3. Cœurs/cristaux touchés par l'explosion : destruction contrôlée.

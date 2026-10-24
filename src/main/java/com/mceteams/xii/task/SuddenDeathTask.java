@@ -26,7 +26,7 @@ public class SuddenDeathTask extends BukkitRunnable {
     public SuddenDeathTask(XiiPlugin plugin) {
         this.plugin = plugin;
         // Premier dragon rapide : 10 secondes après le début de la phase.
-        this.secondsUntilDragon = 10;
+        this.secondsUntilDragon = 5;
     }
 
     @Override
@@ -41,9 +41,10 @@ public class SuddenDeathTask extends BukkitRunnable {
         if (--secondsUntilDragon > 0) {
             return;
         }
-        spawnDragon();
-        secondsUntilDragon =
-                plugin.getConfigManager().getSuddenDeathDragonIntervalSeconds();
+        for (int i = 0; i < 3; i++) {
+            spawnDragon();
+        }
+        secondsUntilDragon = Math.max(3, plugin.getConfigManager().getSuddenDeathDragonIntervalSeconds() / 2);
     }
 
     /**
@@ -90,22 +91,15 @@ public class SuddenDeathTask extends BukkitRunnable {
     private void spawnDragonAt(Location spawnLocation) {
         EnderDragon dragon = spawnLocation.getWorld().spawn(spawnLocation,
                 EnderDragon.class, spawned -> {
-                    // Le dragon n'a pas de barre de boss "battle" vanilla :
-                    // il agit comme un mob sauvage qui détruit la map.
                     spawned.setCustomNameVisible(false);
                 });
 
-        // Ciblage occasionnel d'un joueur (spec §26 : "occasionnellement").
         dragonsSpawned++;
-        if (dragonsSpawned % 3 == 0) {
-            Player target = pickRandomAlivePlayer();
-            if (target != null) {
-                try {
-                    dragon.setTarget(target);
-                } catch (Exception ignored) {
-                    // API variable selon versions : best-effort assumé.
-                }
-            }
+        Player target = pickRandomAlivePlayer();
+        if (target != null) {
+            try {
+                dragon.setTarget(target);
+            } catch (Exception ignored) {}
         }
     }
 

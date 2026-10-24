@@ -91,6 +91,9 @@ public class CombatListener implements Listener {
         }
         if (plugin.getClassService().shouldCancelFallDamage(player)) {
             event.setCancelled(true); // Agile : aucun fall damage
+            try {
+                player.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 60, 0, false, false, true));
+            } catch (Exception ignored) {}
         }
     }
 

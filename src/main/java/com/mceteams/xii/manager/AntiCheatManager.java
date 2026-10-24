@@ -48,11 +48,8 @@ public class AntiCheatManager {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (!p.equals(player)) {
                     p.hidePlayer(plugin, player);
-                    // Try to send leave message in receiver's language context is not directly possible,
-                    // but we can send the vanilla leave message to others? Better to fake quit in tab by hiding
-                    // Also broadcast translated leave message for non-admins? Use server's language via adventure if possible
                     try {
-                        net.kyori.adventure.text.Component leaveMsg = net.kyori.adventure.text.Component.translatable("multiplayer.player.left", net.kyori.adventure.text.Component.text(player.getName()));
+                        net.kyori.adventure.text.Component leaveMsg = net.kyori.adventure.text.Component.text("§e" + player.getName() + " left the game");
                         p.sendMessage(leaveMsg);
                     } catch (Exception ignored) {
                         p.sendMessage("§e" + player.getName() + " left the game");
@@ -61,24 +58,40 @@ public class AntiCheatManager {
             }
             player.setAllowFlight(true);
             player.setFlying(true);
-            player.sendMessage("§7[AntiCheat] Vanish §aactivé");
+            try {
+                player.playerListName(net.kyori.adventure.text.Component.text("§o[VANISH] " + player.getName()));
+            } catch (Exception ignored) {
+                player.setPlayerListName("§o[VANISH] " + player.getName());
+            }
+            player.sendMessage("§7[VANISH] §aactivé");
         } else {
             vd.vanished = false;
             for (Player p : Bukkit.getOnlinePlayers()) {
                 p.showPlayer(plugin, player);
                 try {
-                    net.kyori.adventure.text.Component joinMsg = net.kyori.adventure.text.Component.translatable("multiplayer.player.joined", net.kyori.adventure.text.Component.text(player.getName()));
+                    net.kyori.adventure.text.Component joinMsg = net.kyori.adventure.text.Component.text("§e" + player.getName() + " joined the game");
                     p.sendMessage(joinMsg);
                 } catch (Exception ignored) {
                     p.sendMessage("§e" + player.getName() + " joined the game");
                 }
             }
-            player.setAllowFlight(false);
-            player.setFlying(false);
-            if (vd.previousGamemode != null) {
-                player.setGameMode(vd.previousGamemode);
+            if (vd.previousGamemode != null && vd.previousGamemode == org.bukkit.GameMode.CREATIVE) {
+                player.setGameMode(org.bukkit.GameMode.CREATIVE);
+                player.setAllowFlight(true);
+                player.setFlying(true);
+            } else if (vd.previousGamemode != null && vd.previousGamemode == org.bukkit.GameMode.SPECTATOR) {
+                player.setGameMode(org.bukkit.GameMode.SPECTATOR);
+            } else {
+                player.setAllowFlight(false);
+                player.setFlying(false);
+                if (vd.previousGamemode != null) {
+                    player.setGameMode(vd.previousGamemode);
+                }
             }
-            player.sendMessage("§7[AntiCheat] Vanish §cdésactivé");
+            try {
+                player.playerListName(null);
+            } catch (Exception ignored) {}
+            player.sendMessage("§7[VANISH] §cdésactivé");
         }
     }
 
@@ -90,16 +103,12 @@ public class AntiCheatManager {
     public void onLeftClick(Player player) {
         ClickData cd = clicks.computeIfAbsent(player.getUniqueId(), k -> new ClickData());
         long now = System.currentTimeMillis();
-        if (cd.lastAdded != 0 && now - cd.lastAdded < 55) {
-            cleanupClickTimes(cd, now);
-            return;
-        }
         cd.lastAdded = now;
         cd.clickTimes.addLast(now);
         cleanupClickTimes(cd, now);
         int cps = cd.clickTimes.size();
         if (cps > 15) {
-            if (now - cd.lastWarn > 2000) {
+            if (now - cd.lastWarn > 1500) {
                 player.sendMessage("§c[AntiCheat] Autoclicker suspect - cliques limités.");
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.5f);
                 cd.lastWarn = now;
@@ -116,7 +125,7 @@ public class AntiCheatManager {
                 }
             }
         } else if (cps > 12) {
-            if (now - cd.lastWarn > 3000) {
+            if (now - cd.lastWarn > 2500) {
                 player.sendMessage("§e[AntiCheat] Trop de clics détectés.");
                 player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.5f);
                 cd.lastWarn = now;
@@ -130,10 +139,10 @@ public class AntiCheatManager {
         if (cd == null) return false;
         long now = System.currentTimeMillis();
         cleanupClickTimes(cd, now);
-        if (cd.clickTimes.size() > 18) {
+        if (cd.clickTimes.size() > 25) {
             return true;
         }
-        return cd.clickTimes.size() > 15;
+        return cd.clickTimes.size() > 17;
     }
 
     private void cleanupClickTimes(ClickData cd, long now) {
