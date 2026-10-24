@@ -75,4 +75,13 @@ public enum PlayerClass {
     public String getColoredName() {
         return colorCode + displayName;
     }
+
+    public static PlayerClass fromString(String name) {
+        for (PlayerClass pc : values()) {
+            if (pc.name().equalsIgnoreCase(name) || pc.displayName.equalsIgnoreCase(name)) {
+                return pc;
+            }
+        }
+        return null;
+    }
 }

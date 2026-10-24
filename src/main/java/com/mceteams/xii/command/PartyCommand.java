@@ -49,8 +49,9 @@ public class PartyCommand implements TabExecutor {
             case "package" -> handlePackage(sender);
             case "item" -> handleItem(sender, args);
             case "debug" -> handleDebug(sender);
+            case "class" -> handleClass(sender, args);
             default -> MessageUtil.send(sender,
-                    "§cSous-commandes : start, stop, set, package, item, debug");
+                    "§cSous-commandes : start, stop, set, package, item, debug, class");
         }
         return true;
     }
@@ -167,6 +168,46 @@ public class PartyCommand implements TabExecutor {
         MessageUtil.send(target, "§a✔ Reçu : "
                 + type.getRarity().getColoredName() + " "
                 + type.getDisplayName());
+    }
+
+    /**
+     * /party class <classe> [joueur] : change la classe d'un joueur pendant une partie en cours.
+     */
+    private void handleClass(CommandSender sender, String[] args) {
+        if (!(sender instanceof org.bukkit.entity.Player player)) {
+            MessageUtil.send(sender, "§cCommande réservée aux joueurs.");
+            return;
+        }
+        if (plugin.getGameManager().getState() != com.mceteams.xii.enums.GameState.PREPARATION
+                && plugin.getGameManager().getState() != com.mceteams.xii.enums.GameState.COMBAT) {
+            MessageUtil.send(sender, "§cLa partie doit être en cours.");
+            return;
+        }
+        if (args.length < 2) {
+            MessageUtil.send(sender, "§cUsage : /party class <classe> [joueur]");
+            return;
+        }
+        com.mceteams.xii.enums.PlayerClass pc = com.mceteams.xii.enums.PlayerClass.fromString(args[1]);
+        if (pc == null) {
+            MessageUtil.send(sender, "§cClasse inconnue.");
+            return;
+        }
+        org.bukkit.entity.Player target = player;
+        if (args.length >= 3) {
+            target = org.bukkit.Bukkit.getPlayerExact(args[2]);
+            if (target == null) {
+                MessageUtil.send(sender, "§cJoueur introuvable.");
+                return;
+            }
+        }
+        try {
+            var data = plugin.getPlayerManager().getData(target);
+            data.setPlayerClass(pc);
+            plugin.getClassService().applyPassives(target, data, true);
+            MessageUtil.send(target, "§aVotre classe a été changée en §f" + pc.getDisplayName());
+        } catch (Exception e) {
+            MessageUtil.send(sender, "§cErreur: " + e.getMessage());
+        }
     }
 
     /**

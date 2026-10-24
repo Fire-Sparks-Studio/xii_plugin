@@ -174,6 +174,16 @@ public class TeamManager {
         team.addPlayer(playerUuid);
         mirrorTeamIdToPlayerData(playerUuid, team);
         addToBukkitTeam(playerUuid, team);
+        // Assure l'ajout à l'équipe Minecraft (scoreboard)
+        try {
+            Player p = org.bukkit.Bukkit.getPlayer(playerUuid);
+            if (p != null) {
+                org.bukkit.scoreboard.Team bukkitTeam = org.bukkit.Bukkit.getScoreboardManager().getMainScoreboard().getTeam(TeamUtil.bukkitTeamName(team.getColor()));
+                if (bukkitTeam != null) {
+                    bukkitTeam.addEntry(p.getName());
+                }
+            }
+        } catch (Throwable ignored) {}
         return AddResult.OK;
     }
 
@@ -448,6 +458,10 @@ public class TeamManager {
             Team bukkitTeam = scoreboard.getTeam(TeamUtil.bukkitTeamName(team.getColor()));
             if (bukkitTeam != null) {
                 bukkitTeam.addEntry(uuid.toString());
+                Player p = Bukkit.getPlayer(uuid);
+                if (p != null) {
+                    bukkitTeam.addEntry(p.getName());
+                }
             }
         } catch (Throwable ignored) {
             // cf. syncBukkitTeam
